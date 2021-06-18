@@ -1,8 +1,25 @@
-## Terrain conductance model for assessing risk to Golden eagles
+# Stochastic Soaring Raptor Simulator (SSRS)
 
-This project imlements and extends the capability of the terrain conductance model from 'Brandes, D., & Ombalski, D. (
+## A Stochastic agent-based model for predicting raptor movements during updraft-subsidized directional flights
+
+This project implements and extends the capability of the terrain conductance model from 'Brandes, D., & Ombalski, D. (
 2004). Modelling raptor migration pathways using a fluid-flow analogy. The Journal of Raptor Research, 38(3), 195-207.'
 The code provides an eagle presence map for a given setting of wind conditions and movement direction.
+
+## Authors
+
++ Rimple Sandhu (National Wind Technology Center, National Renewable Energy Laboratory)
++ Charles Tripp (Computational Science Center, National Renewable Energy Laboratory)
++ Eliot Quon (National Wind Technology Center, National Renewable Energy Laboratory)
++ Regis Thedin (National Wind Technology Center, National Renewable Energy Laboratory)
++ Lindy Williams (Computational Science Center, National Renewable Energy Laboratory)
++ Paula Doubrawa (National Wind Technology Center, National Renewable Energy Laboratory)
++ Caroline Draxl (National Wind Technology Center, National Renewable Energy Laboratory)
++ Mike Lawson (National Wind Technology Center, National Renewable Energy Laboratory)
+
+### Keywords
+Behavior modeling, Stochastic modeling, agent--based movement model, wind--wildlife interactions, raptor conservation, golden eagles
+
 
 ### Files and directory description
 

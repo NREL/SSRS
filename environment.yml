@@ -1,0 +1,19 @@
+name: tc_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - elevation=1.0
+  - h5py=2.10
+  - matplotlib=3.1
+  - numpy=1.18
+  - pandas=1.0
+  - pathos=0.2
+  - pip=20.2
+  - python=3.8
+  - rasterio=1.1
+  - scipy=1.4
+  - utm=0.5
+  - pip:
+      - h5pyd==0.8
+      - astral==2.2

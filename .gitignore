@@ -1,0 +1,14 @@
+.DS_Store
+*.pyc
+*.pyo
+*.png
+*.npy
+*.pkl
+*.csv
+
+/.idea/
+/output/
+/venv/
+/.envrc
+mprofile_*.
+physics_site.tif

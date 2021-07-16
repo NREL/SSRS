@@ -1,13 +1,15 @@
 import pathos.multiprocessing as mp
-
+from config import *
 from tcfuncs.common import *
 from tcfuncs.config_tools import *
 from tcfuncs.terrain import *
 from tcfuncs.wfarm import *
 from tcfuncs.wtk import *
+import sys
 
 # Intialize
-config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
+#config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
+config = initialize_code('config.py', eval(sys.argv[1]))
 create_hscfg_file(config.AWS_api_key)  # only when reading AWS WTK data
 
 # Extract wind farm data # print(get_all_wfarms('WY'))

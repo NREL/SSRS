@@ -4,16 +4,17 @@
 import matplotlib.patches as mpatches
 from scipy.interpolate import griddata
 from scipy.stats import gaussian_kde
-
 from tcfuncs.common import *
 # Load local module that contains model specific functions
 # import json
 from tcfuncs.config_tools import initialize_code, makedir_if_not_exists
 from tcfuncs.tcmodel import *
+from config import *
+import sys
 
 # Intialize
 config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
-max_cores_for_plotting = 64
+max_cores_for_plotting = 1
 # delete_files_of_type(config.fig_dir, '.png')
 try:
     print('\n--- Generating plots')

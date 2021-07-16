@@ -1,11 +1,13 @@
 import pathos.multiprocessing as mp
-
+from config import *
+import sys
 from tcfuncs.common import *
 from tcfuncs.config_tools import initialize_code
 from tcfuncs.updrafts import *
 
 # Intialize
-config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
+#config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
+config = initialize_code('config.py', eval(sys.argv[1]))
 
 # Load saved turbine/terrain data
 try:

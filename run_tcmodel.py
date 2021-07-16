@@ -1,11 +1,13 @@
 import pathos.multiprocessing as mp
-
+import sys
+from config import *
 from tcfuncs.common import *
 from tcfuncs.config_tools import initialize_code
 from tcfuncs.tcmodel import *
 
 # Intialize
-config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
+#config = initialize_code(os.path.basename(__file__), eval(sys.argv[1]))
+config = initialize_code('config.py', eval(sys.argv[1]))
 
 # load updraft data
 datetimes = get_saved_datetimes(

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-declare -a configs=("default" "spring_mnorth_morning" "spring_mnorth_afternoon" "spring_mnorth_afternoon_random" "spring_mnorth_afternoon_cubic" "spring_mnorth_afternoon_k1" "spring_mnorth_afternoon_k2" "spring_mnorth_afternoon_2000t" "spring_mnorth_afternoon_256" "spring_mnorth_evening" "fall_msouth_morning" "fall_msouth_afternoon" "fall_msouth_evening")
+declare -a configs=("default")
 
-declare -a scripts=("extract_data.py" "compute_updrafts.py" "generate_plots.py" "all three" "submit_EAGLE.sh" "Quit")
+declare -a scripts=("preprocess.py" "simulator.py" "plotting.py" "all three" "Abort")
 
-source ~/.bashrc
-conda deactivate
-conda activate tc_env
-conda env list
+# source ~/.bashrc
+# conda deactivate
+# conda activate tc_env
+# conda env list
 
 PS3='Please enter your choice: '
 select opt in "${scripts[@]}"; do
@@ -16,7 +16,7 @@ select opt in "${scripts[@]}"; do
     printf "Running $opt for configs:\n"
     printf '%s\n' "${configs[@]}"
     for cfg in ${configs[*]}; do
-      python $opt $cfg
+      python $opt -c $cfg
       wait
     done
     break
@@ -25,25 +25,15 @@ select opt in "${scripts[@]}"; do
     printf "Running the three scripts for configs:\n"
     printf '%s\n' "${configs[@]}"
     for cfg in ${configs[*]}; do
-      python ${scripts[0]} $cfg
+      python ${scripts[0]} -c $cfg
       wait
-      python ${scripts[1]} $cfg
+      python ${scripts[1]} -c $cfg
       wait
-      python ${scripts[2]} $cfg
+      python ${scripts[2]} -c $cfg
     done
     break
     ;;
-  ${scripts[4]})
-    printf "Submitting jobs to EAGLE HPC\n"
-    #printf '%s\n' "${configs[@]}"
-    for cfg in ${configs[*]}; do
-      sbatch $opt $cfg
-      wait
-    done
-    break
-    ;;
-
-  "Quit")
+  "Abort")
     break
     ;;
   *) echo "invalid option $REPLY" ;;

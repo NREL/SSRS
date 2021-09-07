@@ -13,3 +13,4 @@
 mprofile_*.
 physics_site.tif
 /mmctools/
+/__pycache__/

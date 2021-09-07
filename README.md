@@ -10,10 +10,10 @@ SSRS uses the following data sources for setting up the simulation of eagle trac
 -  The wind turbine locations within the study area are extracted from USGS's United States Wind Turbine Database (USWTDB). More details at https://eerscmap.usgs.gov/uswtdb/
 - The atmospheric conditions are extracted from NREL's Wind ToolKit (WTK) dataset hosted on an AWS server. The dataset contains instantaneous 1-hour resolution model output data for 7 years (2007-2014) on a uniform 2-km grid that covers the continental US. More details at https://www.nrel.gov/grid/wind-toolkit.html.
 
-SSRS operates under three modes: predefined, snapshot, and seaosnal, as detailed below:
+SSRS operates under three modes: predefined, snapshot, and seasonal, as detailed below:
 - In the predefined mode, uniform wind speed and direction is assumed for the entire study area. 
-- In the snapshot mode, the focus is on a particular time instant for which the atmopsheric data is extracted from WTK and multiple tracks are simulated based on the estimated orogrpahic updrafts at that time instant. This mode is useful for predicting real-time likely soaring routes of an eagle approaching the study area. 
-- In the seasonal mode, the focus is on a range of months and time of day. Multiple time instances are randomly selected for the given range of months and simulated tracks are produced for each time instant. This mode is useful for predicting the average behavior of soraing eagles for the range of atmosheric conditions experienced during the user-supplied month/time window.  
+- In the snapshot mode, the focus is on a particular time instant for which the atmospheric data is extracted from WTK and multiple tracks are simulated based on the estimated orographic updrafts at that time instant. This mode is useful for predicting real-time likely soaring routes of an eagle approaching the study area. 
+- In the seasonal mode, the focus is on a range of months and time of day. Multiple time instances are randomly selected for the given range of months and simulated tracks are produced for each time instant. This mode is useful for predicting the average behavior of soaring eagles for the range of atmospheric conditions experienced during the user-supplied month/time window.  
 
 For each mode, a relative eagle presence density is produced using the simulated tracks that provides an indication of likely eagle presence while traversing the study area. This tool implements and extends the capability of the fluid-flow model from 'Brandes, D., & Ombalski, D. (
 2004). Modelling raptor migration pathways using a fluid-flow analogy. The Journal of Raptor Research, 38(3), 195-207.'
@@ -85,7 +85,7 @@ python simulator.py
 python plotting.py
 ```
 
-- In addition to the default configuration (which focuses on a study area in Wyoming), the config.py also provides additional configuration, namely CA_AltamontPass (focuses on Altamont Pass area in California) and PA_Appalachian (focsuses on area in Appalachian mountain). To run the snashot mode for CA_AltamontPass case, use following commands (ensure you are in the SSRS directory):
+- In addition to the default configuration (which focuses on a study area in Wyoming), the config.py also provides additional configurations, namely CA_AltamontPass (focuses on Altamont Pass area in California) and PA_Appalachian (focuses on an area in Appalachian mountain). To run the snapshot mode for CA_AltamontPass case, use following commands (ensure you are in the SSRS directory):
 ```bash
 conda activate ssrs_env
 python preprocess.py -c CA_AltamontPass -o mode:snapshot

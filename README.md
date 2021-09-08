@@ -2,17 +2,17 @@
 
 ## A Stochastic agent-based model for predicting raptor movements during updraft-subsidized directional flights
 
-The SSRS tool simulates multiple updraft-subsidized tracks for soaring raptors for a given set of atmospheric conditions, with the goal of predicting potential conflict with operation wind turbines. This tool has been programmed, verified, and validated for soaring golden eagles within the conterminous US, but could be easily extended for other regions and other soaring raptors. 
+The SSRS tool simulates multiple updraft-subsidized tracks for soaring raptors for a given set of atmospheric conditions, with the goal of predicting potential conflict with wind turbines. This tool has been programmed, verified, and validated for soaring golden eagles within the conterminous US, but could be easily extended for other regions and other soaring raptors. 
 
 
 SSRS uses the following data sources for setting up the simulation of eagle tracks:
 - Terrain altitude data for the user supplied longitude and latitude ranges (defined hereby as the study area) is extracted from NASA's Shuttle Radar Topography Mission (SRTM) dataset. More details at https://www2.jpl.nasa.gov/srtm/
 -  The wind turbine locations within the study area are extracted from USGS's United States Wind Turbine Database (USWTDB). More details at https://eerscmap.usgs.gov/uswtdb/
-- The atmospheric conditions are extracted from NREL's Wind ToolKit (WTK) dataset hosted on an AWS server. The dataset contains instantaneous 1-hour resolution model output data for 7 years (2007-2014) on a uniform 2-km grid that covers the continental US. More details at https://www.nrel.gov/grid/wind-toolkit.html.
+- The atmospheric conditions are extracted from NREL's Wind ToolKit (WTK) dataset hosted on AWS. The dataset contains instantaneous 1-hour resolution model output data for 7 years (2007-2014) on a uniform 2-km grid that covers the continental US. More details at https://www.nrel.gov/grid/wind-toolkit.html.
 
 SSRS operates under three modes: predefined, snapshot, and seasonal, as detailed below:
 - In the predefined mode, uniform wind speed and direction is assumed for the entire study area. 
-- In the snapshot mode, the focus is on a particular time instant for which the atmospheric data is extracted from WTK and multiple tracks are simulated based on the estimated orographic updrafts at that time instant. This mode is useful for predicting real-time likely soaring routes of an eagle approaching the study area. 
+- In the snapshot mode, the focus is on a particular time instant for which the atmospheric data is extracted from WTK and multiple tracks are simulated based on the estimated orographic updrafts at that time instant. This mode is useful for predicting real-time soaring routes of an eagle approaching the study area. 
 - In the seasonal mode, the focus is on a range of months and time of day. Multiple time instances are randomly selected for the given range of months and simulated tracks are produced for each time instant. This mode is useful for predicting the average behavior of soaring eagles for the range of atmospheric conditions experienced during the user-supplied month/time window.  
 
 For each mode, a relative eagle presence density is produced using the simulated tracks that provides an indication of likely eagle presence while traversing the study area. This tool implements and extends the capability of the fluid-flow model from 'Brandes, D., & Ombalski, D. (
@@ -53,13 +53,15 @@ Sandhu, Rimple, Tripp, Charles Edison, Thedin, Regis, Quon, Eliot, Lawson, Micha
 ## Instructions on running the code
 
 
-- Install the conda environement using environment.yml and activate the installed ssrs_env environment
+- To get started, install [Anaconda](https://www.anaconda.com/products/individual) or [miniconda](https://docs.conda.io/projects/continuumio-conda/en/latest/user-guide/install/macos.html). Then, install the SSRS conda environement using environment.yml and activate the installed ssrs_env environment
 
 ```bash 
 conda deactivate
 conda env create --file environment.yml
 conda activate ssrs_env
 ```
+
+- To access NREL's WTK dataset, the user needs to get an API key from https://developer.nrel.gov/signup/ and assign it to the parameter 'wtk_aws_key' in config.py. The example API key in config.py is for demonstation and is rate-limited per IP.
 
 - Run python scripts for the default configuration defined in config.py as
 ```bash
@@ -201,6 +203,10 @@ Options: Any value greater than zero and less than the expected boundary layer h
 ```bash
 'presence_smoothing_radius': 1000
 ```
+
+## Credit
+
+This software is currently developed and maintained by Rimple Sandhu (rimple.sandhu@nrel.gov) and Charles Tripp (charles.tripp@nrel.gov).
 
 ## Additional information:
 

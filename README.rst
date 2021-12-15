@@ -18,18 +18,6 @@ SSRS operates under three modes: predefined, snapshot, and seasonal, as detailed
 For each mode, a relative eagle presence density is produced using the simulated tracks that provides an indication of likely eagle presence while traversing the study area. This tool implements and extends the capability of the fluid-flow model from 'Brandes, D., & Ombalski, D. (
 2004). Modelling raptor migration pathways using a fluid-flow analogy. The Journal of Raptor Research, 38(3), 195-207.'
 
-
-## Authors
-
-+ Rimple Sandhu (National Wind Technology Center, National Renewable Energy Laboratory)
-+ Charles Tripp (Computational Science Center, National Renewable Energy Laboratory)
-+ Eliot Quon (National Wind Technology Center, National Renewable Energy Laboratory)
-+ Regis Thedin (National Wind Technology Center, National Renewable Energy Laboratory)
-+ Lindy Williams (Computational Science Center, National Renewable Energy Laboratory)
-+ Paula Doubrawa (National Wind Technology Center, National Renewable Energy Laboratory)
-+ Caroline Draxl (National Wind Technology Center, National Renewable Energy Laboratory)
-+ Mike Lawson (National Wind Technology Center, National Renewable Energy Laboratory)
-
 ## Keywords
 Behavior modeling, Stochastic modeling, agent--based movement model, wind--wildlife interactions, raptor conservation, golden eagles
 
@@ -55,7 +43,7 @@ Sandhu, Rimple, Tripp, Charles Edison, Thedin, Regis, Quon, Eliot, Lawson, Micha
 
 - To get started, install [Anaconda](https://www.anaconda.com/products/individual) or [miniconda](https://docs.conda.io/projects/continuumio-conda/en/latest/user-guide/install/macos.html). Then, install the SSRS conda environement using environment.yml and activate the installed ssrs_env environment
 
-```bash 
+```bash
 conda deactivate
 conda env create --file environment.yml
 conda activate ssrs_env

@@ -25,6 +25,7 @@ downloads/
 .installed.cfg
 *.egg-info
 _build/
+.pypirc
 
 # Sphinx documentation
 docs/_build/

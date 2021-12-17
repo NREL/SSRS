@@ -1,7 +1,7 @@
 """ Module for computing topographical and atmospheric layers """
 
 import numpy as np
-import richdem as rd
+# import richdem as rd
 
 
 def compute_orographic_updraft(
@@ -124,41 +124,41 @@ def compute_aspect_degrees(z_mat: np.ndarray, res: float):
     return np.nan_to_num(aspect)
 
 
-def compute_slope_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
-    """ Compute slope using richdem package
+# def compute_slope_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
+#     """ Compute slope using richdem package
 
-    Parameters:
-    -----------
-    z: numpy array
-        Contains elevation data for the concerned region in meters
-    res: float
-        Resolution in meters, assumed to be same in both directions
+#     Parameters:
+#     -----------
+#     z: numpy array
+#         Contains elevation data for the concerned region in meters
+#     res: float
+#         Resolution in meters, assumed to be same in both directions
 
-    Returns:
-    --------
-    numpy array containing slope in degrees
-    """
+#     Returns:
+#     --------
+#     numpy array containing slope in degrees
+#     """
 
-    z_rd = rd.rdarray(z_mat, no_data=-9999)
-    out = rd.TerrainAttribute(z_rd, attrib='slope_degrees', zscale=1 / res)
-    return out
+#     z_rd = rd.rdarray(z_mat, no_data=-9999)
+#     out = rd.TerrainAttribute(z_rd, attrib='slope_degrees', zscale=1 / res)
+#     return out
 
 
-def compute_aspect_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
-    """ Compute aspect using richdem package
+# def compute_aspect_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
+#     """ Compute aspect using richdem package
 
-    Parameters:
-    -----------
-    z: numpy array
-        Contains elevation data for the concerned region in meters
-    res: float
-        Resolution in meters, assumed to be same in both directions
+#     Parameters:
+#     -----------
+#     z: numpy array
+#         Contains elevation data for the concerned region in meters
+#     res: float
+#         Resolution in meters, assumed to be same in both directions
 
-    Returns:
-    --------
-    numpy array containing aspect in degrees
-    """
+#     Returns:
+#     --------
+#     numpy array containing aspect in degrees
+#     """
 
-    z_rd = rd.rdarray(z_mat, no_data=-9999)
-    out = rd.TerrainAttribute(z_rd, attrib='aspect', zscale=1 / res)
-    return out
+#     z_rd = rd.rdarray(z_mat, no_data=-9999)
+#     out = rd.TerrainAttribute(z_rd, attrib='aspect', zscale=1 / res)
+#     return out

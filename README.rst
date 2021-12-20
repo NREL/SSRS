@@ -17,7 +17,7 @@ of Raptor Research, 38(3), 195-207.'
 
 SSRS uses the following publically available data sources:
 
-* USGS's `3D Elevation Program (3DEP) <https://www2.jpl.nasa.gov/srtm/>`_ dataset for terrain altitude, slope and aspect at a spatial resolution of 10 meters within the US.
+* USGS's `3D Elevation Program (3DEP) <https://www.usgs.gov/core-science-systems/ngp/3dep>`_ dataset for terrain altitude, slope and aspect at a spatial resolution of 10 meters within the US.
 * USGS's `United States Wind Turbine Database (USWTDB) <https://eerscmap.usgs.gov/uswtdb/>`_ for up-to-date turbine locations within the US.
 * NREL's `Wind ToolKit (WTK) <https://www.nrel.gov/grid/wind-toolkit.html>`_ dataset for atmospheric conditions such as wind speed and direction at 1-hour temporal resolution and 2 km spatial resolution within the US.
 
@@ -30,13 +30,9 @@ SSRS operates under three modes:
 
 Installation
 --------------
-Without Anaconda/miniconda (requires python>=3.8 and pip>21.3):
 
-.. code-block:: bash
-
-    pip install git+https://github.com/NREL/SSRS.git#egg=ssrs
-
-With Anaconda/miniconda:
+Using conda virtual environments from
+`Anaconda <https://docs.anaconda.com/anaconda/install/index.html>`_, do:
 
 .. code-block:: bash
 
@@ -53,32 +49,69 @@ cd into the SSRS directory and run following commands in the terminal
     conda activate ssrs_env
     pip install .
 
-For running conda environment ssrs_env in Jupyter Notebook,
+For editable install (for development purpose), do
+
+.. code-block:: bash
+
+    conda env create -f environment.yml
+    conda activate ssrs_env
+    pip install -e .
+
+
+For running conda environment ssrs_env in Jupyter Notebook (Comes with Anaconda),
 
 .. code-block:: bash
 
     conda install ipykernel
     ipython kernel install --user --name=ssrs_env
 
+Without Anaconda (requires python>=3.8 and pip>21.3):
+
+.. code-block:: bash
+
+    pip install git+https://github.com/NREL/SSRS.git#egg=ssrs
+
+
 For SSRS to access NREL's WTK dataset in the snapshot mode, need to get an
 API key from https://developer.nrel.gov/signup/ and save it in .hscfg file
 located in the working directory. Both examples/ and notebooks/ directories
 contain a sample .hscfg_need_api_key file. Make sure to rename this file as
-.hscfg after inserting the API key in this file. 
+.hscfg after inserting your API key in this file. 
 
 Usage
 --------------
 
-The Jupyter Notebooks in examples/ show the usage of SSRS for a given region.
-For instance, see this notebook_ for ssrs simulation in uniform mode for a region
-in Wyoming, simulating 1000 eagles travelling north, which will generate
-following figures:
+The Jupyter notebooks in examples/ show the usage of SSRS for a given region.
+For instance, ssrs simulation in uniform mode for a 60 km by 50 km
+region in Wyoming and simulating 500 eagles travelling north can be implemented
+using the following code:
 
 .. _notebook: notebooks/sample_ssrs_uniform.ipynb
 
+.. code-block:: python
+
+    from ssrs import Simulator, Config
+    config_uniform = Config(
+        run_name='run_wy',
+        southwest_lonlat=(42.78, -106.21), 
+        region_width_km=(60., 50.),
+        resolution=100.,
+        sim_mode='uniform',
+        uniform_winddirn=270.,
+        track_direction='north',
+        track_count = 500,
+        track_start_region=(20, 21, 0, 0)
+    )
+    sim = Simulator(config_uniform)
+    sim.simulate_tracks()
+    sim.plot_terrain_elevation(show=True)
+    sim.plot_simulation_output(show=True)
+
+This will produce the following figures:
+
 Ground elevation and turbine locations:
 
-.. image:: notebooks/output/run_wy/figs/elevation.png
+.. image:: docs/figs/elevation.png
     :width: 2000 px
     :scale: 20 %
     :align: left
@@ -86,7 +119,7 @@ Ground elevation and turbine locations:
 
 Orographic updrafts:
 
-.. image:: notebooks/output/run_wy/figs/uniform/s10d270_orograph.png
+.. image:: docs/figs/s10d270_orograph.png
     :width: 2000 px
     :scale: 20 %
     :align: left
@@ -94,7 +127,7 @@ Orographic updrafts:
 
 1000 simulated tracks travelling towards north:
 
-.. image:: notebooks/output/run_wy/figs/uniform/s10d270_north_tracks.png
+.. image:: docs/figs/s10d270_north_tracks.png
     :width: 2000 px
     :scale: 20 %
     :align: right
@@ -102,7 +135,7 @@ Orographic updrafts:
 
 Relative eagle presence density
 
-.. image:: notebooks/output/run_wy/figs/uniform/s10d270_north_presence.png
+.. image:: docs/figs/s10d270_north_presence.png
     :width: 2000 px
     :scale: 20 %
     :align: right

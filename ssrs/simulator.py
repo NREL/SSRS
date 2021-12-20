@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
+from dataclasses import asdict
 from .terrain import Terrain
 from .wtk import WTK
 from .turbines import TurbinesUSWTB
@@ -33,9 +34,13 @@ class Simulator(Config):
     lonlat_crs = 'EPSG:4236'
     time_format = 'y%Ym%md%dh%H'
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, in_config: Config = None, **kwargs) -> None:
         # initiate the config parameters
-        super().__init__(**kwargs)
+        if in_config is None:
+            print('i was here')
+            super().__init__(**kwargs)
+        else:
+            super().__init__(**asdict(in_config))
         print(f'\n---- SSRS in {self.sim_mode} mode')
         print(f'Run name: {self.run_name}')
 
@@ -205,13 +210,12 @@ class Simulator(Config):
             np.save(fpath, orograph.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
 
-    def plot_terrain_layers(self, plot_turbs=True, show=False) -> None:
+    def plot_terrain_features(self, plot_turbs=True, show=False) -> None:
         """ Plots terrain layers """
         print('Plotting terrain layers..', flush=True)
         self.plot_terrain_elevation(plot_turbs, show)
         self.plot_terrain_slope(plot_turbs, show)
         self.plot_terrain_aspect(plot_turbs, show)
-        self.plot_orographic_updrafts(plot_turbs, show)
 
     def plot_terrain_elevation(self, plot_turbs=True, show=False) -> None:
         """ Plotting terrain elevation """
@@ -248,6 +252,12 @@ class Simulator(Config):
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)
+
+    def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
+        """ Plots oro updraft and tracks """
+        sim.plot_orographic_updrafts(plot_turbs, show)
+        sim.plot_simulated_tracks(plot_turbs, show)
+        sim.plot_presence_maps(plot_turbs, show)
 
     def plot_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
         """ Plot orographic updrafts """

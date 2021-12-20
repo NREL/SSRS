@@ -16,6 +16,11 @@ __pycache__/
 *.pyo
 .pytest_cache
 
+# docs
+docs/_build/
+docs/_template/
+docs/_static/
+
 
 # Distribution / packaging
 .Python

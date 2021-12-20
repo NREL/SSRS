@@ -1,7 +1,7 @@
 """ Scipt for running the SSRS simulation in Wyoming
 around Top of the World wind power plane at 50 m resolution"""
 
-from dataclasses import replace, asdict
+from dataclasses import replace
 from ssrs import Simulator, Config
 
 config_jem_base = Config(
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         # config_jem_seasonal_north
     )
     for i, cfg in enumerate(configs_to_run):
-        sim = Simulator(**asdict(cfg))
+        sim = Simulator(cfg)
         sim.simulate_tracks()
         sim.plot_wtk_layers()
         sim.plot_ssrs_output()

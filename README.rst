@@ -229,10 +229,7 @@ Parameters for plotting:
     turbine_box_around_wfarm: bool = False # to plot box around a plant
     presence_smoothing_radius: bool = 10  # smoothing radius in meters
 
-
-Keywords
---------------
-Behavior modeling, Stochastic modeling, agent--based movement model, wind--wildlife interactions, raptor conservation, golden eagles
+.. include:: AUTHORS.rst 
 
 Citation
 --------------

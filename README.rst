@@ -30,34 +30,84 @@ SSRS operates under three modes:
 
 Installation
 --------------
-pip install 
+Without Anaconda/miniconda (requires python>=3.8 and pip>21.3):
+
+.. code-block:: bash
+
+    pip install git+https://github.com/NREL/SSRS.git#egg=ssrs
+
+With Anaconda/miniconda:
+
+.. code-block:: bash
+
+    conda create -n my_env_name python=3.8 pip
+    conda activate my_env_name
+    pip install git+https://github.com/NREL/SSRS.git#egg=ssrs
+
+Alternatively, clone the GitHub repository on local machine,
+cd into the SSRS directory and run following commands in the terminal
+
+.. code-block:: bash
+
+    conda env create -f environment.yml
+    conda activate ssrs_env
+    pip install .
+
+For running conda environment ssrs_env in Jupyter Notebook,
+
+.. code-block:: bash
+
+    conda install ipykernel
+    ipython kernel install --user --name=ssrs_env
+
+For SSRS to access NREL's WTK dataset in the snapshot mode, need to get an
+API key from https://developer.nrel.gov/signup/ and save it in .hscfg file provided
 
 Usage
 --------------
 
-Keywords
---------------
-Behavior modeling, Stochastic modeling, agent--based movement model, wind--wildlife interactions, raptor conservation, golden eagles
+The Jupyter Notebooks in examples/ show the usage of SSRS for a given region.
+For instance, see this notebook_ for ssrs simulation in uniform mode for a region
+in Wyoming, simulating 1000 eagles travelling north, which will generate
+following figures:
 
-Citation
---------------
-Sandhu, Rimple, Tripp, Charles Edison, Thedin, Regis, Quon, Eliot, Lawson, Michael, Doubrawa, Paula, Draxl, Caroline, and Williams, Lindy. NREL/SSRS. Computer Software. https://github.com/NREL/SSRS. USDOE Office of Energy Efficiency and Renewable Energy (EERE), Renewable Power Office. Wind Energy Technologies Office. Web.
+.. _notebook: notebooks/sample_ssrs_uniform.ipynb
+
+Ground elevation and turbine locations:
+
+.. image:: notebooks/output/run_wy/figs/elevation.png
+    :width: 2000 px
+    :scale: 20 %
+    :align: left
+    :alt: Ground elevation and turbine locations
+
+Orographic updrafts:
+
+.. image:: notebooks/output/run_wy/figs/uniform/s10d270_orograph.png
+    :width: 2000 px
+    :scale: 20 %
+    :align: left
+    :alt: Orographic updrafts
+
+1000 simulated tracks travelling towards north:
+
+.. image:: notebooks/output/run_wy/figs/uniform/s10d270_north_tracks.png
+    :width: 2000 px
+    :scale: 20 %
+    :align: right
+    :alt: 
+
+Relative eagle presence density
+
+.. image:: notebooks/output/run_wy/figs/uniform/s10d270_north_presence.png
+    :width: 2000 px
+    :scale: 20 %
+    :align: right
+    :alt: Relative eagle presence density
 
 
 Configuration
 --------------
-* To get started, install [Anaconda](https://www.anaconda.com/products/individual) or [miniconda](https://docs.conda.io/projects/continuumio-conda/en/latest/user-guide/install/macos.html). Then, install the SSRS conda environement using environment.yml and activate the installed ssrs_env environment
-
-
-.. code-block:: python
-
-    conda deactivate
-    conda env create --file environment.yml
-    conda activate ssrs_env
-
-
-
-To access NREL's WTK dataset, the user needs to get an API key from https://developer.nrel.gov/signup/ and assign it to the parameter 'wtk_aws_key' in config.py. The example API key in config.py is for demonstation and is rate-limited per IP.
 
 Parameter configuration options: 
 SSRS relies on a set of parameter values  (defined as configuration) 
@@ -112,6 +162,15 @@ general parameters for the SSRS simulation
     turbine_mrkr_size: float = 3.
     turbine_box_around_wfarm: bool = False
     presence_smoothing_radius: bool = 10  # smoothing radius in meters
+
+
+Keywords
+--------------
+Behavior modeling, Stochastic modeling, agent--based movement model, wind--wildlife interactions, raptor conservation, golden eagles
+
+Citation
+--------------
+Sandhu, Rimple, Tripp, Charles Edison, Thedin, Regis, Quon, Eliot, Lawson, Michael, Doubrawa, Paula, Draxl, Caroline, and Williams, Lindy. NREL/SSRS. Computer Software. https://github.com/NREL/SSRS. USDOE Office of Energy Efficiency and Renewable Energy (EERE), Renewable Power Office. Wind Energy Technologies Office. Web.
 
 
 

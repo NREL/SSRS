@@ -81,10 +81,10 @@ contain a sample .hscfg_need_api_key file. Make sure to rename this file as
 Usage
 --------------
 
-The Jupyter notebooks in examples/ show the usage of SSRS for a given region.
-For instance, ssrs simulation in uniform mode for a 60 km by 50 km
-region in Wyoming and simulating 500 eagles travelling north can be implemented
-using the following code:
+The Jupyter notebooks in notebooks/ and python scripts in examples/ show the
+usage of SSRS for a given region. For instance, ssrs simulation in uniform mode
+for a 60 km by 50 km region in Wyoming and simulating 500 eagles travelling
+north can be implemented using the following code:
 
 .. _notebook: notebooks/sample_ssrs_uniform.ipynb
 
@@ -227,7 +227,7 @@ Parameters for plotting:
                            '+k', 'xk', '*k', '.k', 'ok')
     turbine_mrkr_size: float = 3. # marker size for plotting turbines
     turbine_box_around_wfarm: bool = False # to plot box around a plant
-    presence_smoothing_radius: bool = 10  # smoothing radius in meters
+    presence_smoothing_radius: bool = 10  # smoothing radius in meters for presence maps
 
 .. include:: AUTHORS.rst 
 

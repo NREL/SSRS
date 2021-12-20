@@ -61,7 +61,10 @@ For running conda environment ssrs_env in Jupyter Notebook,
     ipython kernel install --user --name=ssrs_env
 
 For SSRS to access NREL's WTK dataset in the snapshot mode, need to get an
-API key from https://developer.nrel.gov/signup/ and save it in .hscfg file provided
+API key from https://developer.nrel.gov/signup/ and save it in .hscfg file
+located in the working directory. Both examples/ and notebooks/ directories
+contain a sample .hscfg_need_api_key file. Make sure to rename this file as
+.hscfg after inserting the API key in this file. 
 
 Usage
 --------------
@@ -109,17 +112,27 @@ Relative eagle presence density
 Configuration
 --------------
 
-Parameter configuration options: 
-SSRS relies on a set of parameter values  (defined as configuration) 
-general parameters for the SSRS simulation
+SSRS settings can be changed through a set of parameters defined using
+ssrs.Config attribute. The default setting can be viewed through following code:
+
+.. code-block:: python
+
+    from ssrs import Config
+    print(Config())
+
+Here is a description of the parameters available to the users to vary:
 
 .. code-block:: python
 
     run_name: str = 'default'  # name of this run, determines directory names
-    
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
-    max_cores: int = 8  # maximum of cores to use
+    max_cores: int = 8  # maximum number of cores to use
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+
+
+Parameters for setting up the region:
+
+.. code-block:: python
 
     southwest_lonlat: Tuple[float, float] = (42.78, -106.21)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
@@ -127,40 +140,64 @@ general parameters for the SSRS simulation
     resolution: int = 100.  # desired terrain resolution (meters)
 
 
+Parameters for setting up the uniform mode:
+
+.. code-block:: python
+
     uniform_winddirn: float = 270.  # northerly = 0., easterly = 90, westerly=270
     uniform_windspeed: float = 10.  # uniform wind speed in m/s
 
-    # parameters for seasonal mode
+
+Parameters for setting up the snapshot mode:
+
+.. code-block:: python
+
+    snapshot_datetime: Tuple[int, int, int, int] = (2010, 6, 17, 13)
+
+
+Parameters for setting up the seasonal mode:
+
+.. code-block:: python
+
     seasonal_start: Tuple[int, int] = (3, 1)  # start of season (month, day)
     seasonal_end: Tuple[int, int] = (12, 1)  # end of season (month, day)
     seasonal_timeofday: str = 'daytime'  # morning, afternoon, evening, daytime
     seasonal_count: int = 8  # number of seasonal updraft computations
 
-    # parameters for snapshot mode
-    snapshot_datetime: Tuple[int, int, int, int] = (2010, 6, 17, 13)
 
-    # downloading data from WTK
+Parameters for importing data from WindToolKit dataset: 
+
+.. code-block:: python
+
     wtk_source: str = 'AWS'  # 'EAGLE', 'AWS', 'EAGLE_LED'
     wtk_orographic_height: int = 100  # WTK wind conditions at this height
     wtk_thermal_height: int = 100  # WTK pressure, temperature, at this height
     wtk_interp_type: str = 'linear'  # 'nearest' 'linear' 'cubic'
 
-    # parameters for simulating tracks
+
+Parameters for simulating tracks:
+
+.. code-block:: python
+
     track_direction: str = 'north'  # south,north,east,west,nwest,neast,swest,seast
     track_count: str = 100  # number of simulated eagle tracks
     track_start_region: Tuple[float, float, float, float] = (5, 45, 0, 0)
     track_start_type: str = 'random'  # uniform, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
-    track_dirn_restrict: int = 2  # consideration of previous moves, options: 0,1,2
+    track_dirn_restrict: int = 2  # options: 0,1,2
 
-    # plotting related
-    fig_height: float = 6.
+
+Parameters for plotting:
+
+.. code-block:: python
+
+    fig_height: float = 6. # height of the figure window
     fig_dpi: int = 200  # increase this to get finer plots
-    turbine_minimum_hubheight: float = 50.  # for select turbine locations
+    turbine_minimum_hubheight: float = 50.  # for plotting turbine locations
     turbine_mrkr_styles = ('1k', '2k', '3k', '4k',
                            '+k', 'xk', '*k', '.k', 'ok')
-    turbine_mrkr_size: float = 3.
-    turbine_box_around_wfarm: bool = False
+    turbine_mrkr_size: float = 3. # marker size for plotting turbines
+    turbine_box_around_wfarm: bool = False # to plot box around a plant
     presence_smoothing_radius: bool = 10  # smoothing radius in meters
 
 

@@ -113,7 +113,6 @@ Ground elevation and turbine locations:
 
 .. image:: docs/figs/elevation.png
     :width: 200 px
-    :scale: 50 %
     :align: left
     :alt: Ground elevation and turbine locations
 
@@ -121,7 +120,6 @@ Orographic updrafts:
 
 .. image:: docs/figs/s10d270_orograph.png
     :width: 200 px
-    :scale: 50 %
     :align: left
     :alt: Orographic updrafts
 
@@ -129,7 +127,6 @@ Orographic updrafts:
 
 .. image:: docs/figs/s10d270_north_tracks.png
     :width: 200 px
-    :scale: 50 %
     :align: right
     :alt: 
 
@@ -137,7 +134,6 @@ Relative eagle presence density
 
 .. image:: docs/figs/s10d270_north_presence.png
     :width: 200 px
-    :scale: 50 %
     :align: right
     :alt: Relative eagle presence density
 

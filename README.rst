@@ -112,32 +112,32 @@ This will produce the following figures:
 Ground elevation and turbine locations:
 
 .. image:: docs/figs/elevation.png
-    :width: 2000 px
-    :scale: 20 %
+    :width: 200 px
+    :scale: 50 %
     :align: left
     :alt: Ground elevation and turbine locations
 
 Orographic updrafts:
 
 .. image:: docs/figs/s10d270_orograph.png
-    :width: 2000 px
-    :scale: 20 %
+    :width: 200 px
+    :scale: 50 %
     :align: left
     :alt: Orographic updrafts
 
 1000 simulated tracks travelling towards north:
 
 .. image:: docs/figs/s10d270_north_tracks.png
-    :width: 2000 px
-    :scale: 20 %
+    :width: 200 px
+    :scale: 50 %
     :align: right
     :alt: 
 
 Relative eagle presence density
 
 .. image:: docs/figs/s10d270_north_presence.png
-    :width: 2000 px
-    :scale: 20 %
+    :width: 200 px
+    :scale: 50 %
     :align: right
     :alt: Relative eagle presence density
 

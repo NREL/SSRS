@@ -19,7 +19,8 @@ from .terrain import Terrain
 from .wtk import WTK
 from .turbines import TurbinesUSWTB
 from .config import Config
-from .layers import compute_orographic_updraft
+from .layers import (compute_orographic_updraft, compute_aspect_richdem_degrees, 
+                    compute_slope_richdem_degrees)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 from .movmodel import (MovModel, get_starting_indices, generate_eagle_track,
@@ -77,12 +78,17 @@ class Simulator(Config):
 
         # download terrain layers from USGS's 3DEP dataset
         self.region = Terrain(self.lonlat_bounds, self.data_dir)
-        self.terrain_layers = {
-            'Elevation': 'DEM',
-            'Slope': 'Slope Degrees',
-            'Aspect': 'Aspect Degrees'
-        }
-        self.region.download(self.terrain_layers.values())
+        try:
+            self.terrain_layers = {
+                'Elevation': 'DEM',
+                'Slope': 'Slope Degrees',
+                'Aspect': 'Aspect Degrees'
+            }
+            self.region.download(self.terrain_layers.values())
+        except Exception as _:
+            print('Connection issues with 3DEP WMS service! Trying SRTM1..')
+            self.terrain_layers = {'Elevation': 'SRTM1'}
+            self.region.download(self.terrain_layers.values())
 
         # setup turbine data
         self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
@@ -188,8 +194,8 @@ class Simulator(Config):
     def compute_orographic_updraft_uniform(self) -> None:
         """ Computing orographic updrafts for uniform mode"""
         print('Computing orographic updrafts..')
-        slope = self.get_terrain_layer('Slope')
-        aspect = self.get_terrain_layer('Aspect')
+        slope = self.get_terrain_slope()
+        aspect = self.get_terrain_aspect()
         wspeed = self.uniform_windspeed * np.ones(self.gridsize)
         wdirn = self.uniform_winddirn * np.ones(self.gridsize)
         orograph = compute_orographic_updraft(wspeed, wdirn, slope, aspect)
@@ -199,8 +205,8 @@ class Simulator(Config):
     def compute_orographic_updrafts_using_wtk(self) -> None:
         """ Computing orographic updrafts using wtk data for all datetimes"""
         print('Computing orographic updrafts..', end="")
-        slope = self.get_terrain_layer('Slope')
-        aspect = self.get_terrain_layer('Aspect')
+        slope = self.get_terrain_slope()
+        aspect = self.get_terrain_aspect()
         start_time = time.time()
         for dtime, case_id in zip(self.dtimes, self.case_ids):
             wtk_df = self.wtk.get_dataframe_for_this_time(dtime)
@@ -222,7 +228,7 @@ class Simulator(Config):
 
     def plot_terrain_elevation(self, plot_turbs=True, show=False) -> None:
         """ Plotting terrain elevation """
-        elevation = self.get_terrain_layer('Elevation')
+        elevation = self.get_terrain_elevation()
         fig, axs = plt.subplots(figsize=self.fig_size)
         curm = axs.imshow(elevation / 1000., cmap='terrain',
                           extent=self.extent, origin='lower')
@@ -234,7 +240,7 @@ class Simulator(Config):
 
     def plot_terrain_slope(self, plot_turbs=True, show=False) -> None:
         """ Plots slope in degrees """
-        slope = self.get_terrain_layer('Slope')
+        slope = self.get_terrain_slope()
         fig, axs = plt.subplots(figsize=self.fig_size)
         curm = axs.imshow(slope, cmap='magma_r',
                           extent=self.extent, origin='lower')
@@ -246,7 +252,7 @@ class Simulator(Config):
 
     def plot_terrain_aspect(self, plot_turbs=True, show=False) -> None:
         """ Plots terrain aspect """
-        aspect = self.get_terrain_layer('Aspect')
+        aspect = self.get_terrain_aspect()
         fig, axs = plt.subplots(figsize=self.fig_size)
         curm = axs.imshow(aspect, cmap='hsv',
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
@@ -258,9 +264,10 @@ class Simulator(Config):
 
     def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
         """ Plots oro updraft and tracks """
-        sim.plot_orographic_updrafts(plot_turbs, show)
-        sim.plot_simulated_tracks(plot_turbs, show)
-        sim.plot_presence_maps(plot_turbs, show)
+        self.plot_orographic_updrafts(plot_turbs, show)
+        self.plot_directional_potentials(plot_turbs, show)
+        self.plot_simulated_tracks(plot_turbs, show)
+        self.plot_presence_maps(plot_turbs, show)
 
     def plot_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
         """ Plot orographic updrafts """
@@ -302,11 +309,6 @@ class Simulator(Config):
         except AttributeError as _:
             print('No WTK data to plot in uniform mode!')
 
-    def plot_ssrs_output(self, plot_turbs=True, show=False) -> None:
-        """ Plot tracks, potential and presence """
-        self.plot_directional_potentials(plot_turbs, show)
-        self.plot_simulated_tracks(plot_turbs, show)
-        self.plot_presence_maps(plot_turbs, show)
 
     def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
         """ Plot directional potential """
@@ -327,7 +329,7 @@ class Simulator(Config):
         """ Plots simulated tracks """
         print('Plotting simulated_tracks..')
         lwidth = 0.1 if self.track_count > 251 else 0.4
-        elevation = self.get_terrain_layer('Elevation')
+        elevation = self.get_terrain_elevation()
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
             fig, axs = plt.subplots(figsize=self.fig_size)
@@ -347,7 +349,7 @@ class Simulator(Config):
                            minval=0.2) -> None:
         """ Plot presence maps """
         print('Plotting presence maps..')
-        elevation = self.get_terrain_layer('Elevation')
+        elevation = self.get_terrain_elevation()
         for case_id in self.case_ids:
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
@@ -400,6 +402,28 @@ class Simulator(Config):
         wtk_xlocs, wtk_ylocs = transform_coordinates(
             self.lonlat_crs, self.projected_crs, wtk_lons, wtk_lats)
         return wtk_xlocs, wtk_ylocs
+
+    def get_terrain_elevation(self):
+        """ Returns data for terrain layer inprojected crs """
+        return self.get_terrain_layer('Elevation')
+
+    def get_terrain_slope(self):
+        """ Returns data for terrain layer inprojected crs """
+        try:
+            slope = self.get_terrain_layer('Slope')
+        except:
+            elev = self.get_terrain_elevation()
+            slope = compute_slope_richdem_degrees(elev, self.resolution)
+        return slope
+
+    def get_terrain_aspect(self):
+        """ Returns data for terrain layer inprojected crs """
+        try:
+            aspect = self.get_terrain_layer('Aspect')
+        except:
+            elev = self.get_terrain_elevation()
+            aspect = compute_aspect_richdem_degrees(elev, self.resolution)
+        return aspect
 
     def get_terrain_layer(self, lname: str):
         """ Returns data for terrain layer inprojected crs """

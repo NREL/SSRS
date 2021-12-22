@@ -50,6 +50,6 @@ if __name__ == '__main__':
     for i, cfg in enumerate(configs_to_run):
         sim = Simulator(cfg)
         sim.simulate_tracks()
-        sim.plot_wtk_layers()
-        sim.plot_ssrs_output()
         sim.plot_terrain_features()
+        sim.plot_wtk_layers()
+        sim.plot_simulation_output()

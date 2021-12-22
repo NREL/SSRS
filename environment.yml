@@ -13,6 +13,7 @@ dependencies:
   - h5py>=3.4
   - timezonefinder>=5.2
   - owslib>=0.25
+  - richdem>=0.3.4
   - pip
   - pip:
       - h5pyd>=0.8

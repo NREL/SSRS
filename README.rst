@@ -31,17 +31,10 @@ SSRS operates under three modes:
 Installation
 --------------
 
-Using conda virtual environments from
+Clone the GitHub repository on local machine,
+cd into the SSRS directory and using
+conda virtual environments from
 `Anaconda <https://docs.anaconda.com/anaconda/install/index.html>`_, do:
-
-.. code-block:: bash
-
-    conda create -n my_env_name python=3.8 pip
-    conda activate my_env_name
-    pip install git+https://github.com/NREL/SSRS.git#egg=ssrs
-
-Alternatively, clone the GitHub repository on local machine,
-cd into the SSRS directory and run following commands in the terminal
 
 .. code-block:: bash
 
@@ -229,11 +222,26 @@ Parameters for plotting:
     turbine_box_around_wfarm: bool = False # to plot box around a plant
     presence_smoothing_radius: bool = 10  # smoothing radius in meters for presence maps
 
-.. include:: AUTHORS.rst 
+
+Developers
+-----------
+
+* Rimple Sandhu, National Renewable Energy Laboratory rimple.sandhu@nrel.com
+* Charles Tripp, National Renewable Energy Laboratory, charles.tripp@nrel.gov
+* Eliot Quon, National Renewable Energy Laboratory
+* Regis Thedin, National Renewable Energy Laboratory
+* Lindy Williams, National Renewable Energy Laboratory
+* Paula Doubrawa, National Renewable Energy Laboratory
+* Caroline Draxl, National Renewable Energy Laboratory
+* Mike Lawson, National Renewable Energy Laboratory
+
+
 
 Citation
 --------------
-Sandhu, Rimple, Tripp, Charles Edison, Thedin, Regis, Quon, Eliot, Lawson, Michael, Doubrawa, Paula, Draxl, Caroline, and Williams, Lindy. NREL/SSRS. Computer Software. https://github.com/NREL/SSRS. USDOE Office of Energy Efficiency and Renewable Energy (EERE), Renewable Power Office. Wind Energy Technologies Office. Web.
+Sandhu, Rimple, Tripp, Charles, Quon, Eliot, Thedin, Regis, Williams, Lindy, Doubrawa, Paula, Draxl, Caroline, and Lawson, Mike. SSRS (Stochastic Soaring Raptor Simulator). Computer Software. https://github.com/NREL/SSRS. USDOE Office of Energy Efficiency and Renewable Energy (EERE), Renewable Power Office. Wind Energy Technologies Office. 18 Oct. 2021. Web. doi:10.11578/dc.20210903.2.
+
+
 
 
 

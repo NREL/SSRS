@@ -11,6 +11,7 @@ import pathos.multiprocessing as mp
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from contextlib import redirect_stdout
 from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
 from dataclasses import asdict
@@ -37,7 +38,6 @@ class Simulator(Config):
     def __init__(self, in_config: Config = None, **kwargs) -> None:
         # initiate the config parameters
         if in_config is None:
-            print('i was here')
             super().__init__(**kwargs)
         else:
             super().__init__(**asdict(in_config))
@@ -67,7 +67,7 @@ class Simulator(Config):
         # figure out bounds in both lon/lat and in projected crs
         proj_west, proj_south = transform_coordinates(
             self.lonlat_crs, self.projected_crs,
-            self.southwest_lonlat[1], self.southwest_lonlat[0])
+            self.southwest_lonlat[0], self.southwest_lonlat[1])
         proj_east = proj_west[0] + xsize * self.resolution
         proj_north = proj_south[0] + ysize * self.resolution
         self.bounds = (proj_west[0], proj_south[0], proj_east, proj_north)
@@ -88,6 +88,9 @@ class Simulator(Config):
         self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
                                       self.turbine_minimum_hubheight,
                                       self.data_dir)
+        with open(os.path.join(self.data_dir, 'turbines.txt'), 'w') as f:
+            with redirect_stdout(f):
+                self.turbines.print_details()
 
         # figure out wtk and its layers to extract
         self.wtk_layers = {

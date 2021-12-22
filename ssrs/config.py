@@ -17,7 +17,7 @@ class Config:
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
 
     # parameters defining the terrain
-    southwest_lonlat: Tuple[float, float] = (42.78, -106.21)
+    southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
     region_width_km: Tuple[float, float] = (30., 20.)
     resolution: int = 100.  # desired terrain resolution (meters)

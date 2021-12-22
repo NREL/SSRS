@@ -7,7 +7,6 @@ notebooks/.hscfg
 ssrs/output
 ssrs/older/
 ssrs/__pycache__/
-*review
 
 # Compiled
 __pycache__/

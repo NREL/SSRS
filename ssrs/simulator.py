@@ -94,7 +94,8 @@ class Simulator(Config):
         self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
                                       self.turbine_minimum_hubheight,
                                       self.data_dir)
-        with open(os.path.join(self.data_dir, 'turbines.txt'), 'w') as f:
+        fname = os.path.join(self.data_dir, 'turbines_summary.txt')
+        with open(fname, 'w') as f:
             with redirect_stdout(f):
                 self.turbines.print_details()
 
@@ -282,7 +283,8 @@ class Simulator(Config):
             cbar.set_label('Orographic updraft (m/s)')
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            self.save_fig(fig, self._get_orograph_fpath_fig(case_id), show)
+            fname = os.path.join(self.mode_fig_dir, f'{case_id}_orograph.png')
+            self.save_fig(fig, fname, show)
 
     def plot_wtk_layers(self, plot_turbs=True, show=False) -> None:
         """ Plot all the layers in Wind Toolkit data """
@@ -322,7 +324,8 @@ class Simulator(Config):
             cbar.set_label('Directional potential')
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            self.save_fig(fig, self._get_potential_fpath_fig(case_id), show)
+            fname = f'{case_id}_{self.track_direction}_potential.png'
+            self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 
     def plot_simulated_tracks(self, plot_turbs=True, show=False) -> None:
         """ Plots simulated tracks """
@@ -342,12 +345,13 @@ class Simulator(Config):
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            self.save_fig(fig, self._get_tracks_fpath_fig(case_id), show)
+            fname = f'{case_id}_{self.track_direction}_tracks.png'
+            self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 
     def plot_presence_maps(self, plot_turbs=True, show=False,
                            minval=0.2) -> None:
         """ Plot presence maps """
-        print('Plotting presence maps..')
+        print('Plotting presence map for the study area..')
         #elevation = self.get_terrain_elevation()
         for case_id in self.case_ids:
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
@@ -364,7 +368,35 @@ class Simulator(Config):
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            self.save_fig(fig, self._get_presence_fpath_fig(case_id), show)
+            fname = f'{case_id}_{self.track_direction}_presence.png'
+            self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
+
+    def plot_plant_specific_presence_maps(self, show=False,
+                                          minval=0.2) -> None:
+        """ Plot presence maps for each power plant contained in study area"""
+        print('Plotting presence map for each project..')
+        smooting_radius = int(self.presence_smoothing_radius / 2)
+        pad = 1000.  # in meters
+        for case_id in self.case_ids:
+            with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
+                tracks = pickle.load(fobj)
+            prprob = compute_presence_probability(
+                tracks, self.gridsize, smooting_radius)
+            prprob[prprob <= minval] = 0.
+            for pname in self.turbines.get_project_names():
+                xloc, yloc = self.turbines.get_locations_for_this_project(
+                    pname)
+                fig, axs = plt.subplots()
+                _ = axs.imshow(prprob, extent=self.extent, origin='lower',
+                               cmap='Reds', alpha=0.75,
+                               norm=LogNorm(vmin=minval, vmax=1.0))
+                _, _ = create_gis_axis(fig, axs, None, 1)
+                axs.set_xlim([min(xloc) - pad, max(xloc) + pad])
+                axs.set_ylim([min(yloc) - pad, max(yloc) + pad])
+                self.plot_turbine_locations(axs)
+                fname = f'{case_id}_{self.track_direction}_{pname}_presence.png'
+                self.save_fig(fig, os.path.join(
+                    self.mode_fig_dir, fname), show)
 
     def plot_turbine_locations(
             self,
@@ -477,34 +509,15 @@ class Simulator(Config):
         """ Returns file path for saving orographic updrafts data """
         return os.path.join(self.mode_data_dir, f'{case_id}_orograph.npy')
 
-    def _get_orograph_fpath_fig(self, case_id: str):
-        """ Returns file path for saving orographic updrafts figure"""
-        return os.path.join(self.mode_fig_dir, f'{case_id}_orograph.png')
-
     def _get_potential_fpath(self, case_id: str):
         """ Returns file path for saving directional potential data"""
         fname = f'{case_id}_{self.track_direction}_potential.npy'
         return os.path.join(self.mode_data_dir, fname)
 
-    def _get_potential_fpath_fig(self, case_id: str):
-        """ Returns file path for saving directional potential figure"""
-        fname = f'{case_id}_{self.track_direction}_potential.png'
-        return os.path.join(self.mode_fig_dir, fname)
-
     def _get_tracks_fpath(self, case_id: str):
         """ Returns file path for saving simulated tracks """
         fname = f'{case_id}_{self.track_direction}_tracks.pkl'
         return os.path.join(self.mode_data_dir, fname)
-
-    def _get_tracks_fpath_fig(self, case_id: str):
-        """ Returns file path for saving simulated tracks """
-        fname = f'{case_id}_{self.track_direction}_tracks.png'
-        return os.path.join(self.mode_fig_dir, fname)
-
-    def _get_presence_fpath_fig(self, case_id: str):
-        """ Returns file path for saving simulated tracks """
-        fname = f'{case_id}_{self.track_direction}_presence.png'
-        return os.path.join(self.mode_fig_dir, fname)
 
     def _get_uniform_id(self):
         """ Returns case id for uniform mode """

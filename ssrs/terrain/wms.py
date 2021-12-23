@@ -98,12 +98,11 @@ class WMS:
         out_dir = os.path.dirname(os.path.abspath(fpath))
         if not os.path.isdir(out_dir):
             os.makedirs(out_dir)
-        print(f'WMS: Downloading data for {len(bnds_list)} tiles', end="")
+        print(f'WMS: Downloading data for {len(bnds_list)} tiles..')
         for k, bnds in enumerate(bnds_list):
             width = int(round((bnds[2] - bnds[0]) / res))
             height = int(round((bnds[3] - bnds[1]) / res))
             kk = 0
-            print('.', end="")
             while True:
                 try:
                     imap = self.wms.getmap(
@@ -120,10 +119,10 @@ class WMS:
                         kk += 1
                         continue
                     else:
-                        raise Exception(f'WMS: Connection issues! Try again') from None
+                        raise Exception(
+                            f'WMS: Connection issues! Try again') from None
                 else:
                     break
-        print('done', flush=True)
             # except Exception as _:
             #     raise Exception(f'WMS: Connection issues! Try again') from None
 

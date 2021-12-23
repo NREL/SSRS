@@ -53,4 +53,3 @@ if __name__ == '__main__':
         sim.plot_terrain_features()
         sim.plot_wtk_layers()
         sim.plot_simulation_output()
-

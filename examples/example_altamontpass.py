@@ -8,11 +8,11 @@ config_base = Config(
     run_name='altamont_pass',
     max_cores=16,
     out_dir='./output',
-    southwest_lonlat=(-121.8, 37.63),  # (lon, lat) for southwest pt
-    region_width_km=(50., 60.),  # terrain width (xwidth, ywidth) in km
+    southwest_lonlat=(-121.98, 37.56),  # (lon, lat) for southwest pt
+    region_width_km=(60., 80.),  # terrain width (xwidth, ywidth) in km
     resolution=100.,
     track_direction='north',
-    track_start_region=(2, 28, 0, 0),
+    track_start_region=(2, 58, 0, 0),
     track_count=1000
 )
 
@@ -23,13 +23,11 @@ config_uniform_north = replace(
     uniform_windspeed=10.,
 )
 
-
 config_snapshot_north = replace(
     config_base,
     sim_mode='snapshot',
     snapshot_datetime=(2010, 6, 17, 13),
 )
-
 
 config_seasonal_north = replace(
     config_base,

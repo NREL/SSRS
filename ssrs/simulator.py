@@ -19,8 +19,8 @@ from .terrain import Terrain
 from .wtk import WTK
 from .turbines import TurbinesUSWTB
 from .config import Config
-from .layers import (compute_orographic_updraft, compute_aspect_richdem_degrees, 
-                    compute_slope_richdem_degrees)
+from .layers import (compute_orographic_updraft, compute_aspect_degrees,
+                     compute_slope_degrees)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 from .movmodel import (MovModel, get_starting_indices, generate_eagle_track,
@@ -309,7 +309,6 @@ class Simulator(Config):
         except AttributeError as _:
             print('No WTK data to plot in uniform mode!')
 
-
     def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
         """ Plot directional potential """
         print('Plotting directional potential..')
@@ -349,15 +348,15 @@ class Simulator(Config):
                            minval=0.2) -> None:
         """ Plot presence maps """
         print('Plotting presence maps..')
-        elevation = self.get_terrain_elevation()
+        #elevation = self.get_terrain_elevation()
         for case_id in self.case_ids:
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
             prprob = compute_presence_probability(
                 tracks, self.gridsize, self.presence_smoothing_radius)
             fig, axs = plt.subplots(figsize=self.fig_size)
-            _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
-                           origin='lower', extent=self.extent)
+            # _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
+            #                origin='lower', extent=self.extent)
             prprob[prprob <= minval] = 0.
             _ = axs.imshow(prprob, extent=self.extent, origin='lower',
                            cmap='Reds', alpha=0.75,
@@ -413,7 +412,7 @@ class Simulator(Config):
             slope = self.get_terrain_layer('Slope')
         except:
             elev = self.get_terrain_elevation()
-            slope = compute_slope_richdem_degrees(elev, self.resolution)
+            slope = compute_slope_degrees(elev, self.resolution)
         return slope
 
     def get_terrain_aspect(self):
@@ -422,7 +421,7 @@ class Simulator(Config):
             aspect = self.get_terrain_layer('Aspect')
         except:
             elev = self.get_terrain_elevation()
-            aspect = compute_aspect_richdem_degrees(elev, self.resolution)
+            aspect = compute_aspect_degrees(elev, self.resolution)
         return aspect
 
     def get_terrain_layer(self, lname: str):

@@ -54,6 +54,7 @@ class SRTM:
     def download(self) -> None:
         """ Downloading data from SRTM in GeoTIFF format """
         try:
+            print(self.fpath)
             elevation.clip(self.bnds, product=self.layer,
                            output=self.fpath)
             if self.cleanup:

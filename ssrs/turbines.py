@@ -60,7 +60,7 @@ class TurbinesUSWTB:
             self.__ycol = 'ylat'
 
         # find the turbines within the requested bounds
-        print(f'TurbinesUSWTB: Minimum hub height set to {min_hubheight} m')
+        #print(f'TurbinesUSWTB: Minimum hub height set to {min_hubheight} m')
         xbool = dfraw[self.__xcol].between(bounds[0], bounds[2], 'both')
         ybool = dfraw[self.__ycol].between(bounds[1], bounds[3], 'both')
         hhbool = dfraw['t_hh'].between(min_hubheight, 10000., 'left')

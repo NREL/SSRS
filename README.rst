@@ -91,7 +91,7 @@ north can be implemented using the following code:
         resolution=100.,
         sim_mode='uniform',
         uniform_winddirn=270.,
-        track_direction='north',
+        track_direction=0.,
         track_count = 500,
         track_start_region=(20, 21, 0, 0)
     )

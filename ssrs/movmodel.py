@@ -18,7 +18,7 @@ class MovModel:
         self.move_dirn = move_dirn
         self.grid_shape = grid_shape
 
-    def get_boundary_nodes(self):
+    def get_boundary_nodes_old(self):
         """ returns boundary nodes for given direction of movement"""
         nrow, ncol = self.grid_shape
         north_bnodes = np.array([nrow * (x + 1) - 1 for x in range(ncol)])
@@ -51,16 +51,16 @@ class MovModel:
                  ))
         elif self.move_dirn == 'southwest':
             bnodes = np.concatenate(
-                (north_bnodes[:south_bnodes.size // fac],
+                (south_bnodes[:south_bnodes.size // fac],
                  west_bnodes[:west_bnodes.size // fac],
-                 south_bnodes[north_bnodes.size // fac:],
+                 north_bnodes[north_bnodes.size // fac:],
                  east_bnodes[east_bnodes.size // fac:],
                  ))
         elif self.move_dirn == 'northeast':
             bnodes = np.concatenate(
-                (south_bnodes[north_bnodes.size // fac:],
+                (north_bnodes[north_bnodes.size // fac:],
                  east_bnodes[east_bnodes.size // fac:],
-                 north_bnodes[:south_bnodes.size // fac],
+                 south_bnodes[:south_bnodes.size // fac],
                  west_bnodes[:west_bnodes.size // fac],
                  ))
         else:
@@ -69,6 +69,44 @@ class MovModel:
         bndry_energy[bnodes.size // 2:] = 1000.
 
         return bnodes, bndry_energy
+
+    def get_boundary_nodes(self):
+        """ returns boundary nodes and potential for given direction of 
+        movement """
+        nrow, ncol = self.grid_shape
+        north_bnodes = np.array([nrow * (x + 1) - 1 for x in range(ncol)])
+        south_bnodes = np.array([nrow * x for x in range(ncol)])
+        west_bnodes = np.array(list(range(1, nrow - 1)))
+        east_bnodes = np.array(
+            [(ncol - 1) * nrow + x for x in range(1, nrow - 1)])
+        mov_angle = self.move_dirn % 90.
+        mov_quad = (self.move_dirn % 360) // 90.
+        col_len = round(ncol * mov_angle / 90.)
+        row_len = round(nrow * mov_angle / 90.)
+        if mov_quad == 0:
+            low_nodes = np.concatenate(
+                (north_bnodes[col_len:], east_bnodes[nrow - row_len:]))
+            high_nodes = np.concatenate(
+                (south_bnodes[:ncol - col_len], west_bnodes[:row_len]))
+        elif mov_quad == 1:
+            low_nodes = np.concatenate(
+                (south_bnodes[ncol - col_len:], east_bnodes[:nrow - row_len]))
+            high_nodes = np.concatenate(
+                (north_bnodes[:col_len], west_bnodes[row_len:]))
+        elif mov_quad == 2:
+            low_nodes = np.concatenate(
+                (south_bnodes[:ncol - col_len], west_bnodes[:row_len]))
+            high_nodes = np.concatenate(
+                (north_bnodes[col_len:], east_bnodes[nrow - row_len:]))
+        elif mov_quad == 3:
+            high_nodes = np.concatenate(
+                (south_bnodes[ncol - col_len:], east_bnodes[:nrow - row_len]))
+            low_nodes = np.concatenate(
+                (north_bnodes[:col_len], west_bnodes[row_len:]))
+        bndry_nodes = np.concatenate((low_nodes, high_nodes))
+        bndry_potential = np.zeros((bndry_nodes.size))
+        bndry_potential[bndry_nodes.size // 2:] = 1000.
+        return bndry_nodes, bndry_potential
 
     def assemble_sparse_linear_system(self):
         """ returns the row and column index of sparse linear system"""
@@ -94,31 +132,32 @@ class MovModel:
         row_index = np.array(row_index, dtype='u4')
         col_index = np.array(col_index, dtype='u4')
         facs = np.array(facs, dtype='f4')
-        #print('Sparsity: {0:.3f} %'.format(100 * (1 - facs.size / (nrow * ncol)**2)))
+        # print('Sparsity: {0:.3f} %'.format(100 * (1 - facs.size / (nrow * ncol)**2)))
         return row_index, col_index, facs
 
-    @classmethod
+    @ classmethod
     def solve_sparse_linear_system(
         cls,
-        coeff: np.ndarray,
+        conductivity: np.ndarray,
         bnodes: np.ndarray,
         benergy: np.ndarray,
         row_inds: np.ndarray,
         col_inds: np.ndarray,
         facs: np.ndarray
     ) -> np.ndarray:
-        """ Solves the linear system for unknown energy values at inner nodes, 
+        """ Solves the linear system for unknown energy values at inner nodes,
         returns the energy at all nodes (inner + bndry)"""
 
-        nrow, ncol = coeff.shape
+        nrow, ncol = conductivity.shape
         vals = []
         for r, c, fac in zip(row_inds, col_inds, facs):
-            coeff_a = coeff[r % nrow, r // nrow]
-            coeff_b = coeff[c % nrow, c // nrow]
-            vals.append(harmonic_mean(coeff_a, coeff_b, 1e-10) / fac)
+            conductivity_a = conductivity[r % nrow, r // nrow]
+            conductivity_b = conductivity[c % nrow, c // nrow]
+            vals.append(harmonic_mean(conductivity_a,
+                        conductivity_b, 1e-10) / fac)
         g_coo = ss.coo_matrix((np.array(vals),
                                (np.array(row_inds),
-                                np.array(col_inds))), shape=(nrow * ncol, nrow * ncol))
+                              np.array(col_inds))), shape=(nrow * ncol, nrow * ncol))
         g_csr = g_coo.tocsr()
         g_csr.data = g_csr.data / np.repeat(np.add.reduceat(g_csr.data,
                                                             g_csr.indptr[:-1]),
@@ -181,15 +220,83 @@ def get_track_restrictions(dr: int, dc: int):
 
 
 def generate_eagle_track(
-        coeff: np.ndarray,
-        penergy: np.ndarray,
+        conductivity: np.ndarray,
+        potential: np.ndarray,
         start_loc: List[int],
         dirn_restrict: int,
         nu_par: float
 ):
     """ Generate an eagle track """
 
-    num_rows, num_cols = coeff.shape
+    num_rows, num_cols = conductivity.shape
+    burnin = 10
+    max_moves = num_rows * num_cols
+    dirn = [0, 0]
+    directions = []
+    directions.append(dirn)
+    position = start_loc.copy()
+    trajectory = []
+    trajectory.append(position)
+    k = 0
+    while k < max_moves:
+        row, col = position
+        if k > max_moves - 2:
+            print(f'Maximum steps reached at {row},{col}')
+        if k > burnin:
+            if row <= 0 or row >= num_rows - 1 or col <= 0 or col >= num_cols - 1:
+                break  # absorb if we hit a boundary
+        local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
+        local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
+        local_cond = local_cond.clip(min=1e-5)
+        mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
+        q_diff = local_potential_energy[1, 1] - local_potential_energy
+        if np.count_nonzero(q_diff) == 0:
+            q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
+            # print('All potentials same!')
+        q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
+        mov_probs = np.multiply(mean_cond, q_diff)
+        mov_probs = mov_probs.flatten()
+        mov_probs -= np.min(mov_probs)
+        mov_probs[4] = 0.
+        vec_bool = get_track_restrictions(0, 0)
+        for idirn in directions[-dirn_restrict:]:
+            vec_bool = np.logical_and(get_track_restrictions(*idirn), vec_bool)
+        rmov_probs = [x * float(y) for x, y in zip(mov_probs, vec_bool)]
+        if np.sum(rmov_probs) != 0:
+            rmov_probs /= np.sum(rmov_probs)
+            rmov_probs = np.power(rmov_probs, nu_par)
+            rmov_probs /= np.sum(rmov_probs)
+            chosen_index = np.random.choice(
+                range(len(rmov_probs)), p=rmov_probs)
+        else:
+            # print('Sum(mov_probs) is zero!')
+            if np.sum(mov_probs) != 0:
+                mov_probs /= np.sum(mov_probs)
+                mov_probs = np.power(mov_probs, nu_par)
+                mov_probs /= np.sum(mov_probs)
+                chosen_index = np.random.choice(
+                    range(len(mov_probs)), p=mov_probs)
+            else:
+                chosen_index = np.random.choice(range(len(mov_probs)))
+        # print(neighbour_deltas)
+        dirn = neighbour_deltas[chosen_index]
+        position = [x + y for x, y in zip(position, dirn)]
+        trajectory.append(position)
+        directions.append(dirn)
+        k += 1
+    return np.array(trajectory, dtype=np.int16)
+
+
+def generate_eagle_track_old(
+        conductivity: np.ndarray,
+        potential: np.ndarray,
+        start_loc: List[int],
+        dirn_restrict: int,
+        nu_par: float
+):
+    """ Generate an eagle track """
+
+    num_rows, num_cols = conductivity.shape
     burnin = 5
     max_moves = num_rows * num_cols
     dirn = [0, 0]
@@ -216,14 +323,14 @@ def generate_eagle_track(
                 col -= 1
         position = [row, col]
         previous_dirn = np.copy(dirn)
-        local_conductance = coeff[row - 1:row + 2, col - 1:col + 2]
-        local_potential_energy = penergy[row - 1:row + 2, col - 1:col + 2]
-        local_conductance = local_conductance.clip(min=1e-5)
-        mc = 2.0 / (1.0 / local_conductance[1, 1] + 1.0 / local_conductance)
+        local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
+        local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
+        local_cond = local_cond.clip(min=1e-5)
+        mc = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
         q_diff = local_potential_energy[1, 1] - local_potential_energy
         if np.count_nonzero(q_diff) == 0:
             q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
-            #print('All potentials same!')
+            # print('All potentials same!')
         q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
         mov_probs = np.multiply(mc, q_diff)
         mov_probs = mov_probs.flatten()
@@ -243,9 +350,9 @@ def generate_eagle_track(
             mov_probs = np.power(mov_probs, nu_par)
             mov_probs /= np.sum(mov_probs)
             chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
-            #print([round(x, 1) for x in mov_probs], chosen_index)
+            # print([round(x, 1) for x in mov_probs], chosen_index)
         else:
-            #print('Sum(q) is zero!')
+            # print('Sum(q) is zero!')
             chosen_index = np.random.choice(range(len(mov_probs)))
         # print(neighbour_deltas)
         dirn = neighbour_deltas[chosen_index]

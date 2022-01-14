@@ -201,12 +201,12 @@ Parameters for simulating tracks:
 
 .. code-block:: python
 
-    track_direction: str = 'north'  # south,north,east,west,nwest,neast,swest,seast
+    track_direction: str = 0.  # movement direction measured clockwise from north
     track_count: str = 100  # number of simulated eagle tracks
     track_start_region: Tuple[float, float, float, float] = (5, 45, 0, 0)
     track_start_type: str = 'random'  # uniform, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
-    track_dirn_restrict: int = 2  # options: 0,1,2
+    track_dirn_restrict: int = 2  # restrict within 45 deg of this previous moves
 
 
 Parameters for plotting:

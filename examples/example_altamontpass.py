@@ -11,7 +11,7 @@ config_base = Config(
     southwest_lonlat=(-121.98, 37.56),  # (lon, lat) for southwest pt
     region_width_km=(60., 80.),  # terrain width (xwidth, ywidth) in km
     resolution=100.,
-    track_direction='north',
+    track_direction=0.,
     track_start_region=(2, 58, 0, 0),
     track_count=1000
 )

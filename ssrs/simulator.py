@@ -295,7 +295,7 @@ class Simulator(Config):
                     vardata = wtk_df.loc[:, wtk_lyr].values.flatten()
                     interp_data = self._interpolate_wtk_vardata(vardata)
                     fig, axs = plt.subplots(figsize=self.fig_size)
-                    #cmap = 'hsv' if 'direction' in wtk_lyr else 'viridis'
+                    # cmap = 'hsv' if 'direction' in wtk_lyr else 'viridis'
                     curm = axs.imshow(interp_data, cmap='viridis',
                                       origin='lower', extent=self.extent,
                                       alpha=0.75)
@@ -324,6 +324,8 @@ class Simulator(Config):
             cbar.set_label('Directional potential')
             if plot_turbs:
                 self.plot_turbine_locations(axs)
+            axs.set_xlim([self.extent[0], self.extent[1]])
+            axs.set_ylim([self.extent[2], self.extent[3]])
             fname = f'{case_id}_{self.track_direction}_potential.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 
@@ -340,11 +342,23 @@ class Simulator(Config):
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
                 for itrack in tracks:
+                    axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
+                             markersize=1.5)
                     axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
                              '-r', linewidth=lwidth, alpha=0.5)
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
             if plot_turbs:
                 self.plot_turbine_locations(axs)
+            left = self.extent[0] + self.track_start_region[0] * 1000.
+            bottom = self.extent[2] + self.track_start_region[2] * 1000.
+            width = self.track_start_region[1] - self.track_start_region[0]
+            hght = self.track_start_region[3] - self.track_start_region[2]
+            rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                      hght * 1000., alpha=0.2,
+                                      edgecolor='none', facecolor='b')
+            axs.add_patch(rect)
+            axs.set_xlim([self.extent[0], self.extent[1]])
+            axs.set_ylim([self.extent[2], self.extent[3]])
             fname = f'{case_id}_{self.track_direction}_tracks.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 
@@ -352,7 +366,7 @@ class Simulator(Config):
                            minval=0.2) -> None:
         """ Plot presence maps """
         print('Plotting presence map for the study area..')
-        #elevation = self.get_terrain_elevation()
+        # elevation = self.get_terrain_elevation()
         for case_id in self.case_ids:
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
@@ -368,6 +382,8 @@ class Simulator(Config):
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
             if plot_turbs:
                 self.plot_turbine_locations(axs)
+            axs.set_xlim([self.extent[0], self.extent[1]])
+            axs.set_ylim([self.extent[2], self.extent[3]])
             fname = f'{case_id}_{self.track_direction}_presence.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 

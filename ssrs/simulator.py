@@ -37,6 +37,11 @@ class Simulator(Config):
     time_format = 'y%Ym%md%dh%H'
 
     def __init__(self, in_config: Config = None, **kwargs) -> None:
+        seed = kwargs.get('seed',None)
+        if seed is not None:
+            print('Specified random number seed:',seed)
+            np.random.seed(seed)
+
         # initiate the config parameters
         if in_config is None:
             super().__init__(**kwargs)

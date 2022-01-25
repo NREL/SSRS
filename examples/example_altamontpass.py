@@ -1,5 +1,5 @@
-""" Scipt for running the SSRS simulation in Wyoming
-around Top of the World wind power plane at 50 m resolution"""
+"""Script for running the SSRS simulation in California
+around Altamont Pass at 100-m resolution"""
 
 from dataclasses import replace
 from ssrs import Simulator, Config

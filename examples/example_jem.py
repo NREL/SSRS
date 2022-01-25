@@ -1,19 +1,20 @@
-""" Scipt for running the SSRS simulation in Wyoming
-around Top of the World wind power plane at 50 m resolution"""
+"""Script for running the SSRS simulation in Wyoming
+around Top of the World wind power plant at 50-m resolution"""
 
 from dataclasses import replace
 from ssrs import Simulator, Config
 
 config_jem_base = Config(
     run_name='jem_wy',
-    max_cores=16,
-    out_dir='./output',
+    max_cores=4, # 16
+    out_dir='./ref_output',
     southwest_lonlat=(-106.21, 42.78),  # (lon, lat) for southwest pt
     region_width_km=(50., 50.),  # terrain width (xwidth, ywidth) in km
     resolution=50.,
     track_direction=0.,
-    track_start_region=(2, 48, 0, 0),
-    track_count=1000
+    track_start_region=(2, 48, 0, 1),
+    track_count=100,
+    track_start_type='uniform',
 )
 
 config_jem_uniform_north = replace(

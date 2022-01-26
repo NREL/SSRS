@@ -18,58 +18,6 @@ class MovModel:
         self.move_dirn = move_dirn
         self.grid_shape = grid_shape
 
-    def get_boundary_nodes_old(self):
-        """ returns boundary nodes for given direction of movement"""
-        nrow, ncol = self.grid_shape
-        north_bnodes = np.array([nrow * (x + 1) - 1 for x in range(ncol)])
-        south_bnodes = np.array([nrow * x for x in range(ncol)])
-        west_bnodes = np.array(list(range(1, nrow - 1)))
-        east_bnodes = np.array(
-            [(ncol - 1) * nrow + x for x in range(1, nrow - 1)])
-        fac = 2  # determine portion of each boundary is used for diagonal moves
-        if self.move_dirn == 'north':
-            bnodes = np.concatenate((north_bnodes, south_bnodes))
-        elif self.move_dirn == 'south':
-            bnodes = np.concatenate((south_bnodes, north_bnodes))
-        elif self.move_dirn == 'east':
-            bnodes = np.concatenate((east_bnodes, west_bnodes))
-        elif self.move_dirn == 'west':
-            bnodes = np.concatenate((west_bnodes, east_bnodes))
-        elif self.move_dirn == 'northwest':
-            bnodes = np.concatenate(
-                (north_bnodes[:north_bnodes.size // fac],
-                 west_bnodes[west_bnodes.size // fac:],
-                 south_bnodes[south_bnodes.size // fac:],
-                 east_bnodes[:east_bnodes.size // fac],
-                 ))
-        elif self.move_dirn == 'southeast':
-            bnodes = np.concatenate(
-                (south_bnodes[south_bnodes.size // fac:],
-                 east_bnodes[:east_bnodes.size // fac],
-                 north_bnodes[:north_bnodes.size // fac],
-                 west_bnodes[west_bnodes.size // fac:],
-                 ))
-        elif self.move_dirn == 'southwest':
-            bnodes = np.concatenate(
-                (south_bnodes[:south_bnodes.size // fac],
-                 west_bnodes[:west_bnodes.size // fac],
-                 north_bnodes[north_bnodes.size // fac:],
-                 east_bnodes[east_bnodes.size // fac:],
-                 ))
-        elif self.move_dirn == 'northeast':
-            bnodes = np.concatenate(
-                (north_bnodes[north_bnodes.size // fac:],
-                 east_bnodes[east_bnodes.size // fac:],
-                 south_bnodes[:south_bnodes.size // fac],
-                 west_bnodes[:west_bnodes.size // fac],
-                 ))
-        else:
-            raise ValueError(f'ModelSSRS: Invalid direction {self.move_dirn}')
-        bndry_energy = np.zeros((bnodes.size))
-        bndry_energy[bnodes.size // 2:] = 1000.
-
-        return bnodes, bndry_energy
-
     def get_boundary_nodes(self):
         """ returns boundary nodes and potential for given direction of 
         movement """
@@ -189,14 +137,8 @@ for r in range(neighbour_delta_norms_inv.shape[0]):
         delta = np.array([r, c], dtype=np.int) - center
         neighbour_deltas.append(delta)
         distance = np.linalg.norm(delta)
-        neighbour_delta_norms_inv[r, c] = 1.0 / distance if distance > 0 else 0
-neighbour_deltas_alt = neighbour_deltas[0:4] + neighbour_deltas[5:]
-flat_neighbour_delta_norms_inv = list(neighbour_delta_norms_inv.flatten())
-neighbour_delta_norms_inv_alt = np.array(
-    flat_neighbour_delta_norms_inv[0:4] + flat_neighbour_delta_norms_inv[5:],
-    dtype=np.float32)
-delta_rows_alt = np.array([delta[0] for delta in neighbour_deltas_alt])
-delta_cols_alt = np.array([delta[1] for delta in neighbour_deltas_alt])
+        neighbour_delta_norms_inv[r, c] = 1.0 / \
+            distance if distance > 0 else 0
 
 
 def get_track_restrictions(dr: int, dc: int):
@@ -219,6 +161,21 @@ def get_track_restrictions(dr: int, dc: int):
     return a_mat.flatten()
 
 
+def move_away_from_boundary(row, col, num_rows, num_cols):
+    """ move simulated eagle away from edges """
+    new_col = col
+    new_row = row
+    if row <= 1:
+        new_row = row + 2
+    elif row >= num_rows - 2:
+        new_row = row - 2
+    if col <= 0:
+        new_col = col + 2
+    elif col >= num_cols - 2:
+        new_col = col - 2
+    return new_row, new_col
+
+
 def generate_eagle_track(
         conductivity: np.ndarray,
         potential: np.ndarray,
@@ -229,7 +186,7 @@ def generate_eagle_track(
     """ Generate an eagle track """
 
     num_rows, num_cols = conductivity.shape
-    burnin = 10
+    burnin = 200
     max_moves = num_rows * num_cols
     dirn = [0, 0]
     directions = []
@@ -240,11 +197,11 @@ def generate_eagle_track(
     k = 0
     while k < max_moves:
         row, col = position
-        if k > max_moves - 2:
-            print(f'Maximum steps reached at {row},{col}')
         if k > burnin:
-            if row <= 0 or row >= num_rows - 1 or col <= 0 or col >= num_cols - 1:
-                break  # absorb if we hit a boundary
+            if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
+                break
+        else:
+            row, col = move_away_from_boundary(row, col, num_rows, num_cols)
         local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
         local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
         local_cond = local_cond.clip(min=1e-5)
@@ -280,84 +237,9 @@ def generate_eagle_track(
                 chosen_index = np.random.choice(range(len(mov_probs)))
         # print(neighbour_deltas)
         dirn = neighbour_deltas[chosen_index]
-        position = [x + y for x, y in zip(position, dirn)]
+        position = [x + y for x, y in zip([row, col], dirn)]
         trajectory.append(position)
         directions.append(dirn)
-        k += 1
-    return np.array(trajectory, dtype=np.int16)
-
-
-def generate_eagle_track_old(
-        conductivity: np.ndarray,
-        potential: np.ndarray,
-        start_loc: List[int],
-        dirn_restrict: int,
-        nu_par: float
-):
-    """ Generate an eagle track """
-
-    num_rows, num_cols = conductivity.shape
-    burnin = 5
-    max_moves = num_rows * num_cols
-    dirn = [0, 0]
-    previous_dirn = [0, 0]
-    position = start_loc.copy()
-    trajectory = []
-    trajectory.append(position)
-    k = 0
-    while k < max_moves:
-        row, col = position
-        if k > max_moves - 2:
-            print(f'Maximum steps reached at {row},{col}')
-        if k > burnin:
-            if row <= 0 or row >= num_rows - 1 or col <= 0 or col >= num_cols - 1:
-                break  # absorb if we hit a boundary
-        else:
-            if row in (0, 1):
-                row += 1
-            elif row in (num_rows - 1, num_rows):
-                row -= 1
-            if col in (0, 1):
-                col += 1
-            elif col in (num_cols - 1, num_cols):
-                col -= 1
-        position = [row, col]
-        previous_dirn = np.copy(dirn)
-        local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
-        local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
-        local_cond = local_cond.clip(min=1e-5)
-        mc = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
-        q_diff = local_potential_energy[1, 1] - local_potential_energy
-        if np.count_nonzero(q_diff) == 0:
-            q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
-            # print('All potentials same!')
-        q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
-        mov_probs = np.multiply(mc, q_diff)
-        mov_probs = mov_probs.flatten()
-        mov_probs -= np.min(mov_probs)
-        mov_probs[4] = 0.
-        if dirn_restrict > 0 and k > burnin:
-            zvec = get_track_restrictions(*dirn)
-            if dirn_restrict == 2:
-                zvec = np.logical_and(
-                    zvec, get_track_restrictions(*previous_dirn))
-            if sum(zvec) != 0:
-                q_new = [x * float(y) for x, y in zip(mov_probs, zvec)]
-                if np.sum(q_new) != 0:
-                    mov_probs = q_new.copy()
-        if np.sum(mov_probs) != 0:
-            mov_probs /= np.sum(mov_probs)
-            mov_probs = np.power(mov_probs, nu_par)
-            mov_probs /= np.sum(mov_probs)
-            chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
-            # print([round(x, 1) for x in mov_probs], chosen_index)
-        else:
-            # print('Sum(q) is zero!')
-            chosen_index = np.random.choice(range(len(mov_probs)))
-        # print(neighbour_deltas)
-        dirn = neighbour_deltas[chosen_index]
-        position = [x + y for x, y in zip(position, dirn)]
-        trajectory.append(position)
         k += 1
     return np.array(trajectory, dtype=np.int16)
 
@@ -378,14 +260,14 @@ def get_starting_indices(
     res_km = tres / 1000.
     xind_max = ceil(twidth[0] / res_km)
     yind_max = ceil(twidth[1] / res_km)
-    xind_low = min(max(floor(sbounds[0] / res_km) - 1, 0), xind_max)
-    xind_upp = max(min(ceil(sbounds[1] / res_km), xind_max), 1)
-    yind_low = min(max(floor(sbounds[2] / res_km) - 1, 0), yind_max)
-    yind_upp = max(min(ceil(sbounds[3] / res_km), yind_max), 1)
+    xind_low = min(max(floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
+    xind_upp = max(min(ceil(sbounds[1] / res_km), xind_max - 1), 2)
+    yind_low = min(max(floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
+    yind_upp = max(min(ceil(sbounds[3] / res_km), yind_max - 1), 2)
     xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
     base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
     base_count = base_inds.shape[1]
-    if stype == 'uniform':
+    if stype == 'structured':
         idx = np.round(np.linspace(0, base_count - 1, ntracks % base_count))
         if ntracks > base_count:
             start_inds = np.tile(base_inds, (1, ntracks // base_count))
@@ -398,12 +280,12 @@ def get_starting_indices(
         start_inds = base_inds[:, idx]
     else:
         raise ValueError((f'Model:Invalid sim_start_type of {stype}\n'
-                          'Options: uniform, random'))
+                          'Options: structured, random'))
     start_inds = start_inds.astype(int)
     return start_inds[0, :], start_inds[1, :]
 
 
-def compute_presence_count(
+def compute_presence_counts(
     tracks: List[np.ndarray],
     gridshape: Tuple[int, int]
 ):
@@ -415,7 +297,7 @@ def compute_presence_count(
     return count_mat
 
 
-def compute_presence_probability(
+def compute_smooth_presence_counts(
     tracks: List[np.ndarray],
     gridshape: Tuple[int, int],
     radius: float
@@ -423,14 +305,15 @@ def compute_presence_probability(
     """ Smothens a matrix using 2D covolution of the circular kernel matrix
     with the given matrix """
 
-    count_mat = compute_presence_count(tracks, gridshape)
+    count_mat = compute_presence_counts(tracks, gridshape)
     krad = int(radius)
     kernel = np.zeros((2 * krad + 1, 2 * krad + 1))
     y, x = np.ogrid[-krad:krad + 1, -krad:krad + 1]
     mask2 = x**2 + y**2 <= krad**2
     kernel[mask2] = 1
+    kernel /= np.sum(kernel)
     presence_prob = ssg.convolve2d(count_mat, kernel, mode='same')
-    presence_prob /= np.amax(presence_prob)
+    #presence_prob /= np.amax(presence_prob)
     return presence_prob.astype(np.float32)
 
 

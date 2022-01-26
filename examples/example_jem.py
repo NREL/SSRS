@@ -49,7 +49,7 @@ if __name__ == '__main__':
         # config_jem_seasonal_north
     )
     for i, cfg in enumerate(configs_to_run):
-        sim = Simulator(cfg)
+        sim = Simulator(cfg,seed=42)
         sim.simulate_tracks()
         sim.plot_terrain_features()
         sim.plot_wtk_layers()

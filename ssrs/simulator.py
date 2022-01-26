@@ -137,13 +137,30 @@ class Simulator(Config):
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
 
+    def _adjust_track_start_region(self):
+        adjusted_track_start_region = list(self.track_start_region)
+        xmax,ymax = self.region_width_km
+        perturb = 5 * self.resolution/1000.
+        if adjusted_track_start_region[0] == 0:
+            adjusted_track_start_region[0] += perturb
+        if adjusted_track_start_region[1] == xmax:
+            adjusted_track_start_region[1] -= perturb
+        if adjusted_track_start_region[2] == 0:
+            adjusted_track_start_region[2] += perturb
+        if adjusted_track_start_region[3] == ymax:
+            adjusted_track_start_region[3] -= perturb
+        if not np.all(adjusted_track_start_region == list(self.track_start_region)):
+            print('Adjusted track start region:',adjusted_track_start_region)
+        return tuple(adjusted_track_start_region)
+
     def simulate_tracks(self):
         """ Simulate tracks """
         self.compute_directional_potential()
         # print('Getting starting locations for simulating eagle tracks..')
+        adjusted_track_start_region = self._adjust_track_start_region()
         starting_rows, starting_cols = get_starting_indices(
             self.track_count,
-            self.track_start_region,
+            adjusted_track_start_region,
             self.track_start_type,
             self.region_width_km,
             self.resolution

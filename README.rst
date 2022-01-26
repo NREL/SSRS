@@ -83,22 +83,24 @@ north can be implemented using the following code:
 
 .. code-block:: python
 
-    from ssrs import Simulator, Config
-    config_uniform = Config(
+
+    config_wy_uniform = Config(
         run_name='run_wy',
-        southwest_lonlat=(42.78, -106.21), 
+        southwest_lonlat=(-106.21, 42.78), 
         region_width_km=(60., 50.),
         resolution=100.,
         sim_mode='uniform',
         uniform_winddirn=270.,
+        uniform_windspeed=10.,
         track_direction=0.,
-        track_count = 500,
-        track_start_region=(20, 21, 0, 0)
+        track_count = 1000,
+        track_start_region=(5, 55, 1, 2)
     )
-    sim = Simulator(config_uniform)
+    sim = Simulator(config_wy_uniform)
     sim.simulate_tracks()
     sim.plot_terrain_elevation(show=True)
     sim.plot_simulation_output(show=True)
+
 
 This will produce the following figures:
 
@@ -118,14 +120,14 @@ Orographic updrafts:
 
 1000 simulated tracks travelling towards north:
 
-.. image:: docs/figs/s10d270_north_tracks.png
+.. image:: docs/figs/s10d270_0_tracks.png
     :width: 400 px
     :align: right
     :alt: 
 
 Relative eagle presence density
 
-.. image:: docs/figs/s10d270_north_presence.png
+.. image:: docs/figs/s10d270_0_presence.png
     :width: 400 px
     :align: right
     :alt: Relative eagle presence density
@@ -156,9 +158,9 @@ Parameters for setting up the region:
 
 .. code-block:: python
 
-    southwest_lonlat: Tuple[float, float] = (42.78, -106.21)
+    southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
-    region_width_km: Tuple[float, float] = (30., 20.)
+    region_width_km: Tuple[float, float] = (60., 50.)
     resolution: int = 100.  # desired terrain resolution (meters)
 
 
@@ -181,8 +183,8 @@ Parameters for setting up the seasonal mode:
 
 .. code-block:: python
 
-    seasonal_start: Tuple[int, int] = (3, 1)  # start of season (month, day)
-    seasonal_end: Tuple[int, int] = (12, 1)  # end of season (month, day)
+    seasonal_start: Tuple[int, int] = (3, 20)  # start of season (month, day)
+    seasonal_end: Tuple[int, int] = (5, 15)  # end of season (month, day)
     seasonal_timeofday: str = 'daytime'  # morning, afternoon, evening, daytime
     seasonal_count: int = 8  # number of seasonal updraft computations
 
@@ -202,11 +204,11 @@ Parameters for simulating tracks:
 .. code-block:: python
 
     track_direction: str = 0.  # movement direction measured clockwise from north
-    track_count: str = 100  # number of simulated eagle tracks
-    track_start_region: Tuple[float, float, float, float] = (5, 45, 0, 0)  # xmin, xmax, ymin, ymax [km]
+    track_count: str = 1000  # number of simulated eagle tracks
+    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2)  # xmin, xmax, ymin, ymax [km]
     track_start_type: str = 'random'  # uniform, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
-    track_dirn_restrict: int = 2  # restrict within 45 deg of this previous moves
+    track_dirn_restrict: int = 3  # restrict within 45 deg of this previous moves
 
 
 Parameters for plotting:

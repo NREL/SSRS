@@ -12,7 +12,7 @@ config_jem_base = Config(
     region_width_km=(50., 50.),  # terrain width (xwidth, ywidth) in km
     resolution=50.,
     track_direction=0.,
-    track_start_region=(2, 48, 0, 0),
+    track_start_region=(2, 48, 0, 1),
     track_count=1000
 )
 

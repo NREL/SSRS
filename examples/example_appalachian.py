@@ -12,7 +12,7 @@ config_base = Config(
     region_width_km=(70., 60.),  # terrain width (xwidth, ywidth) in km
     resolution=100.,
     track_direction=0.,
-    track_start_region=(2, 68, 0, 0),
+    track_start_region=(2, 68, 0, 1),
     track_count=1000
 )
 

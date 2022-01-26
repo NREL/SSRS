@@ -237,6 +237,7 @@ def generate_eagle_track(
     position = start_loc.copy()
     trajectory = []
     trajectory.append(position)
+    #print('start track at',position,flush=True)
     k = 0
     while k < max_moves:
         row, col = position
@@ -248,7 +249,11 @@ def generate_eagle_track(
         local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
         local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
         local_cond = local_cond.clip(min=1e-5)
-        mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
+        try:
+            mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
+        except IndexError:
+            print(f'point at ({row:d},{col:d}) is at boundary after {k+1:d} moves? local_cond:{local_cond}')
+            break
         q_diff = local_potential_energy[1, 1] - local_potential_energy
         if np.count_nonzero(q_diff) == 0:
             q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1

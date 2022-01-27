@@ -45,6 +45,11 @@ class Simulator(Config):
         print(f'\n---- SSRS in {self.sim_mode} mode')
         print(f'Run name: {self.run_name}')
 
+        # re-init random number generator for results reproducibility
+        if self.sim_seed >= 0:
+            print('Specified random number seed:',self.sim_seed)
+            np.random.seed(self.sim_seed)
+
         # create directories for saving data and figures
         print(f'Output dir: {os.path.join(self.out_dir, self.run_name)}')
         self.data_dir = os.path.join(self.out_dir, self.run_name, 'data/')

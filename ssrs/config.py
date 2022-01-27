@@ -15,6 +15,7 @@ class Config:
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
     max_cores: int = 8  # maximum of cores to use
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+    sim_seed: int = -1 # random number seed
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)

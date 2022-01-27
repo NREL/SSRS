@@ -37,11 +37,6 @@ class Simulator(Config):
     time_format = 'y%Ym%md%dh%H'
 
     def __init__(self, in_config: Config = None, **kwargs) -> None:
-        seed = kwargs.get('seed',None)
-        if seed is not None:
-            print('Specified random number seed:',seed)
-            np.random.seed(seed)
-
         # initiate the config parameters
         if in_config is None:
             super().__init__(**kwargs)
@@ -49,6 +44,11 @@ class Simulator(Config):
             super().__init__(**asdict(in_config))
         print(f'\n---- SSRS in {self.sim_mode} mode')
         print(f'Run name: {self.run_name}')
+
+        # re-init random number generator for results reproducibility
+        if self.sim_seed >= 0:
+            print('Specified random number seed:',self.sim_seed)
+            np.random.seed(self.sim_seed)
 
         # create directories for saving data and figures
         print(f'Output dir: {os.path.join(self.out_dir, self.run_name)}')

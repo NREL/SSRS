@@ -26,6 +26,7 @@ from .raster import (get_raster_in_projected_crs,
 from .movmodel import (MovModel, get_starting_indices, generate_eagle_track,
                        generate_heuristic_eagle_track,
                        compute_smooth_presence_counts)
+from .heuristics import rulesets
 from .utils import (makedir_if_not_exists, get_elapsed_time,
                     get_extent_from_bounds, empty_this_directory,
                     create_gis_axis, get_sunrise_sunset_time)
@@ -143,6 +144,9 @@ class Simulator(Config):
         """ Simulate tracks """
         if self.sim_movement == 'fluid-analogy':
             self.compute_directional_potential()
+        elif self.sim_movement == 'heuristics':
+            if self.movement_ruleset not in rulesets.keys():
+                raise ValueError(f'{self.movement_ruleset} is not defined.  Valid rulesets: {rulesets.keys()}')
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = get_starting_indices(
             self.track_count,

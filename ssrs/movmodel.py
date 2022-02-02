@@ -6,6 +6,7 @@ import numpy as np
 import scipy.signal as ssg
 import scipy.sparse as ss
 
+from .heuristics import rulesets
 
 class MovModel:
     """ Class for fluid-flow based model """
@@ -251,8 +252,9 @@ def generate_heuristic_eagle_track(
         nu_par: float
 ):
     """ Generate an eagle track based on heuristics """
-    position = start_loc.copy()
-    return np.array([position], dtype=np.int16)
+    rules = rulesets[ruleset]
+    trajectory = [start_loc.copy()]
+    return np.array(trajectory, dtype=np.int16)
 
 
 def get_starting_indices(

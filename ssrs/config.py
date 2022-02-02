@@ -19,7 +19,7 @@ class Config:
     sim_seed: int = -1 # random number seed
 
     # H-SSRS parameters (used if `sim_movement` == 'heuristics')
-    movement_ruleset: str = 'default' # TODO: update this list
+    movement_ruleset: str = 'default' # TODO: add list of valid options
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)

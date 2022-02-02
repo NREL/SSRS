@@ -183,7 +183,7 @@ def generate_eagle_track(
         dirn_restrict: int,
         nu_par: float
 ):
-    """ Generate an eagle track """
+    """ Generate an eagle track based on the fluid-flow analogy """
 
     num_rows, num_cols = conductivity.shape
     burnin = 200
@@ -242,6 +242,17 @@ def generate_eagle_track(
         directions.append(dirn)
         k += 1
     return np.array(trajectory, dtype=np.int16)
+
+
+def generate_heuristic_eagle_track(
+        ruleset: str,
+        start_loc: List[int],
+        dirn_restrict: int,
+        nu_par: float
+):
+    """ Generate an eagle track based on heuristics """
+    position = start_loc.copy()
+    return np.array([position], dtype=np.int16)
 
 
 def get_starting_indices(

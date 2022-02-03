@@ -5,6 +5,7 @@ from typing import List, Tuple
 import numpy as np
 import scipy.signal as ssg
 import scipy.sparse as ss
+from scipy.interpolate import RectBivariateSpline
 
 from .heuristics import rulesets
 
@@ -247,14 +248,50 @@ def generate_eagle_track(
 
 def generate_heuristic_eagle_track(
         ruleset: str,
+        wo: np.ndarray, # orographic updraft
         start_loc: List[int],
-        dirn_restrict: int,
-        nu_par: float
+        PAM: float, # principal axis of migration
+        res: float # grid resolution
 ):
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
-    trajectory = [start_loc.copy()]
-    return np.array(trajectory, dtype=np.int16)
+    num_rows, num_cols = wo.shape
+    max_moves = num_rows * num_cols
+    print(max_moves)
+    # initial conditions -- note, we simulate actual positions and then convert
+    # these back to grid indices at the end
+    current_position = np.array(start_loc) * res
+    trajectory = [current_position]
+    directions = [[0,0]]
+    xg = np.arange(num_rows) * res
+    yg = np.arange(num_cols) * res
+    wo_interp = RectBivariateSpline(xg, yg, wo)
+    for imove in range(max_moves):
+        iact = imove % len(rules)
+        next_rule = rules[iact]
+        if callable(next_rule):
+            new_pos = next_rule(trajectory,directions,wo_interp)
+        else:
+            assert isinstance(next_rule, tuple)
+            action = next_rule[0]
+            assert callable(action)
+            try:
+                kwargs = next_rule[1]
+            except IndexError:
+                kwargs = {}
+            new_pos = action(trajectory,directions,wo_interp,**kwargs)
+
+        # TODO: do some validation on new_position, can accept/reject
+
+        if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
+            break
+        new_dir = new_pos - trajectory[-1]
+        directions.append(new_dir)
+        trajectory.append(new_pos)
+    
+    # convert trajectory back to grid indices
+    trajectory = np.array(trajectory) / res
+    return np.round(trajectory).astype(np.int16)
 
 
 def get_starting_indices(

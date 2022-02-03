@@ -162,7 +162,8 @@ class Simulator(Config):
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
-            potential = np.load(self._get_potential_fpath(case_id))
+            if self.sim_movement == 'fluid-analogy':
+                potential = np.load(self._get_potential_fpath(case_id))
             start_time = time.time()
             if self.sim_movement == 'fluid-analogy':
                 with mp.Pool(num_cores) as pool:
@@ -177,9 +178,10 @@ class Simulator(Config):
                 with mp.Pool(num_cores) as pool:
                     tracks = pool.map(lambda start_loc: generate_heuristic_eagle_track(
                         self.movement_ruleset,
+                        orograph,
                         start_loc,
-                        self.track_dirn_restrict,
-                        self.track_stochastic_nu
+                        self.track_direction,
+                        self.resolution
                     ), starting_locs)
             print(f'took {get_elapsed_time(start_time)}', flush=True)
             with open(self._get_tracks_fpath(case_id), "wb") as fobj:

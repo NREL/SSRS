@@ -34,5 +34,15 @@ rulesets['lookahead'] = [
     (look_ahead, dict(dist=300.0)),
 ]
 
-rulesets['default'] = rulesets['lookahead']
+rulesets['mixed'] = [
+    (random_walk, dict(sector=90.0)),
+    random_walk,
+    (look_ahead, dict(dist=100.0)),
+    (look_ahead, dict(dist=200.0)),
+    (look_ahead, dict(dist=300.0)),
+    (look_ahead, dict(dist=200.0)),
+    (look_ahead, dict(dist=100.0)),
+]
+
+rulesets['default'] = rulesets['mixed']
 

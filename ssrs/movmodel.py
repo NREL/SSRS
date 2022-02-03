@@ -251,26 +251,28 @@ def generate_heuristic_eagle_track(
         wo: np.ndarray, # orographic updraft
         start_loc: List[int],
         PAM: float, # principal axis of migration
-        res: float # grid resolution
+        res: float, # grid resolution
+        max_moves: int = 1000
 ):
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
     num_rows, num_cols = wo.shape
-    max_moves = num_rows * num_cols
-    print(max_moves)
-    # initial conditions -- note, we simulate actual positions and then convert
-    # these back to grid indices at the end
-    current_position = np.array(start_loc) * res
+    # initial conditions
+    # note 1: we simulate actual positions and then convert these back to grid
+    #         indices at the end
+    # note 2: 'i' index (rows) corresponds to y
+    #         'j' index (cols) corresponds to x
+    current_position = np.array([start_loc[1], start_loc[0]]) * res
     trajectory = [current_position]
     directions = [[0,0]]
-    xg = np.arange(num_rows) * res
-    yg = np.arange(num_cols) * res
-    wo_interp = RectBivariateSpline(xg, yg, wo)
+    xg = np.arange(num_cols) * res
+    yg = np.arange(num_rows) * res
+    wo_interp = RectBivariateSpline(xg, yg, wo.T)
     for imove in range(max_moves):
         iact = imove % len(rules)
         next_rule = rules[iact]
         if callable(next_rule):
-            new_pos = next_rule(trajectory,directions,wo_interp)
+            new_pos = next_rule(trajectory,directions,PAM,wo_interp)
         else:
             assert isinstance(next_rule, tuple)
             action = next_rule[0]
@@ -279,9 +281,9 @@ def generate_heuristic_eagle_track(
                 kwargs = next_rule[1]
             except IndexError:
                 kwargs = {}
-            new_pos = action(trajectory,directions,wo_interp,**kwargs)
+            new_pos = action(trajectory,directions,PAM,wo_interp,**kwargs)
 
-        # TODO: do some validation on new_position, can accept/reject
+        # TODO: can do some validation here (to accept/reject new_pos)
 
         if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
             break
@@ -290,8 +292,10 @@ def generate_heuristic_eagle_track(
         trajectory.append(new_pos)
     
     # convert trajectory back to grid indices
-    trajectory = np.array(trajectory) / res
-    return np.round(trajectory).astype(np.int16)
+    trajectory = np.round(np.array(trajectory) / res)
+    iarr = trajectory[:,1]
+    jarr = trajectory[:,0]
+    return np.stack([iarr,jarr],axis=-1).astype(np.int16)
 
 
 def get_starting_indices(

@@ -24,8 +24,7 @@ from .actions import (random_walk,look_ahead)
 rulesets = {}
 
 rulesets['random_walk'] = [
-    #random_walk,
-    (random_walk, dict(sector=90.0)),
+    random_walk,
 ]
 
 rulesets['lookahead'] = [
@@ -35,7 +34,6 @@ rulesets['lookahead'] = [
 ]
 
 rulesets['mixed'] = [
-    (random_walk, dict(sector=90.0)),
     random_walk,
     (look_ahead, dict(dist=100.0)),
     (look_ahead, dict(dist=200.0)),

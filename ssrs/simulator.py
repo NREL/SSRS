@@ -147,6 +147,10 @@ class Simulator(Config):
         elif self.sim_movement == 'heuristics':
             if self.movement_ruleset not in rulesets.keys():
                 raise ValueError(f'{self.movement_ruleset} is not defined.  Valid rulesets: {rulesets.keys()}')
+            else:
+                print('Ruleset:')
+                for i,action in enumerate(rulesets[self.movement_ruleset]):
+                    print(f'{i+1}.',action)
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = get_starting_indices(
             self.track_count,

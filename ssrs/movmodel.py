@@ -264,10 +264,16 @@ def generate_heuristic_eagle_track(
     #         'j' index (cols) corresponds to x
     current_position = np.array([start_loc[1], start_loc[0]]) * res
     trajectory = [current_position]
-    directions = [[0,0]]
+    ref_ang = np.radians(90.0 - PAM)
+    current_heading = np.array([np.cos(ref_ang), np.sin(ref_ang)])
+    directions = [current_heading]
     xg = np.arange(num_cols) * res
     yg = np.arange(num_rows) * res
+
+    # setup updraft interpolation
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
+
+    # move through domain
     for imove in range(max_moves):
         iact = imove % len(rules)
         next_rule = rules[iact]
@@ -286,9 +292,10 @@ def generate_heuristic_eagle_track(
         # TODO: can do some validation here (to accept/reject new_pos)
 
         if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
+            #print('ending after',imove,'moves')
             break
-        new_dir = new_pos - trajectory[-1]
-        directions.append(new_dir)
+        delta = new_pos - trajectory[-1]
+        directions.append(delta)
         trajectory.append(new_pos)
     
     # convert trajectory back to grid indices

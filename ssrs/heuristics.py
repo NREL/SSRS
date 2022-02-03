@@ -19,7 +19,7 @@ where
 * `kwargs` is an optional list of keywords
 
 """
-from .actions import (random_walk,)
+from .actions import (random_walk,look_ahead)
 
 rulesets = {}
 
@@ -28,5 +28,11 @@ rulesets['random_walk'] = [
     (random_walk, dict(sector=90.0)),
 ]
 
-rulesets['default'] = rulesets['random_walk']
+rulesets['lookahead'] = [
+    (look_ahead, dict(dist=100.0)),
+    (look_ahead, dict(dist=200.0)),
+    (look_ahead, dict(dist=300.0)),
+]
+
+rulesets['default'] = rulesets['lookahead']
 

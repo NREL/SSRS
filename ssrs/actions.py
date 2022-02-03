@@ -10,7 +10,7 @@ def random_walk(trajectory,directions,PAM,wo_interp,step=100.0,halfsector=45.0):
     return cur_pos + delta
 
 def look_ahead(trajectory,directions,PAM,wo_interp,step=100.0,
-               dist=100.0,halfsector=45.0,Nsearch=5,threshold=0.85):
+               dist=100.0,halfsector=45.0,Nsearch=5,threshold=0.85,sigma=0.0):
     cur_pos = trajectory[-1]
     last_dir = directions[-1]
     ref_ang = np.arctan2(last_dir[1],last_dir[0])
@@ -25,11 +25,14 @@ def look_ahead(trajectory,directions,PAM,wo_interp,step=100.0,
         # go towards max updraft
         idxmax = np.argmax(w_max)
         best_dir = search_arc[idxmax]
+        if sigma > 0:
+            # add additional uncertainty
+            best_dir = np.random.normal(best_dir, scale=np.radians(sigma))
         delta = step * np.array([np.cos(best_dir),np.sin(best_dir)])
         new_pos = cur_pos + delta
     else:
         # no usable updraft found, do a random walk
         new_pos = random_walk(trajectory,directions,PAM,wo_interp,
-                              step=step,sector=sector)
+                              step=step,halfsector=halfsector)
     return new_pos
 

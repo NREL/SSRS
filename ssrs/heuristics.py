@@ -33,6 +33,12 @@ rulesets['lookahead'] = [
     (look_ahead, dict(dist=300.0)),
 ]
 
+rulesets['lookahead_with_uncertainty'] = [
+    (look_ahead, dict(dist=100.0, sigma=15.)),
+    (look_ahead, dict(dist=200.0, sigma=30.)),
+    (look_ahead, dict(dist=300.0, sigma=45.)),
+]
+
 rulesets['mixed'] = [
     random_walk,
     (look_ahead, dict(dist=100.0)),
@@ -42,5 +48,14 @@ rulesets['mixed'] = [
     (look_ahead, dict(dist=100.0)),
 ]
 
-rulesets['default'] = rulesets['mixed']
+rulesets['mixed_with_uncertainty'] = [
+    random_walk,
+    (look_ahead, dict(dist=100.0)),
+    (look_ahead, dict(dist=200.0)),
+    (look_ahead, dict(dist=300.0,sigma=45)),
+    (look_ahead, dict(dist=200.0,sigma=30)),
+    (look_ahead, dict(dist=100.0,sigma=15)),
+]
+
+rulesets['default'] = rulesets['mixed_with_uncertainty']
 

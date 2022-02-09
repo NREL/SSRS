@@ -278,7 +278,8 @@ def generate_heuristic_eagle_track(
         iact = imove % len(rules)
         next_rule = rules[iact]
         if callable(next_rule):
-            new_pos = next_rule(trajectory,directions,PAM,wo_interp)
+            action = next_rule
+            kwargs = {}
         else:
             assert isinstance(next_rule, tuple)
             action = next_rule[0]
@@ -287,7 +288,7 @@ def generate_heuristic_eagle_track(
                 kwargs = next_rule[1]
             except IndexError:
                 kwargs = {}
-            new_pos = action(trajectory,directions,PAM,wo_interp,**kwargs)
+        new_pos = action(trajectory,directions,PAM,wo_interp,**kwargs)
 
         # TODO: can do some validation here (to accept/reject new_pos)
 

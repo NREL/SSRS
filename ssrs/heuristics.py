@@ -13,7 +13,8 @@ where
 * `trajectory` is the current movement history, i.e., a list of positions
   including the current posiiton;
 * `directions` is the current history of movement directions;
-* `PAM` is the principle axis of migration;
+* `PAM` is the principle axis of migration, specified in degrees clockwise from
+  north (the +y axis);
 * `wo_interp` is an interpolation function that returns the orographic updraft
   at an arbitrary location; and
 * `kwargs` is an optional list of keywords

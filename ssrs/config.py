@@ -15,6 +15,11 @@ class Config:
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
     max_cores: int = 8  # maximum of cores to use
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+    sim_movement: str = 'fluid-analogy' # fluid-analogy, heuristics
+    sim_seed: int = -1 # random number seed
+
+    # H-SSRS parameters (used if `sim_movement` == 'heuristics')
+    movement_ruleset: str = 'default' # TODO: add list of valid options
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)

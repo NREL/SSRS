@@ -24,7 +24,9 @@ from .layers import (compute_orographic_updraft, compute_aspect_degrees,
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 from .movmodel import (MovModel, get_starting_indices, generate_eagle_track,
+                       generate_heuristic_eagle_track,
                        compute_smooth_presence_counts)
+from .heuristics import rulesets
 from .utils import (makedir_if_not_exists, get_elapsed_time,
                     get_extent_from_bounds, empty_this_directory,
                     create_gis_axis, get_sunrise_sunset_time)
@@ -43,7 +45,13 @@ class Simulator(Config):
         else:
             super().__init__(**asdict(in_config))
         print(f'\n---- SSRS in {self.sim_mode} mode')
+        print(f'---- movements based on {self.sim_movement} model')
         print(f'Run name: {self.run_name}')
+
+        # re-init random number generator for results reproducibility
+        if self.sim_seed >= 0:
+            print('Specified random number seed:',self.sim_seed)
+            np.random.seed(self.sim_seed)
 
         # create directories for saving data and figures
         print(f'Output dir: {os.path.join(self.out_dir, self.run_name)}')
@@ -134,7 +142,15 @@ class Simulator(Config):
 
     def simulate_tracks(self):
         """ Simulate tracks """
-        self.compute_directional_potential()
+        if self.sim_movement == 'fluid-analogy':
+            self.compute_directional_potential()
+        elif self.sim_movement == 'heuristics':
+            if self.movement_ruleset not in rulesets.keys():
+                raise ValueError(f'{self.movement_ruleset} is not defined.  Valid rulesets: {rulesets.keys()}')
+            else:
+                print('Ruleset:')
+                for i,action in enumerate(rulesets[self.movement_ruleset]):
+                    print(f'{i+1}.',action)
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = get_starting_indices(
             self.track_count,
@@ -150,16 +166,27 @@ class Simulator(Config):
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
-            potential = np.load(self._get_potential_fpath(case_id))
+            if self.sim_movement == 'fluid-analogy':
+                potential = np.load(self._get_potential_fpath(case_id))
             start_time = time.time()
-            with mp.Pool(num_cores) as pool:
-                tracks = pool.map(lambda start_loc: generate_eagle_track(
-                    orograph,
-                    potential,
-                    start_loc,
-                    self.track_dirn_restrict,
-                    self.track_stochastic_nu
-                ), starting_locs)
+            if self.sim_movement == 'fluid-analogy':
+                with mp.Pool(num_cores) as pool:
+                    tracks = pool.map(lambda start_loc: generate_eagle_track(
+                        orograph,
+                        potential,
+                        start_loc,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu
+                    ), starting_locs)
+            elif self.sim_movement == 'heuristics': 
+                with mp.Pool(num_cores) as pool:
+                    tracks = pool.map(lambda start_loc: generate_heuristic_eagle_track(
+                        self.movement_ruleset,
+                        orograph,
+                        start_loc,
+                        self.track_direction,
+                        self.resolution
+                    ), starting_locs)
             print(f'took {get_elapsed_time(start_time)}', flush=True)
             with open(self._get_tracks_fpath(case_id), "wb") as fobj:
                 pickle.dump(tracks, fobj)

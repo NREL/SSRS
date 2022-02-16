@@ -5,7 +5,9 @@ from typing import List, Tuple
 import numpy as np
 import scipy.signal as ssg
 import scipy.sparse as ss
+from scipy.interpolate import RectBivariateSpline
 
+from .heuristics import rulesets
 
 class MovModel:
     """ Class for fluid-flow based model """
@@ -183,7 +185,7 @@ def generate_eagle_track(
         dirn_restrict: int,
         nu_par: float
 ):
-    """ Generate an eagle track """
+    """ Generate an eagle track based on the fluid-flow analogy """
 
     num_rows, num_cols = conductivity.shape
     burnin = 200
@@ -242,6 +244,66 @@ def generate_eagle_track(
         directions.append(dirn)
         k += 1
     return np.array(trajectory, dtype=np.int16)
+
+
+def generate_heuristic_eagle_track(
+        ruleset: str,
+        wo: np.ndarray, # orographic updraft
+        start_loc: List[int],
+        PAM: float, # principal axis of migration
+        res: float, # grid resolution
+        max_moves: int = 1000
+):
+    """ Generate an eagle track based on heuristics """
+    rules = rulesets[ruleset]
+    num_rows, num_cols = wo.shape
+    # initial conditions
+    # note 1: we simulate actual positions and then convert these back to grid
+    #         indices at the end
+    # note 2: 'i' index (rows) corresponds to y
+    #         'j' index (cols) corresponds to x
+    current_position = np.array([start_loc[1], start_loc[0]]) * res
+    trajectory = [current_position]
+    ref_ang = np.radians(90.0 - PAM)
+    current_heading = np.array([np.cos(ref_ang), np.sin(ref_ang)])
+    directions = [current_heading]
+    xg = np.arange(num_cols) * res
+    yg = np.arange(num_rows) * res
+
+    # setup updraft interpolation
+    wo_interp = RectBivariateSpline(xg, yg, wo.T)
+
+    # move through domain
+    for imove in range(max_moves):
+        iact = imove % len(rules)
+        next_rule = rules[iact]
+        if callable(next_rule):
+            action = next_rule
+            kwargs = {}
+        else:
+            assert isinstance(next_rule, tuple)
+            action = next_rule[0]
+            assert callable(action)
+            try:
+                kwargs = next_rule[1]
+            except IndexError:
+                kwargs = {}
+        new_pos = action(trajectory,directions,PAM,wo_interp,**kwargs)
+
+        # TODO: can do some validation here (to accept/reject new_pos)
+
+        if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
+            #print('ending after',imove,'moves')
+            break
+        delta = new_pos - trajectory[-1]
+        directions.append(delta)
+        trajectory.append(new_pos)
+    
+    # convert trajectory back to grid indices
+    trajectory = np.round(np.array(trajectory) / res)
+    iarr = trajectory[:,1]
+    jarr = trajectory[:,0]
+    return np.stack([iarr,jarr],axis=-1).astype(np.int16)
 
 
 def get_starting_indices(

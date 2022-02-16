@@ -167,6 +167,7 @@ class Simulator(Config):
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
+            thermals = np.zeros_like(orograph)
             elevation = self.get_terrain_elevation()                              #db added
             if self.sim_movement == 'fluid-analogy':
                 potential = np.load(self._get_potential_fpath(case_id))
@@ -185,6 +186,7 @@ class Simulator(Config):
                     tracks = pool.map(lambda start_loc: generate_heuristic_eagle_track(
                         self.movement_ruleset,
                         orograph,
+                        thermals,
                         elevation,                                          #db added
                         start_loc,
                         self.track_direction,

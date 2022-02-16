@@ -251,6 +251,7 @@ def generate_eagle_track(           #fluid-flow model
 def generate_heuristic_eagle_track(
         ruleset: str,
         wo: np.ndarray, # orographic updraft
+        wt: np.ndarray, # thermal updraft
         elev: np.ndarray, # elevation from DEM - db added
         start_loc: List[int],
         PAM: float, # principal axis of migration
@@ -279,6 +280,7 @@ def generate_heuristic_eagle_track(
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
     wo_smoothed=ndimage.gaussian_filter(wo, sigma=1, mode='constant') #db added
     wo_sm_interp=RectBivariateSpline(xg, yg, wo_smoothed.T) #db added
+    wt_interp = RectBivariateSpline(xg, yg, wt.T)
     elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
 
     # move through domain
@@ -292,7 +294,7 @@ def generate_heuristic_eagle_track(
         if randwalk==1:
             randy2 = np.random.randint(*random_walk_step_range) #number of steps
             for i in range(randy2):
-                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,step=100.0,halfsector=90.0)
+                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=100.0,halfsector=90.0)
                 if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
                     break
                 delta = new_pos - trajectory[-1]
@@ -300,10 +302,7 @@ def generate_heuristic_eagle_track(
                 trajectory.append(new_pos)
                 
         if callable(next_rule):
-            new_pos = next_rule(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp) #db added wo_sm_interp and elev
-            #delta = new_pos - trajectory[-1]
-            #directions.append(delta)
-            #trajectory.append(new_pos)
+            new_pos = next_rule(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp) #db added wo_sm_interp and elev
         
         else:
             assert isinstance(next_rule, tuple)
@@ -313,10 +312,7 @@ def generate_heuristic_eagle_track(
                 kwargs = next_rule[1]
             except IndexError:
                 kwargs = {}
-            new_pos = action(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,**kwargs) #db added wo_sm_interp and elev
-            #delta = new_pos - trajectory[-1]
-            #directions.append(delta)
-            #trajectory.append(new_pos)
+            new_pos = action(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,**kwargs) #db added wo_sm_interp and elev
         
         # TODO: can do some validation here (to accept/reject new_pos)
 
@@ -327,7 +323,8 @@ def generate_heuristic_eagle_track(
         delta = new_pos - trajectory[-1]
         directions.append(delta)
         trajectory.append(new_pos)
-    # convert trajectory back to grid indices
+
+    # trajectory is complete--convert back to grid indices
     trajectory = np.round(np.array(trajectory) / res)
     iarr = trajectory[:,1]
     jarr = trajectory[:,0]

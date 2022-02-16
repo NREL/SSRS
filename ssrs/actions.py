@@ -24,6 +24,9 @@ The default arguments (*args) include:
 * wo_sm_interp: function
     Smoothed orographic updraft field w_o(x,y) that can be evaluated at
     an arbitrary location [m/s]
+* wt_interp: function
+    Thermal updraft field w_t(x,y) that can be evaluated at an arbitrary
+    location [m/s]
 * elev_interp: function
     Elevation z(x,y) that can be evaluated at an arbitrary location [m]
 
@@ -36,7 +39,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
 
-def random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+def random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                 step=100.0,halfsector=90.0):
     """Perform a random movement, neglecting the PAM
 
@@ -64,7 +67,7 @@ def random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     return cur_pos + delta
 
 
-def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                 step=100.0,halfsector=45.0):
     cur_pos = trajectory[-1]
     """Perform a random movement along the principle axis of migration (PAM)
@@ -82,14 +85,15 @@ def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp
     delta = step * np.array([np.cos(rand_ang),np.sin(rand_ang)])
     return cur_pos + delta
 
-def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                 step=100.0,dist=100.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
     """
     cur_pos = trajectory[-1]      
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
                 
-    w_max,idxmax,best_dir,elev_w_max=searcharc_wo(trajectory,directions,PAM,wo_interp,elev_interp,
+    w_max,idxmax,best_dir,elev_w_max = searcharc_wo(trajectory,directions,PAM,
+                    wo_interp,wt_interp,elev_interp,
                     step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
     
     # take step based on search results, not allowing movement steeply downslope
@@ -111,15 +115,16 @@ def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     return new_pos
 
 
-def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                     step=100.0,dist=100.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
     """
     cur_pos = trajectory[-1]      
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
                 
-    w_max,idxmax,best_dir,elev_w_max=searcharc_wo(trajectory,directions,PAM,wo_interp,elev_interp,
-        step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
+    w_max,idxmax,best_dir,elev_w_max = searcharc_wo(trajectory,directions,PAM,
+            wo_interp,wt_interp,elev_interp,
+            step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
     
     # take step based on search results, not allowing movement steeply downslope
     if w_max > threshold and (elev_w_max - elev_cur_pos)>-20:
@@ -141,7 +146,7 @@ def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_
     return new_pos
 
 
-def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                step=100.0,dist=100.0,halfsector=45.0,Nsearch=5,threshold=0.85,sigma=0.0):
     """Perform a movement based on some knowledge of the flowfield ahead
     searching along an arc of radius dist
@@ -195,7 +200,7 @@ def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     return new_pos
 
 
-def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                   step=100.0,dist=1000.0,rangedelta=250.0,halfsector=45.0,
                   Nsearch=5,threshold=0.85,sigma=0.0):
     """Perform a movement based on some knowledge of the _smoothed_
@@ -217,7 +222,7 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
         # increment in radius
         numsearchlocs = int(radius/25.)
         w_max,idxmax,best_dir,elev_w_max = searcharc_wo(
-                        trajectory,directions,PAM,wo_sm_interp,elev_interp,
+                        trajectory,directions,PAM,wo_sm_interp,wt_interp,elev_interp,
                         step=step,dist=radius,halfsector=halfsector,Nsearch=numsearchlocs)
         w_best[k] = w_max
         loc_best[k] = idxmax
@@ -257,7 +262,7 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     return new_pos
     
     
-def searcharc_wo(trajectory,directions,PAM,wo_interp,elev_interp,
+def searcharc_wo(trajectory,directions,PAM,wo_interp,wt_interp,elev_interp,
                     step=100.0,dist=100.0,halfsector=45.0,Nsearch=10):
     
     cur_pos = trajectory[-1]

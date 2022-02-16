@@ -255,7 +255,9 @@ def generate_heuristic_eagle_track(
         start_loc: List[int],
         PAM: float, # principal axis of migration
         res: float, # grid resolution
-        max_moves: int = 2000
+        max_moves: int = 2000,
+        random_walk_freq: int = 50, # how often random walks will randomly occur, approx every 1/random_walk_freq steps
+        random_walk_step_range: tuple = (10,30) # when a random walk does occur, the number of random steps will occur in this range
 ):
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
@@ -286,15 +288,13 @@ def generate_heuristic_eagle_track(
         
         #db added this part
         #do random walk at some specified frequency
-        randwalk=np.random.randint(1, 50) #can replace 20 with a parameter "random_walk_freq"
-        if randwalk==25:  #2% of the time take a totally random walk of some number of steps
-            randy2=np.random.randint(10, 30) #number of steps - ask Eliot
-            for i in range(1,randy2):
+        randwalk = np.random.randint(1, random_walk_freq)
+        if randwalk==1:
+            randy2 = np.random.randint(*random_walk_step_range) #number of steps
+            for i in range(randy2):
                 new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,step=100.0,halfsector=90.0)
-                
                 if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
                     break
-                    
                 delta = new_pos - trajectory[-1]
                 directions.append(delta)
                 trajectory.append(new_pos)

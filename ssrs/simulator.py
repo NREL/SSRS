@@ -46,6 +46,7 @@ class Simulator(Config):
             super().__init__(**asdict(in_config))
         print(f'\n---- SSRS in {self.sim_mode} mode')
         print(f'---- movements based on {self.sim_movement} model')
+        print(f'---- using ruleset {self.movement_ruleset}')
         print(f'Run name: {self.run_name}')
 
         # re-init random number generator for results reproducibility
@@ -99,13 +100,13 @@ class Simulator(Config):
             self.region.download(self.terrain_layers.values())
 
         # setup turbine data
-        self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
-                                      self.turbine_minimum_hubheight,
-                                      self.data_dir)
-        fname = os.path.join(self.data_dir, 'turbines_summary.txt')
-        with open(fname, 'w') as f:
-            with redirect_stdout(f):
-                self.turbines.print_details()
+        #self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
+        #                              self.turbine_minimum_hubheight,
+        #                              self.data_dir)
+        #fname = os.path.join(self.data_dir, 'turbines_summary.txt')
+        #with open(fname, 'w') as f:
+        #    with redirect_stdout(f):
+        #        self.turbines.print_details()
 
         # figure out wtk and its layers to extract
         self.wtk_layers = {
@@ -144,7 +145,7 @@ class Simulator(Config):
         """ Simulate tracks """
         if self.sim_movement == 'fluid-analogy':
             self.compute_directional_potential()
-        elif self.sim_movement == 'heuristics':
+        elif self.sim_movement == 'heuristics':      #heuristics
             if self.movement_ruleset not in rulesets.keys():
                 raise ValueError(f'{self.movement_ruleset} is not defined.  Valid rulesets: {rulesets.keys()}')
             else:
@@ -166,6 +167,7 @@ class Simulator(Config):
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
+            elevation=self.get_terrain_elevation()                              #db added
             if self.sim_movement == 'fluid-analogy':
                 potential = np.load(self._get_potential_fpath(case_id))
             start_time = time.time()
@@ -178,11 +180,12 @@ class Simulator(Config):
                         self.track_dirn_restrict,
                         self.track_stochastic_nu
                     ), starting_locs)
-            elif self.sim_movement == 'heuristics': 
+            elif self.sim_movement == 'heuristics':       #heuristics
                 with mp.Pool(num_cores) as pool:
                     tracks = pool.map(lambda start_loc: generate_heuristic_eagle_track(
                         self.movement_ruleset,
                         orograph,
+                        elevation,                                          #db added
                         start_loc,
                         self.track_direction,
                         self.resolution
@@ -258,12 +261,12 @@ class Simulator(Config):
         """ Plotting terrain elevation """
         elevation = self.get_terrain_elevation()
         fig, axs = plt.subplots(figsize=self.fig_size)
-        curm = axs.imshow(elevation / 1000., cmap='terrain',
+        curm = axs.imshow(elevation, cmap='terrain',
                           extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Altitude (km)')
-        if plot_turbs:
-            self.plot_turbine_locations(axs)
+        cbar.set_label('Elevation (m)')
+        #if plot_turbs:
+        #    self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
 
     def plot_terrain_slope(self, plot_turbs=True, show=False) -> None:
@@ -273,9 +276,9 @@ class Simulator(Config):
         curm = axs.imshow(slope, cmap='magma_r',
                           extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Slope (Degrees)')
-        if plot_turbs:
-            self.plot_turbine_locations(axs)
+        cbar.set_label('Slope (deg)')
+        #if plot_turbs:
+        #    self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
 
     def plot_terrain_aspect(self, plot_turbs=True, show=False) -> None:
@@ -285,16 +288,17 @@ class Simulator(Config):
         curm = axs.imshow(aspect, cmap='hsv',
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Aspect (Degrees)')
-        if plot_turbs:
-            self.plot_turbine_locations(axs)
+        cbar.set_label('Aspect (deg)')
+        #if plot_turbs:
+        #    self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)
 
     def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
         """ Plots oro updraft and tracks """
         self.plot_orographic_updrafts(plot_turbs, show)
         #self.plot_directional_potentials(plot_turbs, show)
-        self.plot_simulated_tracks(plot_turbs, show)
+        self.plot_simulated_tracks_dem(plot_turbs, show)   
+        self.plot_simulated_tracks_wo(plot_turbs, show)   
         self.plot_presence_map(plot_turbs, show)
 
     def plot_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
@@ -302,14 +306,14 @@ class Simulator(Config):
         for case_id in self.case_ids:
             orograph = np.load(self._get_orograph_fpath(case_id))
             fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(1, int(round(np.mean(orograph)))), 5)
+            maxval = min(max(2, int(round(np.mean(orograph)))), 5)
             curm = axs.imshow(orograph, cmap='viridis',
                               extent=self.extent, origin='lower',
                               vmin=0, vmax=maxval)
             cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
             cbar.set_label('Orographic updraft (m/s)')
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
+         #   if plot_turbs:
+         #       self.plot_turbine_locations(axs)
             fname = os.path.join(self.mode_fig_dir, f'{case_id}_orograph.png')
             self.save_fig(fig, fname, show)
 
@@ -330,8 +334,8 @@ class Simulator(Config):
                     cbar.set_label(wtk_lyr)
                     axs.set_xlim([self.extent[0], self.extent[1]])
                     axs.set_ylim([self.extent[2], self.extent[3]])
-                    if plot_turbs:
-                        self.plot_turbine_locations(axs)
+            #        if plot_turbs:
+            #            self.plot_turbine_locations(axs)
                     fname = f'{case_id}_{wtk_lyr}.png'
                     self.save_fig(fig, os.path.join(self.mode_fig_dir, fname),
                                   show)
@@ -349,8 +353,8 @@ class Simulator(Config):
                                 extent=self.extent)
             cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
             cbar.set_label('Directional potential')
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
+        #    if plot_turbs:
+        #        self.plot_turbine_locations(axs)
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
             fname = f'{case_id}_{int(self.track_direction)}_potential.png'
@@ -374,8 +378,8 @@ class Simulator(Config):
                     axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
                              '-r', linewidth=lwidth, alpha=0.5)
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
+        #    if plot_turbs:
+        #        self.plot_turbine_locations(axs)
             left = self.extent[0] + self.track_start_region[0] * 1000.
             bottom = self.extent[2] + self.track_start_region[2] * 1000.
             width = self.track_start_region[1] - self.track_start_region[0]
@@ -384,11 +388,98 @@ class Simulator(Config):
                                       hght * 1000., alpha=0.2,
                                       edgecolor='none', facecolor='b')
             axs.add_patch(rect)
+            xtext=self.extent[0]+0.67*(self.extent[1]-self.extent[0])
+            ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
+            axs.text(xtext, ytext, 'move model = %s\nruleset = %s'
+                % (self.sim_movement,self.movement_ruleset),fontsize='xx-small',color='b')
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
             fname = f'{case_id}_{int(self.track_direction)}_tracks.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 
+    def plot_simulated_tracks_dem(self, plot_turbs=True, show=False) -> None:
+        """ Plots simulated tracks """
+        #print('Plotting simulated tracks..')
+        lwidth = 0.1 if self.track_count > 251 else 0.4
+        elevation = self.get_terrain_elevation()
+        xgrid, ygrid = self.get_terrain_grid()
+        for case_id in self.case_ids:
+            fig, axs = plt.subplots(figsize=self.fig_size)
+            _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
+                           origin='lower', extent=self.extent)
+            with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
+                tracks = pickle.load(fobj)
+                for itrack in tracks:
+                    axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
+                             markersize=1.0)
+                    axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
+                             '-r', linewidth=lwidth, alpha=0.5)
+            _, _ = create_gis_axis(fig, axs, None, self.km_bar)
+         #   if plot_turbs:
+         #       self.plot_turbine_locations(axs)
+            left = self.extent[0] + self.track_start_region[0] * 1000.
+            bottom = self.extent[2] + self.track_start_region[2] * 1000.
+            width = self.track_start_region[1] - self.track_start_region[0]
+            hght = self.track_start_region[3] - self.track_start_region[2]
+            rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                      hght * 1000., alpha=0.2,
+                                      edgecolor='none', facecolor='b')
+            axs.add_patch(rect)
+            
+            xtext=self.extent[0]+0.6*(self.extent[1]-self.extent[0])
+            ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
+            axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nPAM(deg) = %6.1f\nreso(m) = %5.1f\nwind = %s %4.0f %3.0f mps'
+                % (self.sim_movement,self.movement_ruleset,self.track_direction,self.resolution,
+                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed),fontsize='xx-small',color='black')
+        
+            axs.set_xlim([self.extent[0], self.extent[1]])
+            axs.set_ylim([self.extent[2], self.extent[3]])
+            
+            fname = f'{case_id}_{int(self.track_direction)}_tracks_dem.png'
+            self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
+
+    def plot_simulated_tracks_wo(self, plot_turbs=True, show=False) -> None:
+        """ Plots simulated tracks """
+        print('Plotting simulated tracks..')
+        lwidth = 0.1 if self.track_count > 251 else 0.4
+        #elevation = self.get_terrain_elevation()
+        xgrid, ygrid = self.get_terrain_grid()
+        for case_id in self.case_ids:
+            orograph = np.load(self._get_orograph_fpath(case_id))
+            fig, axs = plt.subplots(figsize=self.fig_size)
+            _ = axs.imshow(orograph, cmap='afmhot',   #cmap was previously 'Greys' and alpha parameter
+                           origin='lower', extent=self.extent)
+            with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
+                tracks = pickle.load(fobj)
+                for itrack in tracks:
+                    axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
+                             markersize=1.0)
+                    axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
+                             '-w', linewidth=lwidth, alpha=0.5)        #DB changed color to white
+            _, _ = create_gis_axis(fig, axs, None, self.km_bar)
+          #  if plot_turbs:
+          #      self.plot_turbine_locations(axs)
+            left = self.extent[0] + self.track_start_region[0] * 1000.
+            bottom = self.extent[2] + self.track_start_region[2] * 1000.
+            width = self.track_start_region[1] - self.track_start_region[0]
+            hght = self.track_start_region[3] - self.track_start_region[2]
+            rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                      hght * 1000., alpha=0.2,
+                                      edgecolor='none', facecolor='b')
+            axs.add_patch(rect)
+            
+            xtext=self.extent[0]+0.65*(self.extent[1]-self.extent[0])
+            ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
+            axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nPAM(deg) = %6.1f\nreso(m) = %5.1f\nwind = %s %4.0f %3.0f mps'
+                % (self.sim_movement,self.movement_ruleset,self.track_direction,self.resolution,
+                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed),fontsize='xx-small',color='w')
+                
+            axs.set_xlim([self.extent[0], self.extent[1]])
+            axs.set_ylim([self.extent[2], self.extent[3]])
+            
+            fname = f'{case_id}_{int(self.track_direction)}_tracks_wo.png'
+            self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
+            
     def plot_presence_map(self, plot_turbs=True, show=False,
                           minval=0.25) -> None:
         """ Plot presence maps """
@@ -411,10 +502,18 @@ class Simulator(Config):
             # cm = axs.imshow(prprob, extent=self.extent, origin='lower',
             #                 cmap='Reds', alpha=0.75)
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
+          #  if plot_turbs:
+          #      self.plot_turbine_locations(axs)
+            
+            xtext=self.extent[0]+0.6*(self.extent[1]-self.extent[0])
+            ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
+            axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nPAM(deg) = %6.1f\nreso(m) = %5.1f\nwind = %s %4.0f %3.0f mps'
+                % (self.sim_movement,self.movement_ruleset,self.track_direction,self.resolution,
+                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed),fontsize='xx-small',color='black')
+                
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
+            
             fname = f'{case_id}_{int(self.track_direction)}_presence.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 

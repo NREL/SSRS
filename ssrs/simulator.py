@@ -141,11 +141,21 @@ class Simulator(Config):
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
 
-    def simulate_tracks(self,**hssrs_kwargs):
-        """ Simulate tracks """
+    def simulate_tracks(self,PAM_stdev=0.0,**hssrs_kwargs):
+        """Simulate tracks
+
+        Parameters
+        ----------
+        PAM_stdev: float
+            stdev of normally distributed PAM offsets [deg]
+        **hssrs_kwargs:
+            Optional keyword argument(s) passed to
+            `generate_heuristic_eagle_track`, applicable if
+            sim_movement=='heuristics'
+        """
         if self.sim_movement == 'fluid-analogy':
             self.compute_directional_potential()
-        elif self.sim_movement == 'heuristics':      #heuristics
+        elif self.sim_movement == 'heuristics':
             if self.movement_ruleset not in rulesets.keys():
                 raise ValueError(f'{self.movement_ruleset} is not defined.  Valid rulesets: {rulesets.keys()}')
             else:
@@ -161,16 +171,25 @@ class Simulator(Config):
             self.resolution
         )
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
+        if PAM_stdev == 0:
+            dir_offsets = np.zeros(len(starting_locs))
+        else:
+            dir_offsets = np.random.normal(scale=PAM_stdev,
+                                           size=len(starting_locs))
+        self.PAM = self.track_direction + dir_offsets
+        starting_locs_PAM = list(zip(starting_rows, starting_cols, self.PAM))
+
         num_cores = min(self.track_count, self.max_cores)
         for case_id in self.case_ids:
             tmp_str = f'{case_id}_{int(self.track_direction)}'
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
-            thermals = np.zeros_like(orograph)
+            thermals = np.zeros_like(orograph) # TODO: this is a placeholder
             elevation = self.get_terrain_elevation()                              #db added
             if self.sim_movement == 'fluid-analogy':
                 potential = np.load(self._get_potential_fpath(case_id))
+
             start_time = time.time()
             if self.sim_movement == 'fluid-analogy':
                 with mp.Pool(num_cores) as pool:
@@ -181,19 +200,20 @@ class Simulator(Config):
                         self.track_dirn_restrict,
                         self.track_stochastic_nu
                     ), starting_locs)
-            elif self.sim_movement == 'heuristics':       #heuristics
+            elif self.sim_movement == 'heuristics':
                 with mp.Pool(num_cores) as pool:
-                    tracks = pool.map(lambda start_loc: generate_heuristic_eagle_track(
+                    tracks = pool.map(lambda inp: generate_heuristic_eagle_track(
                         self.movement_ruleset,
                         orograph,
                         thermals,
                         elevation,                                          #db added
-                        start_loc,
-                        self.track_direction,
+                        inp[:2], #start_loc
+                        inp[2], #PAM
                         self.resolution,
                         **hssrs_kwargs
-                    ), starting_locs)
+                    ), starting_locs_PAM)
             print(f'took {get_elapsed_time(start_time)}', flush=True)
+
             with open(self._get_tracks_fpath(case_id), "wb") as fobj:
                 pickle.dump(tracks, fobj)
 

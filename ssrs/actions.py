@@ -1,4 +1,36 @@
-""" Module defining possible actions for heuristics-based movements """
+"""Module defining possible actions for heuristics-based movements 
+
+An action function is defined generally as:
+
+    action(*args, **kwargs)
+
+*args are common data passed from
+`movmodel.generate_heuristic_eagle_track()` to all action functions, providing
+information about the eagle movement history and environment, which may or may
+not be used. **kwargs are optional, action-specific keyword arguments.
+
+The default arguments (*args) include:
+
+* trajectory: list
+    The history of all previous positions [m] along the track, including
+    the current position
+* directions: list
+    Vectors defining the direction of movement for all track segments
+* PAM: float
+    Principle axis of migration, clockwise from north [deg]
+* wo_interp: function
+    Orographic updraft field w_o(x,y) that can be evaluated at an
+    arbitrary location [m/s]
+* wo_sm_interp: function
+    Smoothed orographic updraft field w_o(x,y) that can be evaluated at
+    an arbitrary location [m/s]
+* elev_interp: function
+    Elevation z(x,y) that can be evaluated at an arbitrary location [m]
+
+`kwargs` is an optional list of keywords describing additional action-specific
+parameters.
+
+"""
 import numpy as np
 #from scipy import ndimage #for smoothing updraft field
 from scipy.interpolate import RectBivariateSpline
@@ -6,27 +38,19 @@ from scipy.interpolate import RectBivariateSpline
 
 def random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                 step=100.0,halfsector=90.0):
-    """Perform a random movement, relative to the previous direction of
-    movement, neglecting the PAM
+    """Perform a random movement, neglecting the PAM
 
     Notes:
     - Currently, only information from the previous position is used.
 
-    Parameters
-    ----------
-    trajectory: list
-        All previous positions [m] along the track
-    directions: list
-        Vectors defining the movement for all track segments
-    PAM: float
-        Principle axis of migration, clockwise from north [deg]
-    wo_interp: function
-        Orographic updraft field w_o(x,y) that can be evaluated at an
-        arbitrary location
+    Additional Parameters
+    ---------------------
     step: float
         Distance [m] to move in one step
     halfsector: float
-    
+        New movement direction will be within
+          [prevdir-halfsector, prevdir+halfsector],
+        where prevdir is the previous direction of movement [deg]
     """
     cur_pos = trajectory[-1]
     last_dir = directions[-1]
@@ -45,17 +69,8 @@ def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp
     cur_pos = trajectory[-1]
     """Perform a random movement along the principle axis of migration (PAM)
 
-    Parameters
-    ----------
-    trajectory: list
-        All previous positions [m] along the track
-    directions: list
-        Vectors defining the movement for all track segments
-    PAM: float
-        Principle axis of migration, clockwise from north [deg]
-    wo_interp: function
-        Orographic updraft field w_o(x,y) that can be evaluated at an
-        arbitrary location
+    Additional Parameters
+    ---------------------
     step: float
         Distance [m] to move in one step
     halfsector: float
@@ -70,10 +85,6 @@ def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp
 def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                 step=100.0,dist=100.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
-
-    Notes
-    - Currently, only information from the previous position is used.
-
     """
     cur_pos = trajectory[-1]      
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
@@ -103,10 +114,6 @@ def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
 def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                     step=100.0,dist=100.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
-
-    Notes:
-    - Currently, only information from the previous position is used.
-
     """
     cur_pos = trajectory[-1]      
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
@@ -141,17 +148,8 @@ def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     Notes:
     - Currently, only information from the previous position is used.
 
-    Parameters
-    ----------
-    trajectory: list
-        All previous positions [m] along the track
-    directions: list
-        Vectors defining the movement for all track segments
-    PAM: float
-        Principle axis of migration, clockwise from north [deg]
-    wo_interp: function
-        Orographic updraft field w_o(x,y) that can be evaluated at an
-        arbitrary location
+    Additional parameters
+    ---------------------
     step: float
         Distance [m] to move in one step
     dist: float
@@ -202,9 +200,6 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     """Perform a movement based on some knowledge of the _smoothed_
     flowfield ahead, searching within a sector out to radius `dist` in
     radial increments of `rangedelta`
-
-    Notes:
-    - Currently, only information from the previous position is used.
     """
     cur_pos = trajectory[-1]
                      

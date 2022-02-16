@@ -6,7 +6,8 @@ from scipy.interpolate import RectBivariateSpline
 
 def random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                 step=100.0,halfsector=90.0):
-    """Perform a random movement
+    """Perform a random movement, relative to the previous direction of
+    movement, neglecting the PAM
 
     Notes:
     - Currently, only information from the previous position is used.
@@ -43,9 +44,6 @@ def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp
                 step=100.0,halfsector=45.0):
     cur_pos = trajectory[-1]
     """Perform a random movement along the principle axis of migration (PAM)
-
-    Notes:
-    - Currently, only information from the previous position is used.
 
     Parameters
     ----------

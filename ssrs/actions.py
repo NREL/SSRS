@@ -90,7 +90,7 @@ def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
                 
     w_max,idxmax,best_dir,elev_w_max=searcharc_wo(trajectory,directions,PAM,wo_interp,elev_interp,
-                    step=100.0,dist=100.0,halfsector=30.0,Nsearch=10)
+                    step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
     
     # take step based on search results, not allowing movement steeply downslope
     if w_max > threshold and (elev_w_max - elev_cur_pos)>-20:
@@ -119,7 +119,7 @@ def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
                 
     w_max,idxmax,best_dir,elev_w_max=searcharc_wo(trajectory,directions,PAM,wo_interp,elev_interp,
-        step=100.0,dist=100.0,halfsector=30.0,Nsearch=10)
+        step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
     
     # take step based on search results, not allowing movement steeply downslope
     if w_max > threshold and (elev_w_max - elev_cur_pos)>-20:
@@ -135,6 +135,7 @@ def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_
         new_pos = cur_pos + delta
     else:
         # no usable updraft found adjacent, look ahead for strong updraft region
+        # TODO: should we add secondary search parameters as kwargs?
         new_pos = look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                             step=step,dist=2000.0,halfsector=45,Nsearch=10,threshold=threshold,sigma=0.0)
     return new_pos

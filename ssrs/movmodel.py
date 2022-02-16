@@ -258,8 +258,12 @@ def generate_heuristic_eagle_track(
         res: float, # grid resolution
         max_moves: int = 2000,
         random_walk_freq: int = 50, # how often random walks will randomly occur, approx every 1/random_walk_freq steps
-        random_walk_step_range: tuple = (10,30) # when a random walk does occur, the number of random steps will occur in this range
+        random_walk_step_range: tuple = (0,0) # when a random walk does occur, the number of random steps will occur in this range
 ):
+    assert random_walk_freq > 1
+    assert len(random_walk_step_range) == 2
+    assert random_walk_step_range[1] >= random_walk_step_range[0]
+
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
     num_rows, num_cols = wo.shape

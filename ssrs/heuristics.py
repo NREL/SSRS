@@ -13,19 +13,26 @@ where
 * `trajectory` is the current movement history, i.e., a list of positions
   including the current posiiton;
 * `directions` is the current history of movement directions;
-* `PAM` is the principle axis of migration, specified in degrees clockwise from
-  north (the +y axis);
+* `PAM` is the principle axis of migration;
 * `wo_interp` is an interpolation function that returns the orographic updraft
   at an arbitrary location; and
 * `kwargs` is an optional list of keywords
 
 """
-from .actions import (random_walk,look_ahead)
+from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead, look_ahead)
 
 rulesets = {}
 
-rulesets['random_walk'] = [
-    random_walk,
+rulesets['dir_random_walk'] = [
+    dir_random_walk,
+]
+
+rulesets['step_ahead_drw'] = [
+    step_ahead_drw,
+]
+
+rulesets['step_ahead_look_ahead'] = [
+    step_ahead_look_ahead,
 ]
 
 rulesets['lookahead'] = [
@@ -41,7 +48,7 @@ rulesets['lookahead_with_uncertainty'] = [
 ]
 
 rulesets['mixed'] = [
-    random_walk,
+    dir_random_walk,
     (look_ahead, dict(dist=100.0)),
     (look_ahead, dict(dist=200.0)),
     (look_ahead, dict(dist=300.0)),
@@ -50,7 +57,7 @@ rulesets['mixed'] = [
 ]
 
 rulesets['mixed_with_uncertainty'] = [
-    random_walk,
+    dir_random_walk,
     (look_ahead, dict(dist=100.0)),
     (look_ahead, dict(dist=200.0)),
     (look_ahead, dict(dist=300.0,sigma=45)),

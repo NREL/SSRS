@@ -3,11 +3,13 @@
 from math import (floor, ceil, sqrt)
 from typing import List, Tuple
 import numpy as np
+from scipy import ndimage #for smoothing updraft field
 import scipy.signal as ssg
 import scipy.sparse as ss
 from scipy.interpolate import RectBivariateSpline
 
 from .heuristics import rulesets
+from .actions import random_walk
 
 class MovModel:
     """ Class for fluid-flow based model """
@@ -178,7 +180,7 @@ def move_away_from_boundary(row, col, num_rows, num_cols):
     return new_row, new_col
 
 
-def generate_eagle_track(
+def generate_eagle_track(           #fluid-flow model
         conductivity: np.ndarray,
         potential: np.ndarray,
         start_loc: List[int],
@@ -249,10 +251,11 @@ def generate_eagle_track(
 def generate_heuristic_eagle_track(
         ruleset: str,
         wo: np.ndarray, # orographic updraft
+        elev: np.ndarray, # elevation from DEM - db added
         start_loc: List[int],
         PAM: float, # principal axis of migration
         res: float, # grid resolution
-        max_moves: int = 1000
+        max_moves: int = 2000
 ):
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
@@ -270,16 +273,38 @@ def generate_heuristic_eagle_track(
     xg = np.arange(num_cols) * res
     yg = np.arange(num_rows) * res
 
-    # setup updraft interpolation
+    # setup updraft and elevation interpolation and smoothed wo for lookahead
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
+    wo_smoothed=ndimage.gaussian_filter(wo, sigma=1, mode='constant') #db added
+    wo_sm_interp=RectBivariateSpline(xg, yg, wo_smoothed.T) #db added
+    elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
 
     # move through domain
     for imove in range(max_moves):
         iact = imove % len(rules)
         next_rule = rules[iact]
+        
+        #db added this part
+        #do random walk at some specified frequency
+        randwalk=np.random.randint(1, 50) #can replace 20 with a parameter "random_walk_freq"
+        if randwalk==25:  #2% of the time take a totally random walk of some number of steps
+            randy2=np.random.randint(10, 30) #number of steps - ask Eliot
+            for i in range(1,randy2):
+                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,step=100.0,halfsector=90.0)
+                
+                if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
+                    break
+                    
+                delta = new_pos - trajectory[-1]
+                directions.append(delta)
+                trajectory.append(new_pos)
+                
         if callable(next_rule):
-            action = next_rule
-            kwargs = {}
+            new_pos = next_rule(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp) #db added wo_sm_interp and elev
+            #delta = new_pos - trajectory[-1]
+            #directions.append(delta)
+            #trajectory.append(new_pos)
+        
         else:
             assert isinstance(next_rule, tuple)
             action = next_rule[0]
@@ -288,17 +313,20 @@ def generate_heuristic_eagle_track(
                 kwargs = next_rule[1]
             except IndexError:
                 kwargs = {}
-        new_pos = action(trajectory,directions,PAM,wo_interp,**kwargs)
-
+            new_pos = action(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,**kwargs) #db added wo_sm_interp and elev
+            #delta = new_pos - trajectory[-1]
+            #directions.append(delta)
+            #trajectory.append(new_pos)
+        
         # TODO: can do some validation here (to accept/reject new_pos)
 
         if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
             #print('ending after',imove,'moves')
             break
+    
         delta = new_pos - trajectory[-1]
         directions.append(delta)
         trajectory.append(new_pos)
-    
     # convert trajectory back to grid indices
     trajectory = np.round(np.array(trajectory) / res)
     iarr = trajectory[:,1]

@@ -136,9 +136,9 @@ def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_
 
 
 def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
-                step=100.0,dist=100.0,halfsector=45.0,Nsearch=5,threshold=0.85,sigma=0.0):
+               step=100.0,dist=100.0,halfsector=45.0,Nsearch=5,threshold=0.85,sigma=0.0):
     """Perform a movement based on some knowledge of the flowfield ahead
-               searching along an arc of radius dist
+    searching along an arc of radius dist
 
     Notes:
     - Currently, only information from the previous position is used.
@@ -199,42 +199,47 @@ def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
 
 
 def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
-                    step=100.0,dist=1000.0,halfsector=45.0,Nsearch=5,threshold=0.85,sigma=0.0):
-    """Perform a movement based on some knowledge of the smoothed flowfield ahead
-               searching within a sector out to radius dist 
+                  step=100.0,dist=1000.0,rangedelta=250.0,halfsector=45.0,
+                  Nsearch=5,threshold=0.85,sigma=0.0):
+    """Perform a movement based on some knowledge of the _smoothed_
+    flowfield ahead, searching within a sector out to radius `dist` in
+    radial increments of `rangedelta`
 
     Notes:
     - Currently, only information from the previous position is used.
     """
     cur_pos = trajectory[-1]
                      
-    kount=0
-    num=int(dist/250.)
-    intdist=int(dist)
-    w_best=np.zeros(num,dtype=float)
-    loc_best=np.zeros(num,dtype=float)
-    dir_best=np.zeros(num,dtype=float)
-    z_w_best=np.zeros(num,dtype=float)
-    rad_dist=np.zeros(num,dtype=float)      
-    for radius in range(250, intdist, 250):   #search sector of smoothed wo in successive arcs of 250 m radius
-        kount=kount+1
-        numsearchlocs=int(radius/25.)
-        w_max,idxmax,best_dir,elev_w_max=searcharc_wo(trajectory,directions,PAM,wo_sm_interp,elev_interp,
-                        step=100.0,dist=radius,halfsector=45.0,Nsearch=numsearchlocs)
-        w_best[kount]=w_max
-        loc_best[kount]=idxmax
-        dir_best[kount]=best_dir
-        z_w_best[kount]=elev_w_max
-        rad_dist[kount]=radius
-    
-    w_best_sorted=-np.sort(-w_best)                       #find max w over all arcs
-    loc_best_sorted=w_best.argsort()[-2:][::-1]          
-    w_globalmax=w_best_sorted[0]
-    idxglobalmax=loc_best_sorted[0]
+    num = int(dist/rangedelta)
+    assert num > 0, f'dist={dist} should be greater than rangedelta={rangedelta}'
+    w_best = np.zeros(num,dtype=float)
+    loc_best = np.zeros(num,dtype=float)
+    dir_best = np.zeros(num,dtype=float)
+    z_w_best = np.zeros(num,dtype=float)
+    rad_dist = np.zeros(num,dtype=float)
+
+    for k,radius in enumerate(np.arange(rangedelta, dist, rangedelta)):
+        # search sector of smoothed wo in successive arcs with rangedelta
+        # increment in radius
+        numsearchlocs = int(radius/25.)
+        w_max,idxmax,best_dir,elev_w_max = searcharc_wo(
+                        trajectory,directions,PAM,wo_sm_interp,elev_interp,
+                        step=step,dist=radius,halfsector=halfsector,Nsearch=numsearchlocs)
+        w_best[k] = w_max
+        loc_best[k] = idxmax
+        dir_best[k] = best_dir
+        z_w_best[k] = elev_w_max
+        rad_dist[k] = radius
+
+    # find max w over all arcs
+    w_best_sorted = -np.sort(-w_best)
+    loc_best_sorted = w_best.argsort()[-2:][::-1]
+    w_globalmax = w_best_sorted[0]
+    idxglobalmax = loc_best_sorted[0]
     elev_w_globalmax = z_w_best[idxglobalmax]
-    elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
+    elev_cur_pos = elev_interp(cur_pos[0],cur_pos[1], grid=False)
     
-    #maybe what we want is to get the two best, and set the probability of one or the other based on the inverse dist to cur pos
+    # TODO: maybe what we want is to get the two best, and set the probability of one or the other based on the inverse dist to cur pos
     
     # take step towards max updraft 
     if w_globalmax > threshold and elev_w_globalmax >= 0.75*elev_cur_pos:
@@ -248,6 +253,7 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
         # no usable updraft found, do a random walk, either directed or not
         randwalk=np.random.randint(1, 10)  #set frequency for each type of movement
         if randwalk==1:  #10% of the time take a totally random walk
+            # TODO: implement number of steps > 1
             #randy2=np.random.randint(10, 30) #number of steps - ask Eliot
             new_pos=random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                 step=100.0,halfsector=90.0)

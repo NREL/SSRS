@@ -110,8 +110,9 @@ def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,el
         new_pos = cur_pos + delta
     else:
         # no usable updraft found adjacent, do a directed random walk
-        new_pos = dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
-                              step=step,halfsector=halfsector)
+        new_pos = dir_random_walk(trajectory,directions,PAM,
+                                  wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                                  step=step,halfsector=halfsector)
     return new_pos
 
 
@@ -195,8 +196,9 @@ def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_i
         new_pos = cur_pos + delta
     else:
         # no usable updraft found, do a random walk
-        new_pos = dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,
-                              step=step,halfsector=halfsector)
+        new_pos = dir_random_walk(trajectory,directions,PAM,
+                                  wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                                  step=step,halfsector=halfsector)
     return new_pos
 
 
@@ -257,8 +259,9 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,ele
             new_pos=random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
                 step=100.0,halfsector=90.0)
         else:
-            new_pos = dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
-                              step=step,halfsector=halfsector)
+            new_pos = dir_random_walk(trajectory,directions,PAM,
+                                      wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                                      step=step,halfsector=halfsector)
     return new_pos
     
     

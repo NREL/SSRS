@@ -141,7 +141,7 @@ class Simulator(Config):
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
 
-    def simulate_tracks(self):
+    def simulate_tracks(self,**hssrs_kwargs):
         """ Simulate tracks """
         if self.sim_movement == 'fluid-analogy':
             self.compute_directional_potential()
@@ -167,7 +167,7 @@ class Simulator(Config):
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
-            elevation=self.get_terrain_elevation()                              #db added
+            elevation = self.get_terrain_elevation()                              #db added
             if self.sim_movement == 'fluid-analogy':
                 potential = np.load(self._get_potential_fpath(case_id))
             start_time = time.time()
@@ -188,7 +188,8 @@ class Simulator(Config):
                         elevation,                                          #db added
                         start_loc,
                         self.track_direction,
-                        self.resolution
+                        self.resolution,
+                        **hssrs_kwargs
                     ), starting_locs)
             print(f'took {get_elapsed_time(start_time)}', flush=True)
             with open(self._get_tracks_fpath(case_id), "wb") as fobj:

@@ -155,7 +155,7 @@ class Simulator(Config):
         """
         if self.sim_movement == 'fluid-analogy':
             self.compute_directional_potential()
-        elif self.sim_movement == 'heuristics':
+        elif self.sim_movement == 'heuristics':      #heuristics
             if self.movement_ruleset not in rulesets.keys():
                 raise ValueError(f'{self.movement_ruleset} is not defined.  Valid rulesets: {rulesets.keys()}')
             else:

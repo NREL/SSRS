@@ -152,6 +152,8 @@ def look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_i
     """Perform a movement based on some knowledge of the flowfield ahead
     searching along an arc of radius dist
 
+    **DEPRECATED** -- use look_ahead_v2 instead
+
     Notes:
     - Currently, only information from the previous position is used.
 
@@ -208,6 +210,8 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,ele
     """Perform a movement based on some knowledge of the _smoothed_
     flowfield ahead, searching within a sector out to radius `dist` in
     radial increments of `rangedelta`
+
+    TODO: Replace legacy look_ahead function with this 
     """
     cur_pos = trajectory[-1]
                      

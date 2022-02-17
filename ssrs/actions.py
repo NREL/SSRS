@@ -85,8 +85,8 @@ def dir_random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,e
     delta = step * np.array([np.cos(rand_ang),np.sin(rand_ang)])
     return cur_pos + delta
 
-def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                step=100.0,dist=100.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
+def step_ahead_drw(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+                step=100.0,dist=100.0,look_ahead_dist=2000.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
     """
     cur_pos = trajectory[-1]      
@@ -143,7 +143,7 @@ def step_ahead_look_ahead(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_in
         # no usable updraft found adjacent, look ahead for strong updraft region
         # TODO: should we add secondary search parameters as kwargs?
         new_pos = look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
-                            step=step,dist=2000.0,halfsector=45,Nsearch=10,threshold=threshold,sigma=0.0)
+                            step=step,dist=look_ahead_dist,halfsector=45,Nsearch=10,threshold=threshold,sigma=0.0)
     return new_pos
 
 

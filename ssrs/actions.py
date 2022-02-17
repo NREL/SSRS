@@ -58,8 +58,8 @@ def random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_
     cur_pos = trajectory[-1]
     last_dir = directions[-1]
     ref_ang = np.arctan2(last_dir[1],last_dir[0]) # previous movement angle (counterclockwise from +x)                       
-    ang0 = np.radians(ref_ang - halfsector)
-    ang1 = np.radians(ref_ang + halfsector)
+    ang0 = ref_ang - np.radians(halfsector)
+    ang1 = ref_ang + np.radians(halfsector)
     
     rand_ang = ang0 + np.random.random()*(ang1 - ang0)
     delta = step * np.array([np.cos(rand_ang),np.sin(rand_ang)])

@@ -1,22 +1,14 @@
-""" Module for implementing heuristics-based movement model
+"""Module for implementing heuristics-based movement model
 
 Rulesets are lists of specified action functions or tuples of the form:
 
     (action, dict(kwarg0=..., kwarg1=..., ..., kwargN=...))
 
-As such, the `action` function is defined generally as:
+where the kwarg keyword arguments are used to override default action
+parameters.
 
-    action(trajectory, directions, PAM, wo_interp, **kwargs)
-
-where
-
-* `trajectory` is the current movement history, i.e., a list of positions
-  including the current posiiton;
-* `directions` is the current history of movement directions;
-* `PAM` is the principle axis of migration;
-* `wo_interp` is an interpolation function that returns the orographic updraft
-  at an arbitrary location; and
-* `kwargs` is an optional list of keywords
+See the actions module for available action functions and descriptions of their
+action parameters.
 
 """
 from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead, look_ahead)

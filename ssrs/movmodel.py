@@ -251,12 +251,19 @@ def generate_eagle_track(           #fluid-flow model
 def generate_heuristic_eagle_track(
         ruleset: str,
         wo: np.ndarray, # orographic updraft
+        wt: np.ndarray, # thermal updraft
         elev: np.ndarray, # elevation from DEM - db added
         start_loc: List[int],
         PAM: float, # principal axis of migration
         res: float, # grid resolution
-        max_moves: int = 2000
+        max_moves: int = 2000,
+        random_walk_freq: int = 0, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+        random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
+        random_walk_step_range: tuple = (None,None), # when a random walk does occur, the number of random steps will occur in this range
 ):
+    assert random_walk_freq >= 0
+    assert (len(random_walk_step_range) == 2)
+
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
     num_rows, num_cols = wo.shape
@@ -277,7 +284,18 @@ def generate_heuristic_eagle_track(
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
     wo_smoothed=ndimage.gaussian_filter(wo, sigma=1, mode='constant') #db added
     wo_sm_interp=RectBivariateSpline(xg, yg, wo_smoothed.T) #db added
+    wt_interp = RectBivariateSpline(xg, yg, wt.T)
     elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
+
+    # estimate spontaneous random walk params if needed
+    if (random_walk_step_range[0] is None) or (random_walk_step_range[1] is None):
+        # set default based on assumed ~2 km dist of travel
+        nstep = int(2000. / random_walk_step_size)
+        random_walk_step_range = (int(0.5*nstep), int(1.5*nstep))
+        #print('Default spontaneous random walk steps:',random_walk_step_range)
+    else:
+        assert (random_walk_step_range[1] >= random_walk_step_range[0]), \
+               'specify random_walk_step_range as (min_random_steps, max_random_steps)'
 
     # move through domain
     for imove in range(max_moves):
@@ -286,24 +304,21 @@ def generate_heuristic_eagle_track(
         
         #db added this part
         #do random walk at some specified frequency
-        randwalk=np.random.randint(1, 50) #can replace 20 with a parameter "random_walk_freq"
-        if randwalk==25:  #2% of the time take a totally random walk of some number of steps
-            randy2=np.random.randint(10, 30) #number of steps - ask Eliot
-            for i in range(1,randy2):
-                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,step=100.0,halfsector=90.0)
-                
+        randwalk = 0
+        if random_walk_freq > 0:
+            randwalk = np.random.randint(1, random_walk_freq)
+        if randwalk==1:
+            randy2 = np.random.randint(*random_walk_step_range) #number of steps
+            for i in range(randy2):
+                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
                 if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
                     break
-                    
                 delta = new_pos - trajectory[-1]
                 directions.append(delta)
                 trajectory.append(new_pos)
                 
         if callable(next_rule):
-            new_pos = next_rule(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp) #db added wo_sm_interp and elev
-            #delta = new_pos - trajectory[-1]
-            #directions.append(delta)
-            #trajectory.append(new_pos)
+            new_pos = next_rule(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp) #db added wo_sm_interp and elev
         
         else:
             assert isinstance(next_rule, tuple)
@@ -313,21 +328,37 @@ def generate_heuristic_eagle_track(
                 kwargs = next_rule[1]
             except IndexError:
                 kwargs = {}
-            new_pos = action(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,**kwargs) #db added wo_sm_interp and elev
-            #delta = new_pos - trajectory[-1]
-            #directions.append(delta)
-            #trajectory.append(new_pos)
+            new_pos = action(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,**kwargs) #db added wo_sm_interp and elev
         
         # TODO: can do some validation here (to accept/reject new_pos)
 
-        if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
-            #print('ending after',imove,'moves')
-            break
-    
-        delta = new_pos - trajectory[-1]
-        directions.append(delta)
-        trajectory.append(new_pos)
-    # convert trajectory back to grid indices
+        # process new positions
+        try:
+            assert len(new_pos[0]) == 2 # TODO: update this for 3-D tracks!
+        except TypeError:
+            # `new_pos` is of the form [new_x, new_y], so we can't take the len
+            # of a float ==> a _single_ new data point was generated -- this is
+            # the default previous behavior
+            new_pos = [new_pos]
+        #else:
+            # Otherwise, `new_pos` is of the form
+            #   [[new_x1,new_y1], [new_x2,new_y2], ..., [new_xN,newyN]]
+            # and the length of the first set of coordinates is the number of
+            # simulated dimensions
+        # This is now generalized to handle 1 or more points
+        last_pos = trajectory[-1]
+        for cur_pos in new_pos:
+            if not ((0 < cur_pos[0] < xg[-1]) and (0 < cur_pos[1] < yg[-1])):
+                #print('ending after',imove,'moves')
+                break
+            delta = cur_pos - last_pos
+            directions.append(delta)
+            trajectory.append(cur_pos)
+            last_pos = cur_pos
+
+        #===end of current action here===
+
+    # trajectory is complete--convert back to grid indices
     trajectory = np.round(np.array(trajectory) / res)
     iarr = trajectory[:,1]
     jarr = trajectory[:,0]

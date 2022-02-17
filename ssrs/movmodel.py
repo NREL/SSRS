@@ -258,12 +258,11 @@ def generate_heuristic_eagle_track(
         res: float, # grid resolution
         max_moves: int = 2000,
         random_walk_freq: int = 0, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
-        random_walk_step_range: tuple = (0,0), # when a random walk does occur, the number of random steps will occur in this range
+        random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
+        random_walk_step_range: tuple = (None,None), # when a random walk does occur, the number of random steps will occur in this range
 ):
     assert random_walk_freq >= 0
-    assert (len(random_walk_step_range) == 2) and \
-            (random_walk_step_range[1] >= random_walk_step_range[0]), \
-            'specify random_walk_step_range as (min_random_steps, max_random_steps)'
+    assert (len(random_walk_step_range) == 2)
 
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
@@ -288,6 +287,16 @@ def generate_heuristic_eagle_track(
     wt_interp = RectBivariateSpline(xg, yg, wt.T)
     elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
 
+    # estimate spontaneous random walk params if needed
+    if (random_walk_step_range[0] is None) or (random_walk_step_range[1] is None):
+        # set default based on assumed ~2 km dist of travel
+        nstep = int(2000. / random_walk_step_size)
+        random_walk_step_range = (int(0.5*nstep), int(1.5*nstep))
+        #print('Default spontaneous random walk steps:',random_walk_step_range)
+    else:
+        assert (random_walk_step_range[1] >= random_walk_step_range[0]), \
+               'specify random_walk_step_range as (min_random_steps, max_random_steps)'
+
     # move through domain
     for imove in range(max_moves):
         iact = imove % len(rules)
@@ -301,7 +310,7 @@ def generate_heuristic_eagle_track(
         if randwalk==1:
             randy2 = np.random.randint(*random_walk_step_range) #number of steps
             for i in range(randy2):
-                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=100.0,halfsector=90.0)
+                new_pos = random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
                 if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
                     break
                 delta = new_pos - trajectory[-1]

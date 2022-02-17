@@ -258,10 +258,13 @@ def look_ahead_v2(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,ele
         # no usable updraft found, do a random walk, either directed or not
         randwalk=np.random.randint(1, 10)  #set frequency for each type of movement
         if randwalk==1:  #10% of the time take a totally random walk
-            # TODO: implement number of steps > 1
-            #randy2=np.random.randint(10, 30) #number of steps - ask Eliot
-            new_pos=random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
-                step=100.0,halfsector=90.0)
+            randy2=np.random.randint(10, 30) #number of steps
+            new_pos = []
+            for _ in range(randy2):
+                new_pos.append(
+                    random_walk(trajectory,directions,PAM,wo_interp,wo_sm_interp,elev_interp,
+                                step=step,halfsector=90.0)
+                )
         else:
             new_pos = dir_random_walk(trajectory,directions,PAM,
                                       wo_interp,wo_sm_interp,wt_interp,elev_interp,

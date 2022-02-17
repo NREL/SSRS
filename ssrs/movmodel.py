@@ -332,13 +332,31 @@ def generate_heuristic_eagle_track(
         
         # TODO: can do some validation here (to accept/reject new_pos)
 
-        if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
-            #print('ending after',imove,'moves')
-            break
-    
-        delta = new_pos - trajectory[-1]
-        directions.append(delta)
-        trajectory.append(new_pos)
+        # process new positions
+        try:
+            assert len(new_pos[0]) == 2 # TODO: update this for 3-D tracks!
+        except TypeError:
+            # `new_pos` is of the form [new_x, new_y], so we can't take the len
+            # of a float ==> a _single_ new data point was generated -- this is
+            # the default previous behavior
+            new_pos = [new_pos]
+        #else:
+            # Otherwise, `new_pos` is of the form
+            #   [[new_x1,new_y1], [new_x2,new_y2], ..., [new_xN,newyN]]
+            # and the length of the first set of coordinates is the number of
+            # simulated dimensions
+        # This is now generalized to handle 1 or more points
+        last_pos = trajectory[-1]
+        for cur_pos in new_pos:
+            if not ((0 < cur_pos[0] < xg[-1]) and (0 < cur_pos[1] < yg[-1])):
+                #print('ending after',imove,'moves')
+                break
+            delta = cur_pos - last_pos
+            directions.append(delta)
+            trajectory.append(cur_pos)
+            last_pos = cur_pos
+
+        #===end of current action here===
 
     # trajectory is complete--convert back to grid indices
     trajectory = np.round(np.array(trajectory) / res)

@@ -69,8 +69,8 @@ class Simulator(Config):
         proj_west, proj_south = transform_coordinates(
             self.lonlat_crs, self.projected_crs,
             self.southwest_lonlat[0], self.southwest_lonlat[1])
-        proj_east = proj_west[0] + xsize * self.resolution
-        proj_north = proj_south[0] + ysize * self.resolution
+        proj_east = proj_west[0] + (xsize - 1) * self.resolution
+        proj_north = proj_south[0] + (ysize - 1) * self.resolution
         self.bounds = (proj_west[0], proj_south[0], proj_east, proj_north)
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
@@ -335,6 +335,7 @@ class Simulator(Config):
         lwidth = 0.1 if self.track_count > 251 else 0.4
         elevation = self.get_terrain_elevation()
         xgrid, ygrid = self.get_terrain_grid()
+        print(xgrid[0:10])
         for case_id in self.case_ids:
             fig, axs = plt.subplots(figsize=self.fig_size)
             _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
@@ -456,9 +457,11 @@ class Simulator(Config):
 
     def get_terrain_grid(self):
         """ Returns xgrid and ygrid for the terrain """
-        xgrid = np.linspace(self.bounds[0], self.bounds[0] + self.gridsize[1] *
+        xgrid = np.linspace(self.bounds[0],
+                            self.bounds[0] + (self.gridsize[1] - 1) *
                             self.resolution, self.gridsize[1])
-        ygrid = np.linspace(self.bounds[1], self.bounds[1] + self.gridsize[0] *
+        ygrid = np.linspace(self.bounds[1],
+                            self.bounds[1] + (self.gridsize[0] - 1) *
                             self.resolution, self.gridsize[0])
         return xgrid, ygrid
 

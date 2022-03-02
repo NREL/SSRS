@@ -27,12 +27,15 @@ class Terrain:
     def __init__(
             self,
             lonlat_bounds: Tuple[float, float, float, float],
-            out_dir: str
+            out_dir: str,
+            print_verbose: bool = True
     ):
-        print((f'Terrain: Bounds set to'
-               f' {[round(ix,2) for ix in lonlat_bounds]}'))
+        if print_verbose:
+            print((f'Terrain: Bounds set to'
+                   f' {[round(ix,2) for ix in lonlat_bounds]}'))
         self.lonlat_bounds = lonlat_bounds
         self.out_dir = out_dir
+        self.print_verbose = print_verbose
         makedir_if_not_exists(self.out_dir)
         # self.downloaded = {}
 
@@ -57,14 +60,17 @@ class Terrain:
                 self.validate_saved_layer_data(layer)
             except FileNotFoundError:
                 if layer in ThreeDEP.valid_layers:
-                    print(f'Terrain: Downloading {layer} data from 3DEP..')
+                    if self.print_verbose:
+                        print(f'Terrain: Downloading {layer} data from 3DEP..')
                     src_object = ThreeDEP(layer, pad_bnds, fpath)
                 elif layer in SRTM.valid_layers:
-                    print(f'Terrain: Downloading {layer} data from SRTM..')
+                    if self.print_verbose:
+                        print(f'Terrain: Downloading {layer} data from SRTM..')
                     src_object = SRTM(layer, pad_bnds, fpath)
                 src_object.download()
             else:
-                print(f'Terrain: Found saved raster data for {layer}')
+                if self.print_verbose:
+                    print(f'Terrain: Found saved raster data for {layer}')
 
     def validate_layer_name(self, layer: str) -> None:
         """ check if layer name is valid """

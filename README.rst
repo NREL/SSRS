@@ -12,8 +12,11 @@ need for any eagle-centric or atmosphere-related data collection efforts, using
 only the publically available data sources. SSRS implements and extends the
 capability of the fluid-flow model from 'Brandes, D., & Ombalski, D. (2004). 
 Modelling raptor migration pathways using a fluid-flow analogy. The Journal
-of Raptor Research, 38(3), 195-207.'
+of Raptor Research, 38(3), 195-207.' More details can be found in the publication:
 
+Rimple Sandhu, Charles Tripp, Eliot Quon, Regis Thedin, Michael Lawson, David Brandes, Christopher J. Farmer, Tricia A. Miller, Caroline Draxl, Paula Doubrawa, Lindy Williams, Adam E. Duerr, Melissa A. Braham, Todd Katzner,
+`Stochastic agent-based model for predicting turbine-scale raptor movements during updraft-subsidized directional flights <https://authors.elsevier.com/a/1eWBY15DJ-5ecl>`_,
+Ecological Modelling, Volume 466, 109876, 2022.
 
 SSRS uses the following publically available data sources:
 
@@ -76,7 +79,7 @@ Usage
 
 The Jupyter notebooks in notebooks/ and python scripts in examples/ show the
 usage of SSRS for a given region. For instance, ssrs simulation in uniform mode
-for a 60 km by 50 km region in Wyoming and simulating 500 eagles travelling
+for a 60 km by 50 km region in Wyoming and simulating 1000 eagles travelling
 north can be implemented using the following code:
 
 .. _notebook: notebooks/sample_ssrs_uniform.ipynb
@@ -241,7 +244,10 @@ Developers
 
 Citation
 --------------
-Sandhu, Rimple, Tripp, Charles, Quon, Eliot, Thedin, Regis, Williams, Lindy, Doubrawa, Paula, Draxl, Caroline, and Lawson, Mike. SSRS (Stochastic Soaring Raptor Simulator). Computer Software. https://github.com/NREL/SSRS. USDOE Office of Energy Efficiency and Renewable Energy (EERE), Renewable Power Office. Wind Energy Technologies Office. 18 Oct. 2021. Web. doi:10.11578/dc.20210903.2.
+Sandhu, Rimple, Tripp, Charles, Quon, Eliot, Thedin, Regis, Williams, Lindy, 
+Doubrawa, Paula, Draxl, Caroline, and Lawson, Mike. SSRS 
+(Stochastic Soaring Raptor Simulator). Computer Software. 
+https://github.com/NREL/SSRS. USDOE Office of Energy Efficiency and Renewable Energy (EERE), Renewable Power Office. Wind Energy Technologies Office. 18 Oct. 2021. Web. doi:10.11578/dc.20210903.2.
 
 
 

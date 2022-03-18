@@ -12,14 +12,14 @@ class MovModel:
 
     def __init__(
         self,
-        move_dirn: str,
+        move_dirn: float,
         grid_shape: Tuple[int, int]
     ):
         self.move_dirn = move_dirn
         self.grid_shape = grid_shape
 
     def get_boundary_nodes(self):
-        """ returns boundary nodes and potential for given direction of 
+        """ returns boundary nodes and potential for given direction of
         movement """
         nrow, ncol = self.grid_shape
         north_bnodes = np.array([nrow * (x + 1) - 1 for x in range(ncol)])
@@ -176,6 +176,28 @@ def move_away_from_boundary(row, col, num_rows, num_cols):
     return new_row, new_col
 
 
+def generate_move_probabilities(
+    in_probs: np.ndarray,
+    nu_par: float,
+    dir_bool: np.ndarray
+):
+    """ create move probabilities from a 1d array of values"""
+    out_probs = np.asarray(in_probs.copy())
+    if np.isnan(out_probs).any():
+        print('NANs in move probabilities!')
+    out_probs = out_probs.clip(min=0.)
+    out_probs[4] = 0.
+    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    if np.count_nonzero(out_probs) == 0:
+        out_probs = np.random.rand(len(out_probs))
+    out_probs[4] = 0.
+    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    out_probs /= np.sum(out_probs)
+    out_probs = np.power(out_probs, nu_par)
+    out_probs /= np.sum(out_probs)
+    return out_probs
+
+
 def generate_eagle_track(
         conductivity: np.ndarray,
         potential: np.ndarray,
@@ -186,8 +208,8 @@ def generate_eagle_track(
     """ Generate an eagle track """
 
     num_rows, num_cols = conductivity.shape
-    burnin = 200
-    max_moves = num_rows * num_cols
+    burnin = int(min(num_rows, num_cols) / 10)
+    max_moves = num_rows / 2 * num_cols / 2
     dirn = [0, 0]
     directions = []
     directions.append(dirn)
@@ -204,39 +226,21 @@ def generate_eagle_track(
             row, col = move_away_from_boundary(row, col, num_rows, num_cols)
         local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
         local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
-        local_cond = local_cond.clip(min=1e-5)
+        local_cond = local_cond.clip(min=1e-06)
         mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
         q_diff = local_potential_energy[1, 1] - local_potential_energy
-        if np.count_nonzero(q_diff) == 0:
-            q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
-            # print('All potentials same!')
         q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
         mov_probs = np.multiply(mean_cond, q_diff)
         mov_probs = mov_probs.flatten()
-        mov_probs -= np.min(mov_probs)
-        mov_probs[4] = 0.
-        vec_bool = get_track_restrictions(0, 0)
+        dir_bool = get_track_restrictions(0, 0)
         for idirn in directions[-dirn_restrict:]:
-            vec_bool = np.logical_and(get_track_restrictions(*idirn), vec_bool)
-        rmov_probs = [x * float(y) for x, y in zip(mov_probs, vec_bool)]
-        if np.sum(rmov_probs) != 0:
-            rmov_probs /= np.sum(rmov_probs)
-            rmov_probs = np.power(rmov_probs, nu_par)
-            rmov_probs /= np.sum(rmov_probs)
-            chosen_index = np.random.choice(
-                range(len(rmov_probs)), p=rmov_probs)
-        else:
-            # print('Sum(mov_probs) is zero!')
-            if np.sum(mov_probs) != 0:
-                mov_probs /= np.sum(mov_probs)
-                mov_probs = np.power(mov_probs, nu_par)
-                mov_probs /= np.sum(mov_probs)
-                chosen_index = np.random.choice(
-                    range(len(mov_probs)), p=mov_probs)
-            else:
-                chosen_index = np.random.choice(range(len(mov_probs)))
-        # print(neighbour_deltas)
+            dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+        mov_probs = generate_move_probabilities(mov_probs, nu_par, dir_bool)
+        chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
         dirn = neighbour_deltas[chosen_index]
+        # else:
+        # q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
+        # print(f'All potentials same at {k}!')
         position = [x + y for x, y in zip([row, col], dirn)]
         trajectory.append(position)
         directions.append(dirn)
@@ -313,7 +317,7 @@ def compute_smooth_presence_counts(
     kernel[mask2] = 1
     kernel /= np.sum(kernel)
     presence_prob = ssg.convolve2d(count_mat, kernel, mode='same')
-    #presence_prob /= np.amax(presence_prob)
+    # presence_prob /= np.amax(presence_prob)
     return presence_prob.astype(np.float32)
 
 

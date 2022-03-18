@@ -15,6 +15,9 @@ class Config:
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
     max_cores: int = 8  # maximum of cores to use
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+    sim_seed: int = -1  # random number seed
+    updraft_use_thermals: bool = False  # only ue oro updraft
+    updraft_threshold: float = 0.75  # only use updrafts higher than this
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
@@ -47,14 +50,16 @@ class Config:
     track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2)
     track_start_type: str = 'random'  # structured, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
-    track_dirn_restrict: int = 3  # restrict within 45 deg of previous # moves
+    track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves
 
     # plotting related
     fig_height: float = 6.
     fig_dpi: int = 200  # increase this to get finer plots
+    turbine_data_fname: str = 'turbines.csv'
     turbine_minimum_hubheight: float = 50.  # for select turbine locations
     turbine_mrkr_styles = ('1k', '2k', '3k', '4k',
                            '+k', 'xk', '*k', '.k', 'ok')
     turbine_mrkr_size: float = 3.
     turbine_box_around_wfarm: bool = False
     presence_smoothing_radius: bool = 10  # smoothing radius in meters
+    print_verbose: bool = False

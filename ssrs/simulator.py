@@ -129,7 +129,7 @@ class Simulator(Config):
             self.compute_orographic_updraft_uniform()
 
         # compute thermals
-        if (self.sim_mode != 'uniform') & (self.updraft_use_thermals):
+        if self.updraft_use_thermals:
             self.compute_thermal_updrafts()
 
         # plotting settings
@@ -141,7 +141,7 @@ class Simulator(Config):
     def get_updrafts(self, case_id: str):
         """ Computes updrafts for the particular case """
         orograph = np.load(self._get_orograph_fpath(case_id))
-        if (self.sim_mode != 'uniform') & (self.updraft_use_thermals):
+        if self.updraft_use_thermals:
             thermals = np.load(self._get_thermal_fpath(case_id))
         else:
             thermals = np.zeros_like(orograph)
@@ -256,8 +256,10 @@ class Simulator(Config):
 
     def compute_thermal_updrafts(self):
         """ Computes thermal updrafts based on convective velocity """
-        print('Computing thermal updrafts..', end="")
-        for dtime, case_id in zip(self.dtimes, self.case_ids):
+        print('Computing thermal updrafts..', flush=True)
+        aspect = self.get_terrain_aspect()
+        # for dtime, case_id in zip(self.dtimes, self.case_ids):
+        for case_id in self.case_ids:
             # wtk_df = self.wtk.get_dataframe_for_this_time(dtime)
             # pot_temperature = compute_potential_temperature(
             #     wtk_df[self.wtk_layers['pressure']],
@@ -269,18 +271,9 @@ class Simulator(Config):
             #     wtk_df[self.wtk_layers['surfheatflux']]
             # )
             # conv_speed = self._interpolate_wtk_vardata(conv_speed_wtk)
-            _, _, thermals = compute_thermals(
-                self.gridsize,
-                self.resolution,
-                self.wtk_thermal_height,
-                1200.,  # wtk_df[self.wtk_layers['blheight']].mean(),
-                2.5,  # np.mean(conv_speed_wtk),
-                dtime
-            )
-            thermals = np.zeros(self.gridsize)
+            thermals = compute_thermals(aspect, 2.0)
             fpath = self._get_thermal_fpath(case_id)
             np.save(fpath, thermals.astype(np.float32))
-            print(thermals.shape)
 
     def plot_terrain_features(self, plot_turbs=True, show=False) -> None:
         """ Plots terrain layers """
@@ -329,6 +322,7 @@ class Simulator(Config):
         """ Plots oro updraft and tracks """
         self.plot_updrafts(plot_turbs, show)
         self.plot_orographic_updrafts(plot_turbs, show)
+        self.plot_thermal_updrafts(plot_turbs, show)
         self.plot_directional_potentials(plot_turbs, show)
         self.plot_simulated_tracks(plot_turbs, show)
         self.plot_presence_map(plot_turbs, show)
@@ -367,20 +361,22 @@ class Simulator(Config):
             self.save_fig(fig, fname, show)
 
     def plot_thermal_updrafts(self, plot_turbs=True, show=False) -> None:
-        """ Plot orographic updrafts """
-        for case_id in self.case_ids:
-            thermals = np.load(self._get_thermal_fpath(case_id))
-            fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(1, int(round(np.mean(thermals)))), 5)
-            curm = axs.imshow(thermals, cmap='viridis',
-                              extent=self.extent, origin='lower',
-                              vmin=-0.5, vmax=3)
-            cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-            cbar.set_label('Orographic updraft (m/s)')
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
-            fname = os.path.join(self.mode_fig_dir, f'{case_id}_thermals.png')
-            self.save_fig(fig, fname, show)
+        """ Plot thermal updrafts """
+        if self.updraft_use_thermals:
+            for case_id in self.case_ids:
+                thermals = np.load(self._get_thermal_fpath(case_id))
+                fig, axs = plt.subplots(figsize=self.fig_size)
+                maxval = min(max(1, int(round(np.mean(thermals)))), 5)
+                curm = axs.imshow(thermals, cmap='viridis',
+                                  extent=self.extent, origin='lower',
+                                  vmin=-0.5, vmax=3)
+                cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+                cbar.set_label('Thermal updraft (m/s)')
+                if plot_turbs:
+                    self.plot_turbine_locations(axs)
+                fname = os.path.join(
+                    self.mode_fig_dir, f'{case_id}_thermals.png')
+                self.save_fig(fig, fname, show)
 
     def plot_wtk_layers(self, plot_turbs=True, show=False) -> None:
         """ Plot all the layers in Wind Toolkit data """

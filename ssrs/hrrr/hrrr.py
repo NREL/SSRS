@@ -1,8 +1,11 @@
 from collections import OrderedDict
 import warnings
+
 from herbie.archive import Herbie
 import numpy as np
 import xarray as xr
+
+from hrrr import raster
 
 
 class Navigator:
@@ -295,7 +298,7 @@ class Navigator:
             'n': float(n.values)
         }
 
-    def convective_velocity_variables(self):
+    def convective_velocity_xarray(self):
         """
         Retrieves the HRRR variables that allow convective velocity to be 
         calcuated. These variables are HPBL, POT, SHTFL, GFLUX.
@@ -308,3 +311,56 @@ class Navigator:
         data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
         data = xr.combine_by_coords(data)
         return data
+
+    def convective_velcoity_variables(self, southwest_lonlat=None):
+        """
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to retrieve.
+            This parameter defaults to None. If this default is used, this
+            value is set to (-106.21, 42.78) within the method.
+
+        Returns
+        -------
+        Dict[str, xarray.Dataset]
+            A dictionary with two keys: wstar_gflux_masked and wstar_shtfl_masked.
+            Each value is an xarray.Dataset that corresponds to the masked values
+            as referenced by the southwest lat/lon coordinates
+        """
+        # Get the variables for calculating convective velocity
+        data = self.convective_velocity_xarray()
+
+        if southwest_lonlat is None:
+            southwest_lonlat = (-106.21, 42.78)   # TOTW
+
+        # create mask to get values around the region of interest. Arbitrarily setting 0.8 degrees
+        xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
+        
+        # reference (0,0)
+        xref = xSW[0]
+        yref = ySW[0]
+
+        # longitude in degrees East (unusual; for GRIB)
+        min_lat = southwest_lonlat[1] - 0.15
+        min_lon = 180 - southwest_lonlat[0] - 0.9
+        max_lat = min_lat + 0.7
+        max_lon = min_lon + 1.1
+
+        # longitude in degrees West (typical)
+        min_lon_degW = southwest_lonlat[0] - 0.1
+        max_lon_degW = min_lon_degW + 0.8
+
+        latc = data.coords['latitude']
+        lonc = data.coords['longitude']
+        latc_mask = (latc >= min_lat) & (latc <= max_lat)
+        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
+        mask = latc_mask & lonc_mask
+
+        wstar_gflux_masked = data['wstar_gflux'].where(mask, drop=True)
+        wstar_shtfl_masked = data['wstar_shtfl'].where(mask, drop=True)
+
+        return {
+            'wstar_gflux_masked': wstar_gflux_masked,
+            'wstar_shtfl_masked': wstar_shtfl_masked
+        }

@@ -8,7 +8,7 @@ import xarray as xr
 from ssrs import raster
 
 
-class Navigator:
+class HRRR:
     """
     This class provides a basic interface to HRRR GRIB2 files as downloaded
     by Herbie and accessed with xarray.
@@ -178,6 +178,9 @@ class Navigator:
             for all variables requested. Returns a list of xarray.Datasets
             if the requested variables have different coordinates.
         """
+
+        # There is an issue with how Herbie handles regular expressions
+        # with Pandas, and this context manager handles those exceptions.
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             result = self.hrrr.xarray(regex, remove_grib=remove_grib)

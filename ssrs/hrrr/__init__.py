@@ -1,7 +1,7 @@
 """ HRRR package """
 
-from .hrrr import Navigator
+from .hrrr import HRRR
 
 __all__ = [
-    "Navigator"
+    "HRRR"
 ]

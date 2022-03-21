@@ -5,7 +5,7 @@ from herbie.archive import Herbie
 import numpy as np
 import xarray as xr
 
-from hrrr import raster
+from ssrs import raster
 
 
 class Navigator:

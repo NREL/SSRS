@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from typing import Tuple
 import warnings
 
 from herbie.archive import Herbie
@@ -202,10 +203,7 @@ class HRRR:
 
     def wind_uv(
         self,
-        min_lat: float,
-        min_lon: float,
-        max_lat: float,
-        max_lon: float,
+        southwest_lonlat: Tuple[float, float],
         isobar_1_mb: int,
         isobar_2_mb: int,
         remove_grib: bool = False
@@ -213,17 +211,8 @@ class HRRR:
         """
         Parameters
         ----------
-        min_lat: float
-            Minimum latitude
-
-        min_lon: float
-            Minimum longitude
-
-        max_lat: float
-            Maximum latitude
-
-        max_lon: float
-            Maximum longitude
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the area to query.
 
         isobar_1_mb: int
             This must match one of the available HRRR GRIB fields. These are
@@ -257,13 +246,8 @@ class HRRR:
         # Both isobars have the same coordinate mask, so just compute
         # the mask on isobar1.
 
-        # Get a mask for the closest points to the lat lon boundary provided
-        latc = isobar_1.coords['latitude']
-        lonc = isobar_1.coords['longitude']
-        latc_mask = (latc >= min_lat) & (latc <= max_lat)
-        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
-        mask = latc_mask & lonc_mask
-        
+        mask = self.mask_at_coordinates(isobar_1, southwest_lonlat)
+
         # Extract that lats and lons that were found
         lats_data_array = isobar_1.coords['latitude'].where(mask)
         lons_data_array = isobar_1.coords['longitude'].where(mask)
@@ -301,41 +285,22 @@ class HRRR:
             'n': float(n.values)
         }
 
-    def convective_velocity_xarray(self):
-        """
-        Retrieves the HRRR variables that allow convective velocity to be 
-        calcuated. These variables are HPBL, POT, SHTFL, GFLUX.
-
-        Returns
-        -------
-        xarray.Dataset
-            A unified dataset with the all the variables in one hypercube.
-        """
-        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
-        data = xr.combine_by_coords(data)
-        return data
-
-    def convective_velcoity_variables(self, southwest_lonlat=None):
+    @staticmethod
+    def mask_at_coordinates(data, southwest_lonlat):
         """
         Parameters
         ----------
+        data: xarray.Dataset
+            The dataset being masked.
+
         southwest_lonlat: Tuple[float, float]
             The southwest corner of the latitude and longitude to retrieve.
-            This parameter defaults to None. If this default is used, this
-            value is set to (-106.21, 42.78) within the method.
 
         Returns
         -------
-        Dict[str, xarray.Dataset]
-            A dictionary with two keys: wstar_gflux_masked and wstar_shtfl_masked.
-            Each value is an xarray.Dataset that corresponds to the masked values
-            as referenced by the southwest lat/lon coordinates
+        xarray.core.dataarray.DataArray
+            The mask to be used with the coordinates of the xarray dataset.
         """
-        # Get the variables for calculating convective velocity
-        data = self.convective_velocity_xarray()
-
-        if southwest_lonlat is None:
-            southwest_lonlat = (-106.21, 42.78)   # TOTW
 
         # create mask to get values around the region of interest. Arbitrarily setting 0.8 degrees
         xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
@@ -360,8 +325,37 @@ class HRRR:
         lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
         mask = latc_mask & lonc_mask
 
-        wstar_gflux_masked = data['wstar_gflux'].where(mask, drop=True)
-        wstar_shtfl_masked = data['wstar_shtfl'].where(mask, drop=True)
+        return mask
+
+    def convective_velocity_variables(self, southwest_lonlat=None):
+        """
+        Returns the variables needed to calcuate convective velocity.
+
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to retrieve.
+            This parameter defaults to None. If this default is used, this
+            value is set to (-106.21, 42.78) within the method.
+
+        Returns
+        -------
+        Dict[str, xarray.Dataset]
+            A dictionary with two keys: wstar_gflux_masked and wstar_shtfl_masked.
+            Each value is an xarray.Dataset that corresponds to the masked values
+            as referenced by the southwest lat/lon coordinates
+        """
+        # Get the variables for calculating convective velocity
+        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
+        data = xr.combine_by_coords(data)
+
+        if southwest_lonlat is None:
+            southwest_lonlat = (-106.21, 42.78)   # TOTW
+
+        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+
+        wstar_gflux_masked = data['gflux'].where(mask, drop=True)
+        wstar_shtfl_masked = data['shtfl'].where(mask, drop=True)
 
         return {
             'wstar_gflux_masked': wstar_gflux_masked,

@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from typing import Tuple
 import warnings
 
 from herbie.archive import Herbie
@@ -8,7 +9,7 @@ import xarray as xr
 from ssrs import raster
 
 
-class Navigator:
+class HRRR:
     """
     This class provides a basic interface to HRRR GRIB2 files as downloaded
     by Herbie and accessed with xarray.
@@ -178,6 +179,9 @@ class Navigator:
             for all variables requested. Returns a list of xarray.Datasets
             if the requested variables have different coordinates.
         """
+
+        # There is an issue with how Herbie handles regular expressions
+        # with Pandas, and this context manager handles those exceptions.
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             result = self.hrrr.xarray(regex, remove_grib=remove_grib)
@@ -199,10 +203,7 @@ class Navigator:
 
     def wind_uv(
         self,
-        min_lat: float,
-        min_lon: float,
-        max_lat: float,
-        max_lon: float,
+        southwest_lonlat: Tuple[float, float],
         isobar_1_mb: int,
         isobar_2_mb: int,
         remove_grib: bool = False
@@ -210,17 +211,8 @@ class Navigator:
         """
         Parameters
         ----------
-        min_lat: float
-            Minimum latitude
-
-        min_lon: float
-            Minimum longitude
-
-        max_lat: float
-            Maximum latitude
-
-        max_lon: float
-            Maximum longitude
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the area to query.
 
         isobar_1_mb: int
             This must match one of the available HRRR GRIB fields. These are
@@ -254,13 +246,8 @@ class Navigator:
         # Both isobars have the same coordinate mask, so just compute
         # the mask on isobar1.
 
-        # Get a mask for the closest points to the lat lon boundary provided
-        latc = isobar_1.coords['latitude']
-        lonc = isobar_1.coords['longitude']
-        latc_mask = (latc >= min_lat) & (latc <= max_lat)
-        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
-        mask = latc_mask & lonc_mask
-        
+        mask = self.mask_at_coordinates(isobar_1, southwest_lonlat)
+
         # Extract that lats and lons that were found
         lats_data_array = isobar_1.coords['latitude'].where(mask)
         lons_data_array = isobar_1.coords['longitude'].where(mask)
@@ -325,27 +312,22 @@ class Navigator:
 
         return data
 
-    def convective_velcoity_variables(self, southwest_lonlat=None):
+    @staticmethod
+    def mask_at_coordinates(data, southwest_lonlat):
         """
         Parameters
         ----------
+        data: xarray.Dataset
+            The dataset being masked.
+
         southwest_lonlat: Tuple[float, float]
             The southwest corner of the latitude and longitude to retrieve.
-            This parameter defaults to None. If this default is used, this
-            value is set to (-106.21, 42.78) within the method.
 
         Returns
         -------
-        Dict[str, xarray.Dataset]
-            A dictionary with two keys: wstar_gflux_masked and wstar_shtfl_masked.
-            Each value is an xarray.Dataset that corresponds to the masked values
-            as referenced by the southwest lat/lon coordinates
+        xarray.core.dataarray.DataArray
+            The mask to be used with the coordinates of the xarray dataset.
         """
-        # Get the variables for calculating convective velocity
-        data = self.convective_velocity_xarray()
-
-        if southwest_lonlat is None:
-            southwest_lonlat = (-106.21, 42.78)   # TOTW
 
         # create mask to get values around the region of interest. Arbitrarily setting 0.8 degrees
         xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
@@ -370,72 +352,85 @@ class Navigator:
         lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
         mask = latc_mask & lonc_mask
 
+        return mask
+
+    def get_convective_velocity(self, southwest_lonlat=None, extent=None, res=50):
+        """
+        Returns the convective velocity.
+
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to retrieve.
+            This parameter defaults to None. If this default is used, this
+            value is set to (-106.21, 42.78) within the method.
+        extent: Tuple[float, float, float, float]
+            Domain extents xmin, ymin, xmax, ymax. If none is provided, the function
+            returns an xarray on lat/lon on an irregular grid. If extent and res
+            are provided, a grid is created and values interpolatd on that grid 
+            is returned, alongside the meshgrid values.
+        res: float
+            Resolution of the grid the HRRR data will be interpolatd onto.
+
+        Returns
+        -------
+        If extent is given:
+        wstar: xarray.Dataset
+            A dataset containing the calculated wstar value with coordinates
+            lat/lon 
+        Else:
+        wstar: np.array
+            An array of wstar interpolated onto a regular grid xx, yy
+        xx, yy: np.array
+            Grid in meshgrid format
+        """
+
+        # Get the variables for calculating convective velocity
+        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
+        data = xr.combine_by_coords(data)
+
+        g = 9.81    # m/s^2
+        rho = 1.225 # kg/m^3
+        cp = 1005   # J/(kg*K)
+
+        # Heat flux is given in W/m2. To convert it to K-m/s, divide it by rho*cp
+        # We are only interested in wstar of convective times, hence the clip
+        data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
+        # Calculate wstar
+        data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
+
+        if southwest_lonlat is None:
+            southwest_lonlat = (-106.21, 42.78)   # TOTW
+
+        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+
         wstar = data['wstar'].where(mask, drop=True)
 
-        #return {
-        #    'wstar': wstar
-        #}
+        if extent is not None:
+            return  self.convertToRegularGrid(wstar, southwest_lonlat,
+                                              xmin=extent[0], xmax=extent[2],
+                                              ymin=extent[1], ymax=extent[3], res=res)
+
         return wstar
 
+    
+    @staticmethod
+    def convertToRegularGrid(data, southwest_lonlat=None, xmin=0, xmax=50000, ymin=0, ymax=50000, res=50):
 
-    def convective_velocity_variables_regis(self, southwest_lonlat=None, xmin=0, xmax=50000, ymin=0, ymax=50000, res=50):
-        """
-        Function modified by regis
-
-        Parameters
-        ----------
-        southwest_lonlat: Tuple[float, float]
-            The southwest corner of the latitude and longitude to retrieve.
-            This parameter defaults to None. If this default is used, this
-            value is set to (-106.21, 42.78) within the method.
-
-        Returns
-        -------
-        Dict[str, xarray.Dataset]
-            A dictionary with two keys: wstar_gflux_masked and wstar_shtfl_masked.
-            Each value is an xarray.Dataset that corresponds to the masked values
-            as referenced by the southwest lat/lon coordinates
-        """
         from scipy.interpolate import griddata
 
-        # Get the variables for calculating convective velocity
-        data = self.convective_velocity_xarray()
-
-        if southwest_lonlat is None:
-            southwest_lonlat = (-106.21, 42.78)   # TOTW
-
-        # create mask to get values around the region of interest. Arbitrarily setting 0.8 degrees
         xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
         
         # reference (0,0)
         xref = xSW[0]
         yref = ySW[0]
 
-        # longitude in degrees East (unusual; for GRIB)
-        min_lat = southwest_lonlat[1] - 0.15
-        min_lon = 180 - southwest_lonlat[0] - 0.9
-        max_lat = min_lat + 0.7
-        max_lon = min_lon + 1.1
-
-        # longitude in degrees West (typical)
-        min_lon_degW = southwest_lonlat[0] - 0.1
-        max_lon_degW = min_lon_degW + 0.8
-
-        latc = data.coords['latitude']
-        lonc = data.coords['longitude']
-        latc_mask = (latc >= min_lat) & (latc <= max_lat)
-        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
-        mask = latc_mask & lonc_mask
-
-        wstar = data['wstar'].where(mask, drop=True)
-
-
         # Get the transformed lat/long using the whole flattened array. Remember to change long degrees E to W
-        xform_long, xform_lat = raster.transform_coordinates('EPSG:4326','ESRI:102008', 180-wstar.longitude.values.flatten(),
-                                                                                            wstar.latitude.values.flatten())
+        xform_long, xform_lat = raster.transform_coordinates('EPSG:4326','ESRI:102008', 180-data.longitude.values.flatten(),
+                                                                                            data.latitude.values.flatten())
         # Now reshape them into the same form. These are in meshgrid format
-        xform_long_sq = np.reshape(xform_long, np.shape(wstar.longitude.values))
-        xform_lat_sq  = np.reshape(xform_lat,  np.shape(wstar.latitude.values))
+        xform_long_sq = np.reshape(xform_long, np.shape(data .longitude.values))
+        xform_lat_sq  = np.reshape(xform_lat,  np.shape(data.latitude.values))
         # Adjust reference point
         xform_long_sq = xform_long_sq - xref
         xform_lat_sq = xform_lat_sq - yref
@@ -447,9 +442,10 @@ class Navigator:
         nPointsx = int((xmax-xmin)/res)
         nPointsy = int((ymax-ymin)/res)
 
-        # interpolate 
+        # interpolate
         points = np.column_stack( (xform_long_sq.flatten(), xform_lat_sq.flatten()) )
-        values = np.array(wstar).flatten()
-        wstar_interp = griddata(points, values, (xx, yy), method='linear')
+        values = np.array(data).flatten()
+        data_interp = griddata(points, values, (xx, yy), method='linear')
 
-        return wstar_interp, xx, yy
+        return data_interp, xx, yy
+

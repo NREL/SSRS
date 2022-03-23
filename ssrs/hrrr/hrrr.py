@@ -303,6 +303,8 @@ class Navigator:
         Retrieves the HRRR variables that allow convective velocity to be 
         calcuated. These variables are HPBL, POT, SHTFL, GFLUX.
 
+        Performs additional conversions and also outputs the final wstar value.
+
         Returns
         -------
         xarray.Dataset
@@ -310,6 +312,17 @@ class Navigator:
         """
         data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
         data = xr.combine_by_coords(data)
+
+        g = 9.81    # m/s^2
+        rho = 1.225 # kg/m^3
+        cp = 1005   # J/(kg*K)
+
+        # Heat flux is given in W/m2. To convert it to K-m/s, divide it by rho*cp
+        # We are only interested in wstar of convective times, hence the clip
+        data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
+        # Calculate wstar
+        data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
+
         return data
 
     def convective_velcoity_variables(self, southwest_lonlat=None):
@@ -357,10 +370,86 @@ class Navigator:
         lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
         mask = latc_mask & lonc_mask
 
-        wstar_gflux_masked = data['wstar_gflux'].where(mask, drop=True)
-        wstar_shtfl_masked = data['wstar_shtfl'].where(mask, drop=True)
+        wstar = data['wstar'].where(mask, drop=True)
 
-        return {
-            'wstar_gflux_masked': wstar_gflux_masked,
-            'wstar_shtfl_masked': wstar_shtfl_masked
-        }
+        #return {
+        #    'wstar': wstar
+        #}
+        return wstar
+
+
+    def convective_velocity_variables_regis(self, southwest_lonlat=None, xmin=0, xmax=50000, ymin=0, ymax=50000, res=50):
+        """
+        Function modified by regis
+
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to retrieve.
+            This parameter defaults to None. If this default is used, this
+            value is set to (-106.21, 42.78) within the method.
+
+        Returns
+        -------
+        Dict[str, xarray.Dataset]
+            A dictionary with two keys: wstar_gflux_masked and wstar_shtfl_masked.
+            Each value is an xarray.Dataset that corresponds to the masked values
+            as referenced by the southwest lat/lon coordinates
+        """
+        from scipy.interpolate import griddata
+
+        # Get the variables for calculating convective velocity
+        data = self.convective_velocity_xarray()
+
+        if southwest_lonlat is None:
+            southwest_lonlat = (-106.21, 42.78)   # TOTW
+
+        # create mask to get values around the region of interest. Arbitrarily setting 0.8 degrees
+        xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
+        
+        # reference (0,0)
+        xref = xSW[0]
+        yref = ySW[0]
+
+        # longitude in degrees East (unusual; for GRIB)
+        min_lat = southwest_lonlat[1] - 0.15
+        min_lon = 180 - southwest_lonlat[0] - 0.9
+        max_lat = min_lat + 0.7
+        max_lon = min_lon + 1.1
+
+        # longitude in degrees West (typical)
+        min_lon_degW = southwest_lonlat[0] - 0.1
+        max_lon_degW = min_lon_degW + 0.8
+
+        latc = data.coords['latitude']
+        lonc = data.coords['longitude']
+        latc_mask = (latc >= min_lat) & (latc <= max_lat)
+        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
+        mask = latc_mask & lonc_mask
+
+        wstar = data['wstar'].where(mask, drop=True)
+
+
+        # Get the transformed lat/long using the whole flattened array. Remember to change long degrees E to W
+        xform_long, xform_lat = raster.transform_coordinates('EPSG:4326','ESRI:102008', 180-wstar.longitude.values.flatten(),
+                                                                                            wstar.latitude.values.flatten())
+        # Now reshape them into the same form. These are in meshgrid format
+        xform_long_sq = np.reshape(xform_long, np.shape(wstar.longitude.values))
+        xform_lat_sq  = np.reshape(xform_lat,  np.shape(wstar.latitude.values))
+        # Adjust reference point
+        xform_long_sq = xform_long_sq - xref
+        xform_lat_sq = xform_lat_sq - yref
+
+        # create grid
+        x = np.arange(xmin, xmax, res)
+        y = np.arange(xmin, xmax, res)
+        xx, yy = np.meshgrid(x, y, indexing='ij')
+        nPointsx = int((xmax-xmin)/res)
+        nPointsy = int((ymax-ymin)/res)
+
+        # interpolate 
+        points = np.column_stack( (xform_long_sq.flatten(), xform_lat_sq.flatten()) )
+        values = np.array(wstar).flatten()
+        wstar_interp = griddata(points, values, (xx, yy), method='linear')
+
+        return wstar_interp, xx, yy

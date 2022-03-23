@@ -8,7 +8,7 @@ from typing import Tuple
 
 @dataclass
 class Config:
-    """ Configuration parameters for SSRS simulation """
+    """Configuration parameters for SSRS simulation """
 
     # general parameters for the SSRS simulation
     run_name: str = 'default'  # name of this run, determines directory names
@@ -16,8 +16,9 @@ class Config:
     max_cores: int = 8  # maximum of cores to use
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
     sim_seed: int = -1  # random number seed
-    updraft_use_thermals: bool = False  # only ue oro updraft
+    thermals_realization_count: bool = 5  # number of realizations of thermals
     updraft_threshold: float = 0.75  # only use updrafts higher than this
+    movement_model: str = 'fluidflow'  # fluid-flow, drw, heuristics
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
@@ -63,3 +64,9 @@ class Config:
     turbine_box_around_wfarm: bool = False
     presence_smoothing_radius: bool = 10  # smoothing radius in meters
     print_verbose: bool = False
+
+    def __str__(self):
+        out_str = Config.__dict__['__doc__'] + '\n'
+        for k, _ in Config.__dict__['__annotations__'].items():
+            out_str += f'{k} = {Config.__dict__[k]}\n'
+        return out_str

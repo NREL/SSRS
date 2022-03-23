@@ -168,6 +168,23 @@ def compute_aspect_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
     return out
 
 
+def get_above_threshold_speed_scalar(in_val, val):
+    """ Converts updraft using threshold speed """
+    if in_val > 1e-02:
+        if in_val > val:
+            fval = in_val
+        else:
+            fval = val * (np.exp((in_val / val)**5) - 1) / (np.exp(1) - 1)
+    else:
+        fval = 0.
+    return fval
+
+
+def get_above_threshold_speed(in_array: np.ndarray, threshold: float):
+    """ vectorized form """
+    return np.vectorize(get_above_threshold_speed_scalar)(in_array, threshold)
+
+
 def compute_thermals(
     aspect: np.ndarray,  # terrain aspect, used for weighting
     thermal_intensity_scale: float  # describe strength of field

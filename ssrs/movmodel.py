@@ -1,7 +1,7 @@
 """ Module for implementing fluid-flow based movement model """
 
 from math import (floor, ceil, sqrt)
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import numpy as np
 import scipy.signal as ssg
 import scipy.sparse as ss
@@ -102,7 +102,7 @@ class MovModel:
             conductivity_a = conductivity[r % nrow, r // nrow]
             conductivity_b = conductivity[c % nrow, c // nrow]
             vals.append(harmonic_mean(conductivity_a,
-                        conductivity_b, 1e-10) / fac)
+                        conductivity_b, 1e-08) / fac)
         g_coo = ss.coo_matrix((np.array(vals),
                                (np.array(row_inds),
                               np.array(col_inds))), shape=(nrow * ncol, nrow * ncol))
@@ -139,113 +139,6 @@ for r in range(neighbour_delta_norms_inv.shape[0]):
         distance = np.linalg.norm(delta)
         neighbour_delta_norms_inv[r, c] = 1.0 / \
             distance if distance > 0 else 0
-
-
-def get_track_restrictions(dr: int, dc: int):
-    """ Returns updated movement probabilities based on previous moves"""
-    a_mat = np.zeros((3, 3), dtype=int)
-    dr_mat = np.zeros((3, 3), dtype=int)
-    dc_mat = np.zeros((3, 3), dtype=int)
-    if abs(dr + dc % 2) == 1:
-        if dr == 0:
-            a_mat[:, dc + 1] = 1
-        else:
-            a_mat[dr + 1, :] = 1
-    else:
-        dr_mat[(dr + 1, 1), :] = 1
-        dc_mat[:, (1, dc + 1)] = 1
-        a_mat = np.logical_and(dr_mat, dc_mat).astype(int)
-    if dr == 0 and dc == 0:
-        a_mat[:, :] = 1
-    a_mat[1, 1] = 0
-    return a_mat.flatten()
-
-
-def move_away_from_boundary(row, col, num_rows, num_cols):
-    """ move simulated eagle away from edges """
-    new_col = col
-    new_row = row
-    if row <= 1:
-        new_row = row + 2
-    elif row >= num_rows - 2:
-        new_row = row - 2
-    if col <= 0:
-        new_col = col + 2
-    elif col >= num_cols - 2:
-        new_col = col - 2
-    return new_row, new_col
-
-
-def generate_move_probabilities(
-    in_probs: np.ndarray,
-    nu_par: float,
-    dir_bool: np.ndarray
-):
-    """ create move probabilities from a 1d array of values"""
-    out_probs = np.asarray(in_probs.copy())
-    if np.isnan(out_probs).any():
-        print('NANs in move probabilities!')
-    out_probs = out_probs.clip(min=0.)
-    out_probs[4] = 0.
-    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
-    if np.count_nonzero(out_probs) == 0:
-        out_probs = np.random.rand(len(out_probs))
-    out_probs[4] = 0.
-    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
-    out_probs /= np.sum(out_probs)
-    out_probs = np.power(out_probs, nu_par)
-    out_probs /= np.sum(out_probs)
-    return out_probs
-
-
-def generate_eagle_track(
-        conductivity: np.ndarray,
-        potential: np.ndarray,
-        start_loc: List[int],
-        dirn_restrict: int,
-        nu_par: float
-):
-    """ Generate an eagle track """
-
-    num_rows, num_cols = conductivity.shape
-    burnin = int(min(num_rows, num_cols) / 10)
-    max_moves = num_rows / 2 * num_cols / 2
-    dirn = [0, 0]
-    directions = []
-    directions.append(dirn)
-    position = start_loc.copy()
-    trajectory = []
-    trajectory.append(position)
-    k = 0
-    while k < max_moves:
-        row, col = position
-        if k > burnin:
-            if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
-                break
-        else:
-            row, col = move_away_from_boundary(row, col, num_rows, num_cols)
-        local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
-        local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
-        local_cond = local_cond.clip(min=1e-06)
-        mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
-        q_diff = local_potential_energy[1, 1] - local_potential_energy
-        q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
-        mov_probs = np.multiply(mean_cond, q_diff)
-        mov_probs = mov_probs.flatten()
-        dir_bool = get_track_restrictions(0, 0)
-        for idirn in directions[-dirn_restrict:]:
-            dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
-        mov_probs = generate_move_probabilities(mov_probs, nu_par, dir_bool)
-        chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
-        dirn = neighbour_deltas[chosen_index]
-        # else:
-        # q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
-        # print(f'All potentials same at {k}!')
-        position = [x + y for x, y in zip([row, col], dirn)]
-        trajectory.append(position)
-        directions.append(dirn)
-        k += 1
-    return np.array(trajectory, dtype=np.int16)
 
 
 def get_starting_indices(
@@ -287,6 +180,231 @@ def get_starting_indices(
                           'Options: structured, random'))
     start_inds = start_inds.astype(int)
     return start_inds[0, :], start_inds[1, :]
+
+
+def get_track_restrictions(dr: int, dc: int):
+    """ Returns updated movement probabilities based on previous moves"""
+    a_mat = np.zeros((3, 3), dtype=int)
+    dr_mat = np.zeros((3, 3), dtype=int)
+    dc_mat = np.zeros((3, 3), dtype=int)
+    if abs(dr + dc % 2) == 1:
+        if dr == 0:
+            a_mat[:, dc + 1] = 1
+        else:
+            a_mat[dr + 1, :] = 1
+    else:
+        dr_mat[(dr + 1, 1), :] = 1
+        dc_mat[:, (1, dc + 1)] = 1
+        a_mat = np.logical_and(dr_mat, dc_mat).astype(int)
+    if dr == 0 and dc == 0:
+        a_mat[:, :] = 1
+    a_mat[1, 1] = 0
+    return a_mat.flatten()
+
+
+def move_away_from_boundary(row, col, num_rows, num_cols):
+    """ move simulated eagle away from edges """
+    new_col = col
+    new_row = row
+    if row <= 1:
+        new_row = row + 2
+    elif row >= num_rows - 2:
+        new_row = row - 2
+    if col <= 0:
+        new_col = col + 2
+    elif col >= num_cols - 2:
+        new_col = col - 2
+    return new_row, new_col
+
+
+def generate_move_probabilities(
+    in_probs: np.ndarray,
+    move_dirn: float,
+    nu_par: float,
+    dir_bool: np.ndarray
+):
+    """ create move probabilities from a 1d array of values"""
+    out_probs = np.asarray(in_probs.copy())
+    if np.isnan(out_probs).any():
+        print('NANs in move probabilities!')
+        out_probs = get_directional_probs(move_dirn * np.pi / 180.)
+    out_probs = out_probs.clip(min=0.)
+    out_probs[4] = 0.
+    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    if np.count_nonzero(out_probs) == 0:
+        out_probs = get_directional_probs(move_dirn * np.pi / 180.)
+        #out_probs = np.random.rand(len(out_probs))
+    out_probs[4] = 0.
+    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    if np.count_nonzero(out_probs) == 0:
+        out_probs = get_directional_probs(move_dirn * np.pi / 180.)
+    out_probs /= np.sum(out_probs)
+    out_probs = np.power(out_probs, nu_par)
+    out_probs /= np.sum(out_probs)
+    return out_probs
+
+
+def get_directional_probs(theta: float) -> np.ndarray:
+    """ Returns a dirction array based on angle"""
+    dir_mat = np.zeros((3, 3))
+    dir_mat[0, :] = [np.cos(np.pi / 4 + theta), np.cos(theta),
+                     np.cos(7 * np.pi / 4 + theta)]
+    dir_mat[1, :] = [np.cos(np.pi / 2 + theta), 0,
+                     np.cos(3 * np.pi / 2 + theta)]
+    dir_mat[2, :] = [np.cos(3 * np.pi / 4 + theta), np.cos(np.pi + theta),
+                     np.cos(5 * np.pi / 4 + theta)]
+    dir_mat[dir_mat < 0.01] = 0.
+    return np.flipud(dir_mat.clip(min=0.)).flatten()
+
+
+def get_harmonic_mean(in_first, in_second):
+    return 2.0 / (1.0 / in_first + 1.0 / in_second)
+
+
+def generate_simulated_tracks(
+        move_dirn: float,
+        start_location: Tuple[int, int],
+        grid_shape: Tuple[int, int],
+        memory_parameter: int = 1,
+        scaling_parameter: float = 1.,
+        updraft_field: Optional[np.ndarray] = None,
+        potential_field: Optional[np.ndarray] = None
+):
+    """ Generate an eagle track """
+
+    num_rows, num_cols = grid_shape
+    burnin_length = int(min(num_rows, num_cols) / 10)
+    max_moves = num_rows / 2 * num_cols / 2
+    direction = [0, 0]
+    directions = []
+    directions.append(direction)
+    position = start_location.copy()
+    trajectory = []
+    trajectory.append(position)
+    k = 0
+    while k < max_moves:
+        row, col = position
+        if k > burnin_length:  # move away from boundary in initial steps
+            if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
+                break
+        else:
+            row, col = move_away_from_boundary(row, col, num_rows, num_cols)
+        move_probs = np.ones_like(neighbour_delta_norms_inv)
+        if updraft_field is not None:
+            local_updraft = updraft_field[row - 1:row + 2, col - 1:col + 2]
+            local_updraft = local_updraft.clip(min=1e-06)
+            mean_change = get_harmonic_mean(local_updraft[1, 1], local_updraft)
+            move_probs = np.multiply(move_probs, mean_change)
+        else:
+            move_probs = get_directional_probs(move_dirn * np.pi / 180.)
+        if potential_field is not None:
+            local_potential = potential_field[row - 1:row + 2, col - 1:col + 2]
+            potential_diff = local_potential[1, 1] - local_potential
+            potential_diff = np.multiply(potential_diff,
+                                         neighbour_delta_norms_inv)
+            move_probs = np.multiply(move_probs, potential_diff)
+        move_probs = move_probs.flatten()
+        dir_bool = get_track_restrictions(0, 0)
+        for idirn in directions[-memory_parameter:]:
+            dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+        move_probs = generate_move_probabilities(move_probs, move_dirn,
+                                                 scaling_parameter, dir_bool)
+        chosen_index = np.random.choice(range(len(move_probs)), p=move_probs)
+        dirn = neighbour_deltas[chosen_index]
+        position = [x + y for x, y in zip([row, col], dirn)]
+        trajectory.append(position)
+        directions.append(dirn)
+        k += 1
+    return np.array(trajectory, dtype=np.int16)
+
+
+# def generate_eagle_track(
+#         conductivity: np.ndarray,
+#         potential: np.ndarray,
+#         move_dirn: float,
+#         start_loc: List[int],
+#         dirn_restrict: int,
+#         nu_par: float
+# ):
+#     """ Generate an eagle track """
+
+#     num_rows, num_cols = conductivity.shape
+#     burnin = int(min(num_rows, num_cols) / 10)
+#     max_moves = num_rows / 2 * num_cols / 2
+#     dirn = [0, 0]
+#     directions = []
+#     directions.append(dirn)
+#     position = start_loc.copy()
+#     trajectory = []
+#     trajectory.append(position)
+#     k = 0
+#     while k < max_moves:
+#         row, col = position
+#         if k > burnin:
+#             if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
+#                 break
+#         else:
+#             row, col = move_away_from_boundary(row, col, num_rows, num_cols)
+#         local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
+#         local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
+#         local_cond = local_cond.clip(min=1e-06)
+#         mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
+#         q_diff = local_potential_energy[1, 1] - local_potential_energy
+#         q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
+#         mov_probs = np.multiply(mean_cond, q_diff)
+#         mov_probs = mov_probs.flatten()
+#         dir_bool = get_track_restrictions(0, 0)
+#         for idirn in directions[-dirn_restrict:]:
+#             dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+#         mov_probs = generate_move_probabilities(mov_probs, move_dirn,
+#                                                 nu_par, dir_bool)
+#         chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
+#         dirn = neighbour_deltas[chosen_index]
+#         position = [x + y for x, y in zip([row, col], dirn)]
+#         trajectory.append(position)
+#         directions.append(dirn)
+#         k += 1
+#     return np.array(trajectory, dtype=np.int16)
+
+
+# def generate_eagle_track_drw(
+#     grid_shape: Tuple[int, int],
+#     start_loc: List[int],
+#     move_dirn: float,
+#     dirn_restrict: int,
+#     nu_par: float
+# ):
+#     """ Generate an eagle track using directed random walk """
+
+#     num_rows, num_cols = grid_shape
+#     burnin = int(min(num_rows, num_cols) / 10)
+#     max_moves = num_rows / 2 * num_cols / 2
+#     dirn = [0, 0]
+#     directions = []
+#     directions.append(dirn)
+#     position = start_loc.copy()
+#     trajectory = []
+#     trajectory.append(position)
+#     k = 0
+#     while k < max_moves:
+#         row, col = position
+#         if k > burnin:
+#             if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
+#                 break
+#         else:
+#             row, col = move_away_from_boundary(row, col, num_rows, num_cols)
+#         dir_bool = get_track_restrictions(0, 0)
+#         mov_probs = np.ones_like(dir_bool)
+#         for idirn in directions[-dirn_restrict:]:
+#             dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+#         mov_probs = generate_move_probabilities(mov_probs, nu_par, dir_bool)
+#         chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
+#         dirn = neighbour_deltas[chosen_index]
+#         position = [x + y for x, y in zip([row, col], dirn)]
+#         trajectory.append(position)
+#         directions.append(dirn)
+#         k += 1
+#     return np.array(trajectory, dtype=np.int16)
 
 
 def compute_presence_counts(

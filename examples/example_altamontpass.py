@@ -50,4 +50,6 @@ if __name__ == '__main__':
         sim.simulate_tracks()
         sim.plot_terrain_features()
         sim.plot_wtk_layers()
-        sim.plot_simulation_output()
+        sim.plot_directional_potentials()
+        sim.plot_simulated_tracks()
+        sim.plot_presence_map()

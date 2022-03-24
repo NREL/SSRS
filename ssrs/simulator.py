@@ -289,7 +289,7 @@ class Simulator(Config):
 
     def _get_id_string(self, case_id: str, real_id: Optional[int] = None):
         """ Commong id string for saving/reading data and screen output"""
-        dirn_str = f'd{int(self.track_direction)}'
+        dirn_str = f'd{int(self.track_direction % 360)}'
         threshold_str = f't{int(self.updraft_threshold*100)}'
         mov_str = f'{self.movement_model}'
         out_str = f'{case_id}_{dirn_str}_{threshold_str}_{mov_str}'
@@ -753,8 +753,8 @@ class Simulator(Config):
 
     def save_fig(self, fig, fpath: str, show_fig: bool = False):
         """ Saves a fig """
-        fig.savefig(fpath, bbox_inches='tight', dpi=self.fig_dpi)
         if not show_fig:
+            fig.savefig(fpath, bbox_inches='tight', dpi=self.fig_dpi)
             plt.close(fig)
 
     def _get_uniform_id(self):

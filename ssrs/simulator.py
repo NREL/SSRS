@@ -19,8 +19,7 @@ from .wtk import WTK
 from .turbines import TurbinesUSWTB
 from .config import Config
 from .layers import (compute_orographic_updraft, compute_aspect_degrees,
-                     compute_slope_degrees, compute_potential_temperature,
-                     deardoff_velocity_function, compute_thermals,
+                     compute_slope_degrees, compute_thermals,
                      get_above_threshold_speed)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
@@ -100,10 +99,10 @@ class Simulator(Config):
             self.region.download(self.terrain_layers.values())
 
         # setup turbine data
+        turbine_fpath = os.path.join(self.mode_data_dir, 'turbines.csv')
         self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
                                       self.turbine_minimum_hubheight,
-                                      self.turbine_data_fname,
-                                      self.data_dir, self.print_verbose)
+                                      turbine_fpath, self.print_verbose)
 
         # figure out wtk and its layers to extract
         self.wtk_layers = {
@@ -141,8 +140,7 @@ class Simulator(Config):
         self.fig_size = (self.fig_height * fig_aspect, self.fig_height)
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
-
-        print('SSRS Simulator class initiation done.')
+        print('SSRS Simulator initiation done.')
 
 
 ########## terrain related functions ############
@@ -353,12 +351,12 @@ class Simulator(Config):
                 if self.sim_seed > 0:
                     np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
-                start_time = time.time()
                 if self.movement_model == 'fluidflow':
                     potential = self.get_directional_potential(
                         updraft, case_id, real_id)
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
+                    start_time = time.time()
                     with mp.Pool(num_cores) as pool:
                         tracks = pool.map(lambda start_loc: generate_simulated_tracks(
                             self.track_direction,
@@ -370,6 +368,7 @@ class Simulator(Config):
                             potential
                         ), starting_locs)
                 elif self.movement_model == 'drw':
+                    start_time = time.time()
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
                     with mp.Pool(num_cores) as pool:
@@ -489,14 +488,36 @@ class Simulator(Config):
 
 ########### Compute and plot presence maps ###########
 
+    def _plot_presence(self, in_prob, in_val, plot_turbs, wfarm_level=False):
+        """Plots a presence density """
+        fig, axs = plt.subplots(figsize=self.fig_size)
+        in_prob[in_prob <= in_val] = 0.
+        _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
+                       cmap='Reds', alpha=0.75,
+                       norm=LogNorm(vmin=in_val, vmax=1.0))
+        if wfarm_level:
+            _, _ = create_gis_axis(fig, axs, None, 1.)
+        else:
+            _, _ = create_gis_axis(fig, axs, None, self.km_bar)
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
+        axs.set_xlim([self.extent[0], self.extent[1]])
+        axs.set_ylim([self.extent[2], self.extent[3]])
+        return fig, axs
 
-    def plot_presence_map(self, plot_turbs=True, show=False,
-                          minval=0.25, save_data=False,
-                          plot_all: bool = True) -> None:
+    def plot_presence_map(
+        self,
+        plot_turbs=True,
+        radius: float = 1000.,
+        show=False,
+        minval=0.1,
+        plot_all: bool = False
+    ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
         elevation = self.get_terrain_elevation()
         summary_prob = np.zeros_like(elevation)
+        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             case_prob = np.zeros_like(updrafts[0])
@@ -506,64 +527,69 @@ class Simulator(Config):
                 with open(f'{fname}.pkl', 'rb') as fobj:
                     tracks = pickle.load(fobj)
                 prprob = compute_smooth_presence_counts(
-                    tracks, self.gridsize,
-                    self.presence_smoothing_radius)
-                prprob /= self.track_count
+                    tracks, self.gridsize, int(round(krad)))
                 prprob /= np.amax(prprob)
                 case_prob += prprob
                 if plot_all:
-                    fig, axs = plt.subplots(figsize=self.fig_size)
-                    prprob[prprob <= minval] = 0.
-                    _ = axs.imshow(prprob, extent=self.extent, origin='lower',
-                                   cmap='Reds', alpha=0.75,
-                                   norm=LogNorm(vmin=minval, vmax=1.0))
-                    _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-                    if plot_turbs:
-                        self.plot_turbine_locations(axs)
-                    axs.set_xlim([self.extent[0], self.extent[1]])
-                    axs.set_ylim([self.extent[2], self.extent[3]])
+                    fig, _ = self._plot_presence(prprob, minval, plot_turbs)
                     fname = self._get_presence_fname(case_id, real_id,
                                                      self.mode_fig_dir)
                     self.save_fig(fig, f'{fname}.png', show)
             case_prob /= np.amax(case_prob)
             summary_prob += case_prob
-            fig, axs = plt.subplots(figsize=self.fig_size)
-            case_prob[case_prob <= minval] = 0.
-            _ = axs.imshow(case_prob, extent=self.extent,
-                           origin='lower',
-                           cmap='Reds', alpha=0.75,
-                           norm=LogNorm(vmin=minval, vmax=1.0))
-            _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
-            axs.set_xlim([self.extent[0], self.extent[1]])
-            axs.set_ylim([self.extent[2], self.extent[3]])
+            fig, _ = self._plot_presence(case_prob, minval, plot_turbs)
             fname = f'{self._get_id_string(case_id)}_presence.png'
             fpath = os.path.join(self.mode_fig_dir, fname)
             self.save_fig(fig, fpath, show)
-            case_prob /= np.amax(case_prob)
-        fig, axs = plt.subplots(figsize=self.fig_size)
         summary_prob /= np.amax(summary_prob)
-        if save_data:
-            fname = os.path.join(self.mode_data_dir, 'summary_presence')
-            np.save(f'{fname}.npy', summary_prob.astype(np.float32))
-        summary_prob[summary_prob <= minval] = 0.
-        _ = axs.imshow(summary_prob, extent=self.extent,
-                       origin='lower',
-                       cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=minval, vmax=1.0))
-        _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-        if plot_turbs:
-            self.plot_turbine_locations(axs)
-        axs.set_xlim([self.extent[0], self.extent[1]])
-        axs.set_ylim([self.extent[2], self.extent[3]])
-        fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
-        self.save_fig(fig, fpath, show)
+        fname = os.path.join(self.mode_data_dir, 'summary_presence')
+        np.save(f'{fname}.npy', summary_prob.astype(np.float32))
+        if len(self.case_ids) > 1:
+            fig, _ = self._plot_presence(summary_prob, minval, plot_turbs)
+            fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
+            self.save_fig(fig, fpath, show)
 
     def _get_presence_fname(self, case_id: str, real_id: int, dirname: str):
         """ Returns file path for saving presence """
         fname = f'{self._get_id_string(case_id, real_id)}_presence'
         return os.path.join(dirname, fname)
+
+    def plot_windplant_presence_map(
+        self,
+        pname,
+        radius: int = 100.,
+        plot_turbs=True,
+        show=False,
+        minval=0.05,
+        pad: float = 2000.
+    ) -> None:
+        """ Plot presence maps """
+        print('Plotting presence density map..')
+        elevation = self.get_terrain_elevation()
+        summary_prob = np.zeros_like(elevation)
+        xloc, yloc = self.turbines.get_locations_for_this_project(pname)
+        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+        for case_id in self.case_ids:
+            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            case_prob = np.zeros_like(updrafts[0])
+            for real_id, _ in enumerate(updrafts):
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_data_dir)
+                with open(f'{fname}.pkl', 'rb') as fobj:
+                    tracks = pickle.load(fobj)
+                prprob = compute_smooth_presence_counts(
+                    tracks, self.gridsize, krad)
+                prprob /= np.amax(prprob)
+                case_prob += prprob
+            case_prob /= np.amax(case_prob)
+            summary_prob += case_prob
+        summary_prob /= np.amax(summary_prob)
+        fig, axs = self._plot_presence(summary_prob, minval, plot_turbs,
+                                       wfarm_level=True)
+        axs.set_xlim([min(xloc) - pad, max(xloc) + pad])
+        axs.set_ylim([min(yloc) - pad, max(yloc) + pad])
+        fpath = os.path.join(self.mode_fig_dir, f'presence_{pname}.png')
+        self.save_fig(fig, fpath, show)
 
     # def get_turbine_presence(self) -> None:
     #     """ Get turbines list where relative presence is high """
@@ -657,12 +683,6 @@ class Simulator(Config):
 
 
 ########### other useful functions ###########
-
-    def plot_ssrs_output(self, plot_turbs=True, show=False) -> None:
-        """ Plots oro updraft and tracks """
-        self.plot_directional_potentials(plot_turbs, show)
-        self.plot_simulated_tracks(plot_turbs, show)
-        self.plot_presence_map(plot_turbs, show)
 
     def plot_turbine_locations(
             self,
@@ -770,3 +790,15 @@ class Simulator(Config):
         interp_wdirn = np.arctan2(interp_easterly, interp_northerly)
         interp_wdirn = np.mod(interp_wdirn + 2. * np.pi, 2. * np.pi)
         return interp_wspeed, interp_wdirn * 180. / np.pi
+
+    def plot_updraft_threshold_function(self, show=False):
+        """Plots the threshold function """
+        fig, axs = plt.subplots(figsize=(5, 3))
+        uspeed = np.linspace(0, np.ceil(self.updraft_threshold) + 1, 100)
+        axs.plot(uspeed, get_above_threshold_speed(
+            uspeed, self.updraft_threshold))
+        axs.grid(True)
+        axs.set_xlabel('Updraft speed (m/s)')
+        axs.set_ylabel('Threshold function')
+        fname = 'threshold_function.png'
+        self.save_fig(fig, os.path.join(self.fig_dir, fname), show)

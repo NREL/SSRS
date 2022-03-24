@@ -14,11 +14,9 @@ class Config:
     run_name: str = 'default'  # name of this run, determines directory names
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
     max_cores: int = 8  # maximum of cores to use
-    sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
     sim_seed: int = -1  # random number seed
-    thermals_realization_count: bool = 5  # number of realizations of thermals
-    updraft_threshold: float = 0.75  # only use updrafts higher than this
-    movement_model: str = 'fluidflow'  # fluid-flow, drw, heuristics
+    sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+    print_verbose: bool = False
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
@@ -45,6 +43,11 @@ class Config:
     wtk_thermal_height: int = 100  # WTK pressure, temperature, at this height
     wtk_interp_type: str = 'linear'  # 'nearest' 'linear' 'cubic'
 
+    # parameters defining the updraft calculation
+    thermals_realization_count: bool = 0  # number of realizations of thermals
+    updraft_threshold: float = 0.75  # only use updrafts higher than this
+    movement_model: str = 'fluidflow'  # fluid-flow, drw, heuristics
+
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
     track_count: str = 1000  # number of simulated eagle tracks
@@ -53,20 +56,36 @@ class Config:
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves
 
-    # plotting related
-    fig_height: float = 6.
-    fig_dpi: int = 200  # increase this to get finer plots
-    turbine_data_fname: str = 'turbines.csv'
+    # turbine related
     turbine_minimum_hubheight: float = 50.  # for select turbine locations
     turbine_mrkr_styles = ('1k', '2k', '3k', '4k',
                            '+k', 'xk', '*k', '.k', 'ok')
     turbine_mrkr_size: float = 3.
-    turbine_box_around_wfarm: bool = False
-    presence_smoothing_radius: bool = 10  # smoothing radius in meters
-    print_verbose: bool = False
+
+    # plotting related
+    fig_height: float = 6.
+    fig_dpi: int = 200  # increase this to get finer plots
 
     def __str__(self):
-        out_str = Config.__dict__['__doc__'] + '\n'
-        for k, _ in Config.__dict__['__annotations__'].items():
-            out_str += f'{k} = {Config.__dict__[k]}\n'
+        out_str = self.__doc__ + '\n'
+        for i, (k, _) in enumerate(self.__dict__.items()):
+            if i == 0:
+                out_str += '\n:::: General settings\n'
+            elif i == 6:
+                out_str += '\n:::: Terrain settings\n'
+            elif i == 10:
+                out_str += '\n:::: Uniform mode\n'
+            elif i == 12:
+                out_str += '\n:::: Snapshot mode\n'
+            elif i == 13:
+                out_str += '\n:::: Seasonal mode\n'
+            elif i == 17:
+                out_str += '\n:::: WindToolKit settings\n'
+            elif i == 21:
+                out_str += '\n:::: Updraft computation\n'
+            elif i == 23:
+                out_str += '\n:::: Simulating tracks\n'
+            elif i == 30:
+                out_str += '\n:::: Plotting and wind turbines\n'
+            out_str += f'{k} = {self.__dict__[k]}\n'
         return out_str

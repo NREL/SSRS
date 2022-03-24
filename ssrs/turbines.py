@@ -36,8 +36,7 @@ class TurbinesUSWTB:
         bounds: Tuple[float, float, float, float],
         crs_string: str = 'EPSG:4326',
         min_hubheight: float = 50.,  # in meters
-        out_fname: str = 'turbines.csv',
-        out_dir: Optional[str] = None,
+        out_fpath: str = 'turbines.csv',
         print_verbose: bool = False
     ):
 
@@ -70,12 +69,11 @@ class TurbinesUSWTB:
             ybool = dfraw[self.__ycol].between(bounds[1], bounds[3], 'both')
             hhbool = dfraw['t_hh'].between(min_hubheight, 10000., 'left')
             self.dframe = dfraw.loc[xbool & ybool & hhbool, :]
-            if out_dir is not None:
-                fpath = os.path.join(out_dir, out_fname)
-                if not os.path.isdir(out_dir):
-                    os.makedirs(out_dir)
-                self.dframe.to_csv(fpath)
-
+            if out_fpath is not None:
+                try:
+                    self.dframe.to_csv(fpath)
+                except:
+                    pass
             if print_verbose:
                 self.print_details()
 

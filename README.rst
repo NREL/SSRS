@@ -102,7 +102,9 @@ north can be implemented using the following code:
     sim = Simulator(config_wy_uniform)
     sim.simulate_tracks()
     sim.plot_terrain_elevation(show=True)
-    sim.plot_simulation_output(show=True)
+    sim.plot_updrafts(show=True)
+    sim.plot_simulated_tracks(show=True)
+    sim.plot_presence_map(show=True)
 
 
 This will produce the following figures:

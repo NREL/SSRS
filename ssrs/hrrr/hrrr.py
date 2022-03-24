@@ -15,7 +15,7 @@ class HRRR:
     by Herbie and accessed with xarray.
     """
 
-    def __init__(self, timestamp: str, fxx: int = 0):
+    def __init__(self, date: str = None, valid_date: str= None, fxx: int = 0):
         """
         Parameters
         ----------
@@ -25,7 +25,14 @@ class HRRR:
         fxx: int
             The forecast hour of the model. Defaults to zero.
         """
-        self.hrrr = Herbie(timestamp, model='hrrr', product='sfc', fxx=fxx)
+        if date is None and valid_date is not None:
+            print('Using valid_date')
+            self.hrrr = Herbie(valid_date=valid_date, model='hrrr', product='sfc', fxx=fxx)
+        elif date is not None and valid_date is None:
+            print('Using date')
+            self.hrrr = Herbie(date=date, model='hrrr', product='sfc', fxx=fxx)
+        else:
+            raise ValueError("Use `date` or `valid_date`")
 
     @staticmethod
     def nearest_pressures(h):
@@ -407,15 +414,13 @@ class HRRR:
         wstar = data['wstar'].where(mask, drop=True)
 
         if extent is not None:
-            return  self.convertToRegularGrid(wstar, southwest_lonlat,
-                                              xmin=extent[0], xmax=extent[2],
-                                              ymin=extent[1], ymax=extent[3], res=res)
+            return  self.convertToRegularGrid(wstar, southwest_lonlat, extent, res)
 
         return wstar
 
     
     @staticmethod
-    def convertToRegularGrid(data, southwest_lonlat=None, xmin=0, xmax=50000, ymin=0, ymax=50000, res=50):
+    def convertToRegularGrid(data, southwest_lonlat, extent, res=50):
 
         from scipy.interpolate import griddata
 
@@ -436,11 +441,9 @@ class HRRR:
         xform_lat_sq = xform_lat_sq - yref
 
         # create grid
-        x = np.arange(xmin, xmax, res)
-        y = np.arange(xmin, xmax, res)
+        x = np.arange(extent[0], extent[2], res)
+        y = np.arange(extent[1], extent[3], res)
         xx, yy = np.meshgrid(x, y, indexing='ij')
-        nPointsx = int((xmax-xmin)/res)
-        nPointsy = int((ymax-ymin)/res)
 
         # interpolate
         points = np.column_stack( (xform_long_sq.flatten(), xform_lat_sq.flatten()) )
@@ -448,4 +451,33 @@ class HRRR:
         data_interp = griddata(points, values, (xx, yy), method='linear')
 
         return data_interp, xx, yy
+
+
+    def getSingleVariableOnGrid(self, regex, southwest_lonlat, extent, res):
+        '''
+        Designed to get a single variable, as defined by a regex expression, onto a regular
+        grid.
+
+        '''
+
+        # Get the data
+        data = self.get_xarray_for_regex(regex, remove_grib=False)
+
+        # Get the name of the varialbe related to the `regex`
+        varname = list(data.data_vars)[0]
+
+        # Mask it based on latlon limits
+        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+        data_masked = data[varname].where(mask, drop=True)
+
+        # Convert to an orthogonal grid
+        data_interp, xx, yy =  self.convertToRegularGrid(data_masked, southwest_lonlat, extent, res)
+
+        return data_interp, xx, yy
+
+
+
+
+
+
 

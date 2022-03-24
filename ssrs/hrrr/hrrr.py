@@ -304,18 +304,29 @@ class HRRR:
         xarray.Dataset
             A unified dataset with the all the variables in one hypercube.
         """
-        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
+        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|LHTFL|GFLUX):', remove_grib=False)
         data = xr.combine_by_coords(data)
 
         g = 9.81    # m/s^2
         rho = 1.225 # kg/m^3
         cp = 1005   # J/(kg*K)
 
+        # Energy budget
+        sensible = data['shtfl']/(rho*cp)
+        latent   = data['lhtfl']/(rho*cp)
+        gflux    = data['gflux']/(rho*cp)
+        qs_Kms = sensible + latent - gflux
+        
+        # Get wstar of convective conditions
+        qs_Kms = qs_Kms.clip(min=0)
+
         # Heat flux is given in W/m2. To convert it to K-m/s, divide it by rho*cp
         # We are only interested in wstar of convective times, hence the clip
-        data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
+        #data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
         # Calculate wstar
-        data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
+        #data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
+
+        data['wstar'] = ( g * data.hpbl * qs_Kms / data.pt )**(1/3)
 
         return data
 
@@ -393,18 +404,30 @@ class HRRR:
         """
 
         # Get the variables for calculating convective velocity
-        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|GFLUX):', remove_grib=False)
+        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|LHTFL|GFLUX):', remove_grib=False)
         data = xr.combine_by_coords(data)
 
         g = 9.81    # m/s^2
         rho = 1.225 # kg/m^3
         cp = 1005   # J/(kg*K)
 
+        # Energy budget
+        sensible = data['shtfl']/(rho*cp)
+        latent   = data['lhtfl']/(rho*cp)
+        gflux    = data['gflux']/(rho*cp)
+        qs_Kms = sensible + latent - gflux
+        
+        # Get wstar of convective conditions
+        qs_Kms = qs_Kms.clip(min=0)
+
         # Heat flux is given in W/m2. To convert it to K-m/s, divide it by rho*cp
         # We are only interested in wstar of convective times, hence the clip
-        data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
+        #data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
         # Calculate wstar
-        data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
+        #data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
+
+        data['wstar'] = ( g * data.hpbl * qs_Kms / data.pt )**(1/3)
+
 
         if southwest_lonlat is None:
             southwest_lonlat = (-106.21, 42.78)   # TOTW
@@ -417,6 +440,64 @@ class HRRR:
             return  self.convertToRegularGrid(wstar, southwest_lonlat, extent, res)
 
         return wstar
+    
+    
+    
+    def get_albedo(self, southwest_lonlat=None, extent=None, res=50):
+        """
+        Returns the albedo.
+        alpha = shortwave rad upward / shortwave rad downward
+
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to retrieve.
+            This parameter defaults to None. If this default is used, this
+            value is set to (-106.21, 42.78) within the method.
+        extent: Tuple[float, float, float, float]
+            Domain extents xmin, ymin, xmax, ymax. If none is provided, the function
+            returns an xarray on lat/lon on an irregular grid. If extent and res
+            are provided, a grid is created and values interpolatd on that grid 
+            is returned, alongside the meshgrid values.
+        res: float
+            Resolution of the grid the HRRR data will be interpolatd onto.
+
+        Returns
+        -------
+        If extent is given:
+        wstar: xarray.Dataset
+            A dataset containing the calculated albedo value with coordinates
+            lat/lon 
+        Else:
+        wstar: np.array
+            An array of albedo interpolated onto a regular grid xx, yy
+        xx, yy: np.array
+            Grid in meshgrid format
+        """
+
+        # Get the variables for calculating
+        data = self.get_xarray_for_regex(':(USWRF|DSWRF):surface', remove_grib=False)
+
+        # Shortwave radiation
+        Su  = data['uswrf']
+        Sd  = data['dswrf']
+        
+        if np.mean(Su) == 0:
+            data['alpha_surface_albedo'] = np.ones_like(Su) # night
+        else:
+            data['alpha_surface_albedo'] = Su/Sd
+
+        if southwest_lonlat is None:
+            southwest_lonlat = (-106.21, 42.78)   # TOTW
+
+        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+
+        alpha_surface_albedo = data.where(mask, drop=True)
+
+        if extent is not None:
+            return  self.convertToRegularGrid(alpha_surface_albedo, southwest_lonlat, extent, res)
+
+        return alpha_surface_albedo
 
     
     @staticmethod

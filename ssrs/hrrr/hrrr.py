@@ -464,40 +464,28 @@ class HRRR:
 
         Returns
         -------
-        If extent is given:
-        wstar: xarray.Dataset
-            A dataset containing the calculated albedo value with coordinates
-            lat/lon 
-        Else:
-        wstar: np.array
+        albedo: np.array
             An array of albedo interpolated onto a regular grid xx, yy
         xx, yy: np.array
             Grid in meshgrid format
         """
 
-        # Get the variables for calculating
-        data = self.get_xarray_for_regex(':(USWRF|DSWRF):surface', remove_grib=False)
-
-        # Shortwave radiation
-        Su  = data['uswrf']
-        Sd  = data['dswrf']
-        
-        if np.mean(Su) == 0:
-            data['alpha_surface_albedo'] = np.ones_like(Su) # night
-        else:
-            data['alpha_surface_albedo'] = Su/Sd
-
         if southwest_lonlat is None:
             southwest_lonlat = (-106.21, 42.78)   # TOTW
 
-        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+        # Get the variables for calculating albedo, shortwave upward/downward radiation
+        Su, xx, yy = self.getSingleVariableOnGrid(':USWRF:surface', southwest_lonlat, extent, res)   # short wave upward
+        Sd, xx, yy = self.getSingleVariableOnGrid(':DSWRF:surface', southwest_lonlat, extent, res)   # short wave downward
 
-        alpha_surface_albedo = data.where(mask, drop=True)
+        if np.mean(Su) == 0:
+            alpha_surface_albedo = np.ones_like(Su) # night
+            # TODO: this is a placeholder. We should just compute the albedo at noon of the same day.
+            # Setting it to 1 works because upward radiation will only be zero at night, which it is
+            # not a time of interest right now.
+        else:
+            alpha_surface_albedo = Su/Sd
 
-        if extent is not None:
-            return  self.convertToRegularGrid(alpha_surface_albedo, southwest_lonlat, extent, res)
-
-        return alpha_surface_albedo
+        return alpha_surface_albedo, xx, yy
 
     
     @staticmethod

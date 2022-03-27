@@ -295,7 +295,7 @@ class HRRR:
     def convective_velocity_xarray(self):
         """
         Retrieves the HRRR variables that allow convective velocity to be 
-        calcuated. These variables are HPBL, POT, SHTFL, GFLUX.
+        calcuated.
 
         Performs additional conversions and also outputs the final wstar value.
 
@@ -319,12 +319,6 @@ class HRRR:
         
         # Get wstar of convective conditions
         qs_Kms = qs_Kms.clip(min=0)
-
-        # Heat flux is given in W/m2. To convert it to K-m/s, divide it by rho*cp
-        # We are only interested in wstar of convective times, hence the clip
-        #data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
-        # Calculate wstar
-        #data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
 
         data['wstar'] = ( g * data.hpbl * qs_Kms / data.pt )**(1/3)
 
@@ -420,12 +414,7 @@ class HRRR:
         # Get wstar of convective conditions
         qs_Kms = qs_Kms.clip(min=0)
 
-        # Heat flux is given in W/m2. To convert it to K-m/s, divide it by rho*cp
-        # We are only interested in wstar of convective times, hence the clip
-        #data['gflux_Kms'] = (data['gflux']/(rho*cp)).clip(min=0)
         # Calculate wstar
-        #data['wstar'] = ( g * data.hpbl * data.gflux_Kms / data.pt )**(1/3)
-
         data['wstar'] = ( g * data.hpbl * qs_Kms / data.pt )**(1/3)
 
 

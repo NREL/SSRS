@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Tuple
 import random
 from scipy import ndimage
+from .hrrr import HRRR
 
 
 def compute_orographic_updraft(
@@ -221,6 +222,7 @@ def calcSx(xx, yy, zagl, A, dmax, method='linear', verbose=False):
         Recommended linear or cubic.
     '''
     from scipy.interpolate import griddata
+    import xarray as xr
     
     # get resolution (assumes uniform resolution)
     res = xx[1,0] - xx[0,0]
@@ -282,7 +284,7 @@ def calcSx(xx, yy, zagl, A, dmax, method='linear', verbose=False):
                 # At the borders, can't get a valid positions
                 xsel = np.zeros(np.size(isel))  
                 ysel = np.zeros(np.size(jsel))
-                elev = np.zeros(np.size(isel)) `
+                elev = np.zeros(np.size(isel))
 
             # elevation of (xi, yi), for convenience
             elevi = elev[-1]
@@ -320,9 +322,11 @@ def getRandomPointsWeighted (weight, n, nRealization=1):
 def getObs_maxw(height, hrrr, southwest_lonlat, extent, res):
     # Add a weight based on experimental observations at the WFIP2 site if height is low
     import xarray as xr
+    import os
 
     if height<=200:
-        wfip = xr.open_dataset('updraft/updraft_conditions_wfip2.nc')
+        my_path = os.path.abspath(os.path.dirname(__file__))
+        wfip = xr.open_dataset(os.path.join(my_path,'updraft','updraft_conditions_wfip2.nc'))
         rho = 1.225 # kg/m^3
         cp = 1005   # J/(kg*K)
 
@@ -360,8 +364,8 @@ def compute_thermals_3d(
     '''
     Returns field of thermals based on Allen (2006)
     '''
-    from ssrs.raster import *
-    from ssrs import Terrain, HRRR
+    #from ssrs.raster import *
+    #from ssrs import Terrain, HRRR
     
     # TODO: Loop over a list of `time`s
     
@@ -536,12 +540,12 @@ def compute_adjusted_orographic_updraft (
     xx, yy = np.meshgrid(np.arange(0,res*np.shape(elevation)[0], res),
                          np.arange(0,res*np.shape(elevation)[1], res), indexing='ij')
     # Compute shelterness angle (180 for flipped behavior)
-    wdir_sx =  (wdir+90)%360  # wdir for sx due to weird convention
+    wdir_sx =  (np.mean(wdirn)+90)%360  # wdir for sx due to weird convention
     sx400 = calcSx(xx, yy, elevation, np.mean(wdir_sx)+180, 400)
 
     # Get terrain quantities
     sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
-    zblur = gaussian_filter(elevation, sigma=sigma_in_m/res)
+    zblur = ndimage.gaussian_filter(elevation, sigma=sigma_in_m/res)
     slopeblur = compute_slope_degrees(zblur, res)
     aspectblur = compute_aspect_degrees(zblur, res)
     slope = compute_slope_degrees(elevation, res)
@@ -555,8 +559,8 @@ def compute_adjusted_orographic_updraft (
     F = factor_tc * factor_sx / factor_height
 
     # Compute dimensional w0 based on original model and a reference wind speed at a reference height
-    w0 =  wspeedAtRefHeight * np.sin(np.deg2rad(slope)) * np.cos(np.deg2rad(((-wdir+90)%360)-aspect))
-    w0blur = wspeedAtRefHeight * np.sin(np.deg2rad(slopeblur)) * np.cos(np.deg2rad(((-wdir+90)%360)-aspectblur))
+    w0 =  wspeedAtRefHeight * np.sin(np.deg2rad(slope)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspect))
+    w0blur = wspeedAtRefHeight * np.sin(np.deg2rad(slopeblur)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspectblur))
     
     # Adjust w0
     w0adj =  F * w0blur

@@ -156,7 +156,9 @@ Here is a description of the parameters available to the users to vary:
     run_name: str = 'default'  # name of this run, determines directory names
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
     max_cores: int = 8  # maximum number of cores to use
+    sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+    print_verbose: bool = False # if want to print verbose
 
 
 Parameters for setting up the region:
@@ -194,7 +196,7 @@ Parameters for setting up the seasonal mode:
     seasonal_count: int = 8  # number of seasonal updraft computations
 
 
-Parameters for importing data from WindToolKit dataset: 
+Parameters for importing data from NREL's WTK dataset: 
 
 .. code-block:: python
 
@@ -226,9 +228,7 @@ Parameters for plotting:
     turbine_mrkr_styles = ('1k', '2k', '3k', '4k',
                            '+k', 'xk', '*k', '.k', 'ok')
     turbine_mrkr_size: float = 3. # marker size for plotting turbines
-    turbine_box_around_wfarm: bool = False # to plot box around a plant
-    presence_smoothing_radius: bool = 10  # smoothing radius in meters for presence maps
-
+   
 
 Developers
 -----------

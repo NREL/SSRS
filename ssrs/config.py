@@ -16,7 +16,7 @@ class Config:
     max_cores: int = 8  # maximum of cores to use
     sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
-    print_verbose: bool = False
+    print_verbose: bool = False  # if want to print verbose
 
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)

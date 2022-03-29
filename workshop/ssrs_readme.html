@@ -14590,8 +14590,7 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p>This document provides instructions on installing SSRS on your local machine and running the notebooks provided in this workshop folder of the Github repository. These instructions have been tested for Unix OS (Linux/MacOS) and may
-require slight modification for Windows OS.</p>
+<p>This document provides instructions on installing SSRS on your local machine and running the ssrs_demo notebook provided in this workshop folder of the Github repository. These instructions have been tested for Unix OS (Linux/MacOS) and may require slight modification for Windows OS.</p>
 <p>Github repository: <a href="https://github.com/NREL/SSRS">https://github.com/NREL/SSRS</a></p>
 <p>Journal publication: Stochastic agent-based model for predicting turbine-scale raptor movements during updraft-subsidized directional flights. Ecological Modelling, April 2022. <a href="https://www.sciencedirect.com/science/article/pii/S0304380022000047">link</a></p>
 
@@ -14690,7 +14689,7 @@ require slight modification for Windows OS.</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p>6) Check if conda environment was created successfully, this command should list myenv as one of the conda envs</p>
+<p>6) Check if conda environment was created successfully, this command should list myenv as one of the conda environments</p>
 <div class="highlight"><pre><span></span><span class="gp">rsandhu@mac$ </span>conda env list
 </pre></div>
 
@@ -14704,7 +14703,7 @@ require slight modification for Windows OS.</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p>7) Activate the installed conda environments</p>
+<p>7) Activate the installed conda environment named myenv</p>
 <div class="highlight"><pre><span></span><span class="gp">rsandhu@mac$ </span>conda activate myenv
 </pre></div>
 
@@ -14718,7 +14717,7 @@ require slight modification for Windows OS.</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p>8) Install SSRS (use the -e flag before . if editing the SSRS source code)</p>
+<p>8) Install SSRS</p>
 <div class="highlight"><pre><span></span><span class="gp">rsandhu@mac$ </span>pip install .
 </pre></div>
 
@@ -14746,7 +14745,7 @@ require slight modification for Windows OS.</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<h4 id="Running-Jupyter-notebooks-from-myenv">Running Jupyter notebooks from myenv<a class="anchor-link" href="#Running-Jupyter-notebooks-from-myenv">&#182;</a></h4>
+<h4 id="Running-Jupyter-notebook">Running Jupyter notebook<a class="anchor-link" href="#Running-Jupyter-notebook">&#182;</a></h4>
 </div>
 </div>
 </div>
@@ -14813,7 +14812,7 @@ require slight modification for Windows OS.</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p>4) The jupyter notebook will open to the SSRS direcotry. Go to the workshop or the notebooks folder and then open any notebook (.ipynb files), and make sure the kernel is selected to be myenv (Kernel -&gt; Change kernel -&gt; myenv).</p>
+<p>4) The jupyter notebook will open to the SSRS directory. Go to the workshop or the notebooks folder and then open any notebook (.ipynb files), and make sure the kernel is selected to be myenv (Kernel -&gt; Change kernel -&gt; myenv).</p>
 
 </div>
 </div>
@@ -14825,7 +14824,8 @@ require slight modification for Windows OS.</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<h4 id="Getting-API-key-for-using-NREL's-WTK-dataset-in-SSRS">Getting API key for using NREL's WTK dataset in SSRS<a class="anchor-link" href="#Getting-API-key-for-using-NREL's-WTK-dataset-in-SSRS">&#182;</a></h4>
+<h4 id="Getting-API-key-for-using-NREL's-WTK-dataset-in-SSRS">Getting API key for using NREL's WTK dataset in SSRS<a class="anchor-link" href="#Getting-API-key-for-using-NREL's-WTK-dataset-in-SSRS">&#182;</a></h4><p>You wil need to get an API key to use NREL's WTK data set, which is required in the snapshot and seasonal mode of SSRS. Follow these steps to get access to WTK:</p>
+
 </div>
 </div>
 </div>

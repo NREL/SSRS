@@ -9,7 +9,7 @@ movements through an orographic updraft field estimated using the
 spatially varying wind conditions and ground features (altitude, slope, aspect).
 SSRS can be applied to any rectangular region within the US without the
 need for any eagle-centric or atmosphere-related data collection efforts, using
-only the publically available data sources. SSRS implements and extends the
+only the publicly available data sources. SSRS implements and extends the
 capability of the fluid-flow model from 'Brandes, D., & Ombalski, D. (2004). 
 Modelling raptor migration pathways using a fluid-flow analogy. The Journal
 of Raptor Research, 38(3), 195-207.' More details can be found in the publication:

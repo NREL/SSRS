@@ -362,12 +362,6 @@ class HRRR:
             The mask to be used with the coordinates of the xarray dataset.
         """
 
-        # # longitude in degrees East (unusual; for GRIB)
-        # min_lat = southwest_lonlat[1] - 0.15
-        # min_lon = 180 - southwest_lonlat[0] - 0.9
-        # max_lat = min_lat + 0.7
-        # max_lon = min_lon + 1.1
-
         # Convert extent in meters to degrees
         # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
         radius_of_earth_km = 6371

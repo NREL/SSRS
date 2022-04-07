@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from contextlib import redirect_stdout
 from scipy.interpolate import griddata
+from scipy import ndimage #db - for smoothing updraft field
 from matplotlib.colors import LogNorm
 from dataclasses import asdict
 from .terrain import Terrain
@@ -25,8 +26,9 @@ from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 from .movmodel import (MovModel, get_starting_indices, generate_eagle_track,
                        generate_heuristic_eagle_track,
-                       compute_smooth_presence_counts)
+                       compute_smooth_presence_counts,compute_smooth_presence_counts_HSSRS)
 from .heuristics import rulesets
+from .randomthermals import est_random_thermals
 from .utils import (makedir_if_not_exists, get_elapsed_time,
                     get_extent_from_bounds, empty_this_directory,
                     create_gis_axis, get_sunrise_sunset_time)
@@ -100,13 +102,13 @@ class Simulator(Config):
             self.region.download(self.terrain_layers.values())
 
         # setup turbine data
-        #self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
-        #                              self.turbine_minimum_hubheight,
-        #                              self.data_dir)
-        #fname = os.path.join(self.data_dir, 'turbines_summary.txt')
-        #with open(fname, 'w') as f:
-        #    with redirect_stdout(f):
-        #        self.turbines.print_details()
+        self.turbines = TurbinesUSWTB(self.bounds, self.projected_crs,
+                                      self.turbine_minimum_hubheight,
+                                      self.data_dir)
+        fname = os.path.join(self.data_dir, 'turbines_summary.txt')
+        with open(fname, 'w') as f:
+            with redirect_stdout(f):
+                self.turbines.print_details()
 
         # figure out wtk and its layers to extract
         self.wtk_layers = {
@@ -135,6 +137,9 @@ class Simulator(Config):
             self.case_ids = [self._get_uniform_id()]
             self.compute_orographic_updraft_uniform()
 
+        # Compute thermal updrafts
+        self.estimate_thermal_updraft()   #db added
+        
         # plotting settings
         fig_aspect = self.region_width_km[0] / self.region_width_km[1]
         self.fig_size = (self.fig_height * fig_aspect, self.fig_height)
@@ -185,7 +190,7 @@ class Simulator(Config):
             print(f'{tmp_str}: Simulating {self.track_count} tracks..',
                   end="", flush=True)
             orograph = np.load(self._get_orograph_fpath(case_id))
-            thermals = np.zeros_like(orograph) # TODO: this is a placeholder
+            thermal = np.load(self._get_thermal_fpath(case_id))                    #db added
             elevation = self.get_terrain_elevation()                              #db added
             if self.sim_movement == 'fluid-analogy':
                 potential = np.load(self._get_potential_fpath(case_id))
@@ -205,11 +210,13 @@ class Simulator(Config):
                     tracks = pool.map(lambda inp: generate_heuristic_eagle_track(
                         self.movement_ruleset,
                         orograph,
-                        thermals,
+                        thermal,
                         elevation,                                          #db added
                         inp[:2], #start_loc
                         inp[2], #PAM
                         self.resolution,
+                        self.uniform_windspeed,  #TODO needs to be generalized to wind from WTK
+                        self.uniform_winddirn,   #TODO needs to be generalized to wind from WTK
                         **hssrs_kwargs
                     ), starting_locs_PAM)
             print(f'took {get_elapsed_time(start_time)}', flush=True)
@@ -256,6 +263,16 @@ class Simulator(Config):
         fpath = self._get_orograph_fpath(self.case_ids[0])
         np.save(fpath, orograph.astype(np.float32))
 
+    def estimate_thermal_updraft(self) -> None:
+        """ Estimating thermal updrafts"""
+        print('Estimating thermal updrafts..')
+        xsize = int(round((self.region_width_km[0] * 1000. / self.resolution)))
+        ysize = int(round((self.region_width_km[1] * 1000. / self.resolution)))
+        aspect = self.get_terrain_aspect()
+        thermal = est_random_thermals(xsize,ysize,aspect,self.thermal_intensity_scale)
+        fpath = self._get_thermal_fpath(self.case_ids[0])
+        np.save(fpath, thermal.astype(np.float32))
+
     def compute_orographic_updrafts_using_wtk(self) -> None:
         """ Computing orographic updrafts using wtk data for all datetimes"""
         print('Computing orographic updrafts..', end="")
@@ -288,8 +305,8 @@ class Simulator(Config):
                           extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
         cbar.set_label('Elevation (m)')
-        #if plot_turbs:
-        #    self.plot_turbine_locations(axs)
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
 
     def plot_terrain_slope(self, plot_turbs=True, show=False) -> None:
@@ -300,8 +317,8 @@ class Simulator(Config):
                           extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
         cbar.set_label('Slope (deg)')
-        #if plot_turbs:
-        #    self.plot_turbine_locations(axs)
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
 
     def plot_terrain_aspect(self, plot_turbs=True, show=False) -> None:
@@ -312,16 +329,19 @@ class Simulator(Config):
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
         cbar.set_label('Aspect (deg)')
-        #if plot_turbs:
-        #    self.plot_turbine_locations(axs)
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)
 
     def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
         """ Plots oro updraft and tracks """
         self.plot_orographic_updrafts(plot_turbs, show)
+        self.plot_sm_orographic_updrafts(plot_turbs, show)
+        self.plot_thermal_updrafts(plot_turbs, show)
+        self.plot_updrafts(plot_turbs, show)
         #self.plot_directional_potentials(plot_turbs, show)
         self.plot_simulated_tracks_dem(plot_turbs, show)   
-        self.plot_simulated_tracks_wo(plot_turbs, show)   
+        self.plot_simulated_tracks_w(plot_turbs, show)   
         self.plot_presence_map(plot_turbs, show)
 
     def plot_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
@@ -329,15 +349,66 @@ class Simulator(Config):
         for case_id in self.case_ids:
             orograph = np.load(self._get_orograph_fpath(case_id))
             fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(2, int(round(np.mean(orograph)))), 5)
+            maxval = min(max(3, int(round(np.mean(orograph)))), 5)
             curm = axs.imshow(orograph, cmap='viridis',
                               extent=self.extent, origin='lower',
                               vmin=0, vmax=maxval)
             cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
             cbar.set_label('Orographic updraft (m/s)')
-         #   if plot_turbs:
-         #       self.plot_turbine_locations(axs)
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
             fname = os.path.join(self.mode_fig_dir, f'{case_id}_orograph.png')
+            self.save_fig(fig, fname, show)
+
+    def plot_thermal_updrafts(self, plot_turbs=True, show=False) -> None:
+        """ Plot estimated thermal updrafts """
+        for case_id in self.case_ids:
+            thermal = np.load(self._get_thermal_fpath(case_id))
+            fig, axs = plt.subplots(figsize=self.fig_size)
+            maxval = min(max(6, int(round(np.mean(thermal)))), 6)
+            curm = axs.imshow(thermal, cmap='viridis',
+                              extent=self.extent, origin='lower',
+                              vmin=0, vmax=maxval)
+            cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+            cbar.set_label('Thermal updraft (m/s)')
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
+            fname = os.path.join(self.mode_fig_dir, f'{case_id}_thermal.png')
+            self.save_fig(fig, fname, show)
+    
+    def plot_updrafts(self, plot_turbs=True, show=False) -> None:
+        """ Plot estimated thermal updrafts """
+        for case_id in self.case_ids:
+            orograph = np.load(self._get_orograph_fpath(case_id))
+            thermal = np.load(self._get_thermal_fpath(case_id))
+            sum=orograph+thermal
+            fig, axs = plt.subplots(figsize=self.fig_size)
+            maxval = min(max(5, int(round(np.mean(thermal)))), 5)
+            curm = axs.imshow(sum, cmap='viridis',
+                              extent=self.extent, origin='lower',
+                              vmin=0, vmax=maxval)
+            cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+            cbar.set_label('Wo + Wt (m/s)')
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
+            fname = os.path.join(self.mode_fig_dir, f'{case_id}_wtot.png')
+            self.save_fig(fig, fname, show)
+
+    def plot_sm_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
+        """ Plot orographic updrafts """
+        for case_id in self.case_ids:
+            orograph = np.load(self._get_orograph_fpath(case_id))
+            wo_smoothed=ndimage.gaussian_filter(orograph, sigma=3, mode='constant') #db added
+            fig, axs = plt.subplots(figsize=self.fig_size)
+            maxval = min(max(2, int(round(np.mean(orograph)))), 5)
+            curm = axs.imshow(wo_smoothed, cmap='viridis',
+                              extent=self.extent, origin='lower',
+                              vmin=0, vmax=maxval)
+            cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+            cbar.set_label('Smoothed Wo (m/s)')
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
+            fname = os.path.join(self.mode_fig_dir, f'{case_id}_smoothed.orograph.png')
             self.save_fig(fig, fname, show)
 
     def plot_wtk_layers(self, plot_turbs=True, show=False) -> None:
@@ -357,8 +428,8 @@ class Simulator(Config):
                     cbar.set_label(wtk_lyr)
                     axs.set_xlim([self.extent[0], self.extent[1]])
                     axs.set_ylim([self.extent[2], self.extent[3]])
-            #        if plot_turbs:
-            #            self.plot_turbine_locations(axs)
+                    if plot_turbs:
+                        self.plot_turbine_locations(axs)
                     fname = f'{case_id}_{wtk_lyr}.png'
                     self.save_fig(fig, os.path.join(self.mode_fig_dir, fname),
                                   show)
@@ -376,8 +447,8 @@ class Simulator(Config):
                                 extent=self.extent)
             cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
             cbar.set_label('Directional potential')
-        #    if plot_turbs:
-        #        self.plot_turbine_locations(axs)
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
             fname = f'{case_id}_{int(self.track_direction)}_potential.png'
@@ -401,8 +472,8 @@ class Simulator(Config):
                     axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
                              '-r', linewidth=lwidth, alpha=0.5)
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-        #    if plot_turbs:
-        #        self.plot_turbine_locations(axs)
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
             left = self.extent[0] + self.track_start_region[0] * 1000.
             bottom = self.extent[2] + self.track_start_region[2] * 1000.
             width = self.track_start_region[1] - self.track_start_region[0]
@@ -438,8 +509,8 @@ class Simulator(Config):
                     axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
                              '-r', linewidth=lwidth, alpha=0.5)
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-         #   if plot_turbs:
-         #       self.plot_turbine_locations(axs)
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
             left = self.extent[0] + self.track_start_region[0] * 1000.
             bottom = self.extent[2] + self.track_start_region[2] * 1000.
             width = self.track_start_region[1] - self.track_start_region[0]
@@ -449,11 +520,15 @@ class Simulator(Config):
                                       edgecolor='none', facecolor='b')
             axs.add_patch(rect)
             
-            xtext=self.extent[0]+0.6*(self.extent[1]-self.extent[0])
+            xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
             ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
-            axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nPAM(deg) = %6.1f\nreso(m) = %5.1f\nwind = %s %4.0f %3.0f mps'
-                % (self.sim_movement,self.movement_ruleset,self.track_direction,self.resolution,
-                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed),fontsize='xx-small',color='black')
+            if self.movement_ruleset != 'step_ahead_look_ahead':
+                self.look_ahead_dist = 0.0
+            axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
+                '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'
+                % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
+                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,self.track_count),
+                fontsize='xx-small',color='black')
         
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
@@ -461,16 +536,18 @@ class Simulator(Config):
             fname = f'{case_id}_{int(self.track_direction)}_tracks_dem.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
 
-    def plot_simulated_tracks_wo(self, plot_turbs=True, show=False) -> None:
+    def plot_simulated_tracks_w(self, plot_turbs=True, show=False) -> None:
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
         lwidth = 0.1 if self.track_count > 251 else 0.4
         #elevation = self.get_terrain_elevation()
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
+            thermal = np.load(self._get_thermal_fpath(case_id))
             orograph = np.load(self._get_orograph_fpath(case_id))
+            w_tot=thermal+orograph
             fig, axs = plt.subplots(figsize=self.fig_size)
-            _ = axs.imshow(orograph, cmap='afmhot',   #cmap was previously 'Greys' and alpha parameter
+            _ = axs.imshow(w_tot, cmap='viridis',   #cmap was previously 'Greys' and alpha parameter
                            origin='lower', extent=self.extent)
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
@@ -480,8 +557,8 @@ class Simulator(Config):
                     axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
                              '-w', linewidth=lwidth, alpha=0.5)        #DB changed color to white
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-          #  if plot_turbs:
-          #      self.plot_turbine_locations(axs)
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
             left = self.extent[0] + self.track_start_region[0] * 1000.
             bottom = self.extent[2] + self.track_start_region[2] * 1000.
             width = self.track_start_region[1] - self.track_start_region[0]
@@ -491,16 +568,18 @@ class Simulator(Config):
                                       edgecolor='none', facecolor='b')
             axs.add_patch(rect)
             
-            xtext=self.extent[0]+0.65*(self.extent[1]-self.extent[0])
+            xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
             ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
-            axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nPAM(deg) = %6.1f\nreso(m) = %5.1f\nwind = %s %4.0f %3.0f mps'
-                % (self.sim_movement,self.movement_ruleset,self.track_direction,self.resolution,
-                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed),fontsize='xx-small',color='w')
+            axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
+                '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'
+                % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
+                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,self.track_count),
+                fontsize='xx-small',color='white')
                 
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
             
-            fname = f'{case_id}_{int(self.track_direction)}_tracks_wo.png'
+            fname = f'{case_id}_{int(self.track_direction)}_tracks_wtot.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
             
     def plot_presence_map(self, plot_turbs=True, show=False,
@@ -511,8 +590,12 @@ class Simulator(Config):
         for case_id in self.case_ids:
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
-            prprob = compute_smooth_presence_counts(
-                tracks, self.gridsize, self.presence_smoothing_radius)
+            if self.sim_movement == 'fluid-analogy':
+                prprob = compute_smooth_presence_counts(
+                    tracks, self.gridsize, self.presence_smoothing_radius)
+            elif self.sim_movement == 'heuristics':
+                prprob = compute_smooth_presence_counts_HSSRS(
+                    tracks, self.gridsize, self.presence_smoothing_radius)
             prprob /= self.track_count
             prprob /= np.amax(prprob)
             fig, axs = plt.subplots(figsize=self.fig_size)
@@ -525,14 +608,16 @@ class Simulator(Config):
             # cm = axs.imshow(prprob, extent=self.extent, origin='lower',
             #                 cmap='Reds', alpha=0.75)
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
-          #  if plot_turbs:
-          #      self.plot_turbine_locations(axs)
+            if plot_turbs:
+                self.plot_turbine_locations(axs)
             
-            xtext=self.extent[0]+0.6*(self.extent[1]-self.extent[0])
+            xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
             ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
-            axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nPAM(deg) = %6.1f\nreso(m) = %5.1f\nwind = %s %4.0f %3.0f mps'
-                % (self.sim_movement,self.movement_ruleset,self.track_direction,self.resolution,
-                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed),fontsize='xx-small',color='black')
+            axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
+                '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'
+                % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
+                self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,self.track_count),
+                fontsize='xx-small',color='black')
                 
             axs.set_xlim([self.extent[0], self.extent[1]])
             axs.set_ylim([self.extent[2], self.extent[3]])
@@ -559,13 +644,13 @@ class Simulator(Config):
                                           minval=0.2) -> None:
         """ Plot presence maps for each power plant contained in study area"""
         print('Plotting presence map for each project..')
-        smooting_radius = int(self.presence_smoothing_radius / 2)
+        smoothing_radius = int(self.presence_smoothing_radius / 2)
         pad = 2000.  # in meters
         for case_id in self.case_ids:
             with open(self._get_tracks_fpath(case_id), 'rb') as fobj:
                 tracks = pickle.load(fobj)
             prprob = compute_smooth_presence_counts(
-                tracks, self.gridsize, smooting_radius)
+                tracks, self.gridsize, smoothing_radius)
             prprob[prprob <= minval] = 0.
             for pname in self.turbines.get_project_names():
                 xloc, yloc = self.turbines.get_locations_for_this_project(
@@ -693,6 +778,10 @@ class Simulator(Config):
         """ Returns file path for saving orographic updrafts data """
         return os.path.join(self.mode_data_dir, f'{case_id}_orograph.npy')
 
+    def _get_thermal_fpath(self, case_id: str):
+        """ Returns file path for saving thermal updrafts data """
+        return os.path.join(self.mode_data_dir, f'{case_id}_thermal.npy')
+        
     def _get_potential_fpath(self, case_id: str):
         """ Returns file path for saving directional potential data"""
         fname = f'{case_id}_{int(self.track_direction)}_potential.npy'
@@ -706,7 +795,8 @@ class Simulator(Config):
     def _get_uniform_id(self):
         """ Returns case id for uniform mode """
         return (f's{int(self.uniform_windspeed)}'
-                f'd{int(self.uniform_winddirn)}')
+                f'd{int(self.uniform_winddirn)}'
+                f'th{int(self.thermal_intensity_scale)}')
 
     def _interpolate_wtk_vardata(
         self,

@@ -1,4 +1,6 @@
+from math import sqrt, atan2, pi
 from collections import OrderedDict
+from logging import warning
 from typing import Tuple
 import warnings
 
@@ -119,54 +121,6 @@ class HRRR:
         """
         return p0 * (1 - .0065*h/(temp+.0065*h+273.15)) ** 5.257
 
-    def wind_uv_at_height(
-        self,
-        min_lat: float,
-        min_lon: float,
-        max_lat: float,
-        max_lon: float,
-        ground_height: float,
-        height_above_ground: float,
-        remove_grib: bool = False
-    ):
-        """
-        Parameters
-        ----------
-        min_lat: float
-            Minimum latitude
-
-        min_lon: float
-            Minimum longitude
-
-        max_lat: float
-            Maximum latitude
-
-        max_lon: float
-            Maximum longitude
-
-        ground_height: float
-            The ground level height at the point of calculation.
-
-        height_above_ground: float
-            The height above ground that 
-        """
-        height = ground_height + height_above_ground
-        pressures = self.nearest_pressures(height)
-        isobar_1_mb = pressures['closest_pressure_below']
-        isobar_2_mb = pressures['closest_pressure_above']
-        
-        result = self.wind_uv(
-            min_lat,
-            min_lon,
-            max_lat,
-            max_lon,
-            isobar_1_mb,
-            isobar_2_mb,
-            remove_grib
-        )
-
-        return result
-
     def get_xarray_for_regex(self, regex, remove_grib=False):
         """
         Parameters
@@ -208,7 +162,74 @@ class HRRR:
         """
         return self.hrrr.read_idx()
 
-    def wind_uv(
+    def wind_velocity_direction_at_altitude(
+        self,
+        southwest_lonlat: Tuple[float, float],
+        h: float,
+        remove_grib: bool = False
+    ):
+        """
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the area to query.
+        
+        h: float
+            Height above sea level 
+
+        remove_grib: bool
+            If True, the GRIB is deleted from the cache after it is
+            accessed. If False, the cached copy is preserved.
+
+        Returns
+        -------
+        Dict[str, float]
+            Key, value pairs
+        """
+        nearest_pressures = self.nearest_pressures(h)
+        closest_pressure_above = nearest_pressures['closest_pressure_above']
+        uv_grd_field = f'(U|V)GRD:{closest_pressure_above} mb'
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            uv_grd = self.hrrr.xarray(uv_grd_field, remove_grib=remove_grib)
+
+        mask = self.mask_at_coordinates(uv_grd, southwest_lonlat)
+
+        # Extract that lats and lons that were found
+        lats_data_array = uv_grd.coords['latitude'].where(mask)
+        lons_data_array = uv_grd.coords['longitude'].where(mask)
+        lats = np.array(lats_data_array).flatten()
+        lons = np.array(lons_data_array).flatten()
+        lats = lats[~np.isnan(lats)]
+        lons = lons[~np.isnan(lons)]
+
+        # Calculate the number of points that were found
+        n = float(mask.sum())
+
+        # Mask the u and v values
+        u_points = uv_grd['u'].where(mask)
+        v_points = uv_grd['v'].where(mask)
+        
+        # Average u, v values
+        u = float(u_points.sum()) / n
+        v = float(v_points.sum()) / n
+
+        # Calculate wind speed and direction
+        deg_per_radian = 57.296
+        speed = sqrt(u**2 + v**2)
+        direction_deg = atan2(u, v) * deg_per_radian  # Convert radians to degrees
+
+        return {
+            'speed': speed,
+            'direction_deg': direction_deg,
+            'closest_pressure_above': closest_pressure_above,
+            'lats': lats,
+            'lons': lons,
+            'n': n
+        }
+
+    def wind_uv_between_isobars(
         self,
         southwest_lonlat: Tuple[float, float],
         isobar_1_mb: int,
@@ -325,7 +346,7 @@ class HRRR:
         return data
 
     @staticmethod
-    def mask_at_coordinates(data, southwest_lonlat):
+    def mask_at_coordinates(data, southwest_lonlat, extent_km_lat=3.0, extent_km_lon=3.0, fringe_deg_lat=0.15, fringe_deg_lon=0.9):
         """
         Parameters
         ----------
@@ -341,23 +362,28 @@ class HRRR:
             The mask to be used with the coordinates of the xarray dataset.
         """
 
-        # create mask to get values around the region of interest. Arbitrarily setting 0.8 degrees
-        xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
-        
-        # reference (0,0)
-        xref = xSW[0]
-        yref = ySW[0]
+        # # longitude in degrees East (unusual; for GRIB)
+        # min_lat = southwest_lonlat[1] - 0.15
+        # min_lon = 180 - southwest_lonlat[0] - 0.9
+        # max_lat = min_lat + 0.7
+        # max_lon = min_lon + 1.1
+
+        # Convert extent in meters to degrees
+        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
+        radius_of_earth_km = 6371
+        extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
+        extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
+
+        # Extract lon and lat
+        southwest_lon, southwest_lat = southwest_lonlat
 
         # longitude in degrees East (unusual; for GRIB)
-        min_lat = southwest_lonlat[1] - 0.15
-        min_lon = 180 - southwest_lonlat[0] - 0.9
-        max_lat = min_lat + 0.7
-        max_lon = min_lon + 1.1
+        min_lat = southwest_lat - fringe_deg_lat
+        min_lon = 180 - southwest_lon - fringe_deg_lon
+        max_lat = min_lat + extent_deg_lat
+        max_lon = min_lon + extent_deg_lon
 
-        # longitude in degrees West (typical)
-        min_lon_degW = southwest_lonlat[0] - 0.1
-        max_lon_degW = min_lon_degW + 0.8
-
+        # Construct the mask
         latc = data.coords['latitude']
         lonc = data.coords['longitude']
         latc_mask = (latc >= min_lat) & (latc <= max_lat)

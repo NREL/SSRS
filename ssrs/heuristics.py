@@ -15,6 +15,10 @@ from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_l
 
 rulesets = {}
 
+rulesets['random_walk'] = [
+    random_walk,
+]
+
 rulesets['dir_random_walk'] = [
     dir_random_walk,
 ]

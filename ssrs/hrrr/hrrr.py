@@ -170,13 +170,41 @@ class HRRR:
         remove_grib: bool = False
     ):
         """
+        This method retrieves UV values for wind and computes the
+        speed and direction of the wind. The point of interest is
+        described by the parameters to this method call.
+
+        There are some quirks of how the altitude requested works.
+
+        When the method first starts, it calculates the pressure of
+        the isobar closest to (but not lower than) the ground level.
+        That is consdered to be the wind speed at the highest height
+        above ground. In the HRRR GRIB files, there are also UV data
+        at 10m and 80m above ground level. This gives three altitudes
+        of wind data that this method uses to find UV values:
+
+        1. Highest: Closest pressure above ground
+        2. Middle: 80 m above ground
+        3. Lowest: 10 m above ground
+
+        If 0 < height_above_ground_m < 45, the 10 m above ground wind values
+        are used. If 45 <= height_above_ground_m < 100, the 80 m above ground
+        wind values are used. If height_above_ground_m > 100, then the closest
+        pressure above ground is used. Also, if height_above_ground_m < 0,
+        the closest pressure above ground is used. The final condition prevents
+        errors when bad data with a negative height above ground is encountered.
+
         Parameters
         ----------
         southwest_lonlat: Tuple[float, float]
             The southwest corner of the area to query.
         
-        h: float
-            Height above sea level 
+        ground_level_m: float
+            The height of the ground above sea level in meters at the point
+            of interest.
+
+        height_above_ground_m: float
+            The height above the ground in meters at the point of interest.
 
         remove_grib: bool
             If True, the GRIB is deleted from the cache after it is
@@ -185,7 +213,10 @@ class HRRR:
         Returns
         -------
         Dict[str, float]
-            Key, value pairs
+            Key, value pairs with the results of the wind speed and direction,
+            lats/lons over which the averages of U and V were taken, the
+            number of points the values were averaged over, and the grib
+            field/message used to find the u and v values.
         """
         nearest_pressures = self.nearest_pressures(ground_level_m)
         closest_pressure_above = nearest_pressures['closest_pressure_above']
@@ -236,10 +267,9 @@ class HRRR:
         return {
             'speed': speed,
             'direction_deg': direction_deg,
-            'closest_pressure_above': closest_pressure_above,
             'lats': lats,
             'lons': lons,
-            'field': grib_field,
+            'grib_field': grib_field,
             'n': n
         }
 

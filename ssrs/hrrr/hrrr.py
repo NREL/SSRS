@@ -165,7 +165,8 @@ class HRRR:
     def wind_velocity_direction_at_altitude(
         self,
         southwest_lonlat: Tuple[float, float],
-        h: float,
+        ground_level_m: float,
+        height_above_ground_m: float,
         remove_grib: bool = False
     ):
         """
@@ -186,13 +187,26 @@ class HRRR:
         Dict[str, float]
             Key, value pairs
         """
-        nearest_pressures = self.nearest_pressures(h)
+        nearest_pressures = self.nearest_pressures(ground_level_m)
         closest_pressure_above = nearest_pressures['closest_pressure_above']
-        uv_grd_field = f'(U|V)GRD:{closest_pressure_above} mb'
+
+        print(height_above_ground_m)
+        if height_above_ground_m > 0.0 and height_above_ground_m < 45.0:
+            grib_field = f'(U|V)GRD:10 m above ground:anl'
+            u_data_var = 'u10'
+            v_data_var = 'v10'
+        elif height_above_ground_m >= 45.0 and height_above_ground_m < 100.0:
+            grib_field = f'(U|V)GRD:80 m above ground:anl'
+            u_data_var = 'u'
+            v_data_var = 'v'
+        else:
+            grib_field = f'(U|V)GRD:{closest_pressure_above} mb'
+            u_data_var = 'u'
+            v_data_var = 'v'
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            uv_grd = self.hrrr.xarray(uv_grd_field, remove_grib=remove_grib)
+            uv_grd = self.hrrr.xarray(grib_field, remove_grib=remove_grib)
 
         mask = self.mask_at_coordinates(uv_grd, southwest_lonlat)
 
@@ -208,8 +222,8 @@ class HRRR:
         n = float(mask.sum())
 
         # Mask the u and v values
-        u_points = uv_grd['u'].where(mask)
-        v_points = uv_grd['v'].where(mask)
+        u_points = uv_grd[u_data_var].where(mask)
+        v_points = uv_grd[v_data_var].where(mask)
         
         # Average u, v values
         u = float(u_points.sum()) / n
@@ -226,6 +240,7 @@ class HRRR:
             'closest_pressure_above': closest_pressure_above,
             'lats': lats,
             'lons': lons,
+            'field': grib_field,
             'n': n
         }
 

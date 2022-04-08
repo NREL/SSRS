@@ -290,8 +290,8 @@ class HRRR:
         # longitude in degrees East (unusual; for GRIB)
         min_lat = southwest_lat - fringe_deg_lat
         min_lon = 180 - southwest_lon - fringe_deg_lon
-        max_lat = min_lat + extent_deg_lat
-        max_lon = min_lon + extent_deg_lon
+        max_lat = min_lat + extent_deg_lat + fringe_deg_lat
+        max_lon = min_lon + extent_deg_lon + fringe_deg_lon
 
         # Construct the mask
         latc = data.coords['latitude']

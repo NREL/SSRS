@@ -190,7 +190,6 @@ class HRRR:
         nearest_pressures = self.nearest_pressures(ground_level_m)
         closest_pressure_above = nearest_pressures['closest_pressure_above']
 
-        print(height_above_ground_m)
         if height_above_ground_m > 0.0 and height_above_ground_m < 45.0:
             grib_field = f'(U|V)GRD:10 m above ground:anl'
             u_data_var = 'u10'

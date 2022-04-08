@@ -262,7 +262,7 @@ class HRRR:
         # Calculate wind speed and direction
         deg_per_radian = 57.296
         speed = sqrt(u**2 + v**2)
-        direction_deg = atan2(u, v) * deg_per_radian  # Convert radians to degrees
+        direction_deg = atan2(v, u) * deg_per_radian  # Convert radians to degrees
 
         return {
             'speed': speed,

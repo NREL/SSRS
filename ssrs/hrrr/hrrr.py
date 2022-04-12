@@ -1,7 +1,7 @@
 from math import sqrt, atan2, pi
 from collections import OrderedDict
 from logging import warning
-from typing import Tuple
+from typing import Tuple, Dict
 import warnings
 
 from herbie.archive import Herbie
@@ -35,6 +35,12 @@ class HRRR:
             self.hrrr = Herbie(date=date, model='hrrr', product='sfc', fxx=fxx)
         else:
             raise ValueError("Use `date` or `valid_date`")
+
+        # self.datasets is a cache for xarrays obtained from GRIB files
+        #  keys are the regular expressions that obtained the dataset,
+        # values are the xarray datasets parsed from the GRIB files.
+
+        self.datasets: Dict[str, xr.Dataset] = {}
 
     @staticmethod
     def nearest_pressures(h):
@@ -141,13 +147,15 @@ class HRRR:
             if the requested variables have different coordinates.
         """
 
-        # There is an issue with how Herbie handles regular expressions
-        # with Pandas, and this context manager handles those exceptions.
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            result = self.hrrr.xarray(regex, remove_grib=remove_grib)
-
-        return result
+        if regex in self.datasets:
+            return self.datasets[regex]
+        else:
+            # There is an issue with how Herbie handles regular expressions
+            # with Pandas, and this context manager handles those exceptions.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                self.datasets[regex] = self.hrrr.xarray(regex, remove_grib=remove_grib)
+            return self.datasets[regex]
 
     def read_idx(self):
         """
@@ -236,7 +244,7 @@ class HRRR:
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            uv_grd = self.hrrr.xarray(grib_field, remove_grib=remove_grib)
+            uv_grd = self.get_xarray_for_regex(grib_field, remove_grib=False)
 
         mask = self.mask_at_coordinates(uv_grd, southwest_lonlat)
 

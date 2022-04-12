@@ -271,7 +271,7 @@ class HRRR:
         deg_per_radian = 57.296
         adjustment_to_wind_measurement = 180
         speed = sqrt(u**2 + v**2)
-        direction_deg = atan2(u, v) * deg_per_radian  + adjustment_to_wind_measurement  # Convert radians to degrees
+        direction_deg = adjustment_to_wind_measurement - atan2(u, v) * deg_per_radian  # Convert radians to degrees
 
         return {
             'speed': speed,

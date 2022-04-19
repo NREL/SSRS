@@ -259,7 +259,7 @@ def generate_heuristic_eagle_track(
         res: float, # grid resolution
         windspeed: float, # uniform windspeed - needs to be generalized for wtk 
         winddir: float, #uniform winddir - needs to be generalized for wtk 
-        max_moves: int = 1000,
+        max_moves: int = 200,  #changed from 1000 to 200 for local movements
         #TODO ask Eliot why next param has to be specified here rather than set to int,
         random_walk_freq: int=400, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
         random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
@@ -278,7 +278,7 @@ def generate_heuristic_eagle_track(
     # note 2: 'i' index (rows) corresponds to y
     #         'j' index (cols) corresponds to x
     current_position = np.array([start_loc[1], start_loc[0]]) * res
-    weight_start=np.array(1.0)
+    weight_start=np.array(0.5)
     wo_start=np.array(0.0)
      #set up a list for adding a altitude-based weighting for each move
     #weighting applied to moves based on presumed low (wt=1), moderate (wt=0.5), or high flight (wt=0)
@@ -392,7 +392,7 @@ def generate_heuristic_eagle_track(
     
     #combine traj with track_weight
     trajectory_3D = np.c_[trajectory,track_wt_10000]
-    #np.savetxt('output/wo_track.csv', track_wo, delimiter=',')
+    np.savetxt('output/traj.csv', trajectory, delimiter=',')
     
     iarr = trajectory_3D[:,1]
     jarr = trajectory_3D[:,0]

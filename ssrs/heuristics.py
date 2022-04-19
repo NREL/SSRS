@@ -11,7 +11,7 @@ See the actions module for available action functions and descriptions of their
 action parameters.
 
 """
-from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead, look_ahead)
+from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead, local_moves,look_ahead)
 
 rulesets = {}
 
@@ -31,6 +31,9 @@ rulesets['step_ahead_look_ahead'] = [
     step_ahead_look_ahead,
 ]
 
+rulesets['local_moves'] = [
+    local_moves,
+]
 rulesets['lookahead'] = [
     (look_ahead, dict(dist=100.0)),
     (look_ahead, dict(dist=200.0)),

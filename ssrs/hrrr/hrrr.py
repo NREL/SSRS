@@ -175,6 +175,10 @@ class HRRR:
         southwest_lonlat: Tuple[float, float],
         ground_level_m: float,
         height_above_ground_m: float,
+        extent_km_lat=3.0,
+        extent_km_lon=3.0,
+        fringe_deg_lat=0.15,
+        fringe_deg_lon=0.9,
         remove_grib: bool = False
     ):
         """
@@ -214,6 +218,22 @@ class HRRR:
         height_above_ground_m: float
             The height above the ground in meters at the point of interest.
 
+            extent_km_lat: float
+            The extent of the mask in the latitude direction in units of
+            kilometers.
+
+        extent_km_lon: float
+            The extent of the mask in the longitude direction in units of
+            kilometers.
+
+        fringe_deg_lat: float
+            The number of degrees in the latitude directionadded to the 
+            edges of the extent in units of degrees.
+
+        fringe_deg_lon: float
+            The number of degrees in the longitude direction to add to edges
+            of the extent in degrees.
+
         remove_grib: bool
             If True, the GRIB is deleted from the cache after it is
             accessed. If False, the cached copy is preserved.
@@ -244,9 +264,16 @@ class HRRR:
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            uv_grd = self.get_xarray_for_regex(grib_field, remove_grib=False)
+            uv_grd = self.get_xarray_for_regex(grib_field, remove_grib=remove_grib)
 
-        mask = self.mask_at_coordinates(uv_grd, southwest_lonlat)
+        mask = self.mask_at_coordinates(
+            uv_grd,
+            southwest_lonlat=southwest_lonlat,
+            extent_km_lat=extent_km_lat,
+            extent_km_lon=extent_km_lon,
+            fringe_deg_lat=fringe_deg_lat,
+            fringe_deg_lon=fringe_deg_lon
+        )
 
         # Extract that lats and lons that were found
         lats_data_array = uv_grd.coords['latitude'].where(mask)
@@ -315,7 +342,14 @@ class HRRR:
         return data
 
     @staticmethod
-    def mask_at_coordinates(data, southwest_lonlat, extent_km_lat=3.0, extent_km_lon=3.0, fringe_deg_lat=0.15, fringe_deg_lon=0.9):
+    def mask_at_coordinates(
+        data,
+        southwest_lonlat,
+        extent_km_lat=3.0,
+        extent_km_lon=3.0, 
+        fringe_deg_lat=0.15, 
+        fringe_deg_lon=0.9
+    ):
         """
         Parameters
         ----------
@@ -324,6 +358,22 @@ class HRRR:
 
         southwest_lonlat: Tuple[float, float]
             The southwest corner of the latitude and longitude to retrieve.
+
+        extent_km_lat: float
+            The extent of the mask in the latitude direction in units of
+            kilometers.
+
+        extent_km_lon: float
+            The extent of the mask in the longitude direction in units of
+            kilometers.
+
+        fringe_deg_lat: float
+            The number of degrees in the latitude directionadded to the 
+            edges of the extent in units of degrees.
+
+        fringe_deg_lon: float
+            The number of degrees in the longitude direction to add to edges
+            of the extent in degrees.
 
         Returns
         -------

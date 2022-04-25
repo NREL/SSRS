@@ -1,7 +1,7 @@
 """ Module for implementing fluid-flow based movement model """
 
 from math import (floor, ceil, sqrt)
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import numpy as np
 import matplotlib.pyplot as plt #temp for plotting wt_test
 from scipy import ndimage #for smoothing updraft field
@@ -17,14 +17,14 @@ class MovModel:
 
     def __init__(
         self,
-        move_dirn: str,
+        move_dirn: float,
         grid_shape: Tuple[int, int]
     ):
         self.move_dirn = move_dirn
         self.grid_shape = grid_shape
 
     def get_boundary_nodes(self):
-        """ returns boundary nodes and potential for given direction of 
+        """ returns boundary nodes and potential for given direction of
         movement """
         nrow, ncol = self.grid_shape
         north_bnodes = np.array([nrow * (x + 1) - 1 for x in range(ncol)])
@@ -107,7 +107,7 @@ class MovModel:
             conductivity_a = conductivity[r % nrow, r // nrow]
             conductivity_b = conductivity[c % nrow, c // nrow]
             vals.append(harmonic_mean(conductivity_a,
-                        conductivity_b, 1e-10) / fac)
+                        conductivity_b, 1e-08) / fac)
         g_coo = ss.coo_matrix((np.array(vals),
                                (np.array(row_inds),
                               np.array(col_inds))), shape=(nrow * ncol, nrow * ncol))
@@ -146,6 +146,47 @@ for r in range(neighbour_delta_norms_inv.shape[0]):
             distance if distance > 0 else 0
 
 
+def get_starting_indices(
+    ntracks: int,
+    sbounds: List[float],
+    stype: str,
+    twidth: Tuple[float, float],
+    tres: float
+) -> List[int]:
+    """ get starting indices of eagle tracks """
+
+    if (sbounds[1] < sbounds[0] or sbounds[3] < sbounds[2] or
+        sbounds[0] < 0. or sbounds[2] < 0. or sbounds[1] > twidth[0] or
+            sbounds[3] > twidth[1]):
+        raise ValueError('track_start_region incompatible with terrain_width!')
+    res_km = tres / 1000.
+    xind_max = ceil(twidth[0] / res_km)
+    yind_max = ceil(twidth[1] / res_km)
+    xind_low = min(max(floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
+    xind_upp = max(min(ceil(sbounds[1] / res_km), xind_max - 1), 2)
+    yind_low = min(max(floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
+    yind_upp = max(min(ceil(sbounds[3] / res_km), yind_max - 1), 2)
+    xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
+    base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
+    base_count = base_inds.shape[1]
+    if stype == 'structured':
+        idx = np.round(np.linspace(0, base_count - 1, ntracks % base_count))
+        if ntracks > base_count:
+            start_inds = np.tile(base_inds, (1, ntracks // base_count))
+            start_inds = np.hstack(
+                (start_inds, start_inds[:, idx.astype(int)]))
+        else:
+            start_inds = base_inds[:, idx.astype(int)]
+    elif stype == 'random':
+        idx = np.random.randint(0, base_count, ntracks)
+        start_inds = base_inds[:, idx]
+    else:
+        raise ValueError((f'Model:Invalid sim_start_type of {stype}\n'
+                          'Options: structured, random'))
+    start_inds = start_inds.astype(int)
+    return start_inds[0, :], start_inds[1, :]
+
+
 def get_track_restrictions(dr: int, dc: int):
     """ Returns updated movement probabilities based on previous moves"""
     a_mat = np.zeros((3, 3), dtype=int)
@@ -181,73 +222,106 @@ def move_away_from_boundary(row, col, num_rows, num_cols):
     return new_row, new_col
 
 
-def generate_eagle_track(           #fluid-flow model
-        conductivity: np.ndarray,
-        potential: np.ndarray,
-        start_loc: List[int],
-        dirn_restrict: int,
-        nu_par: float
-):
-    """ Generate an eagle track based on the fluid-flow analogy """
 
-    num_rows, num_cols = conductivity.shape
-    burnin = 200
-    max_moves = num_rows * num_cols
-    dirn = [0, 0]
+def generate_move_probabilities(
+    in_probs: np.ndarray,
+    move_dirn: float,
+    nu_par: float,
+    dir_bool: np.ndarray
+):
+    """ create move probabilities from a 1d array of values"""
+    out_probs = np.asarray(in_probs.copy())
+    if np.isnan(out_probs).any():
+        print('NANs in move probabilities!')
+        out_probs = get_directional_probs(move_dirn * np.pi / 180.)
+    out_probs = out_probs.clip(min=0.)
+    out_probs[4] = 0.
+    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    if np.count_nonzero(out_probs) == 0:
+        out_probs = get_directional_probs(move_dirn * np.pi / 180.)
+        #out_probs = np.random.rand(len(out_probs))
+    out_probs[4] = 0.
+    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    if np.count_nonzero(out_probs) == 0:
+        out_probs = get_directional_probs(move_dirn * np.pi / 180.)
+    out_probs /= np.sum(out_probs)
+    out_probs = np.power(out_probs, nu_par)
+    out_probs /= np.sum(out_probs)
+    return out_probs
+
+
+def get_directional_probs(theta: float) -> np.ndarray:
+    """ Returns a dirction array based on angle"""
+    dir_mat = np.zeros((3, 3))
+    dir_mat[0, :] = [np.cos(np.pi / 4 + theta), np.cos(theta),
+                     np.cos(7 * np.pi / 4 + theta)]
+    dir_mat[1, :] = [np.cos(np.pi / 2 + theta), 0,
+                     np.cos(3 * np.pi / 2 + theta)]
+    dir_mat[2, :] = [np.cos(3 * np.pi / 4 + theta), np.cos(np.pi + theta),
+                     np.cos(5 * np.pi / 4 + theta)]
+    dir_mat[dir_mat < 0.01] = 0.
+    return np.flipud(dir_mat.clip(min=0.)).flatten()
+
+
+def get_harmonic_mean(in_first, in_second):
+    return 2.0 / (1.0 / in_first + 1.0 / in_second)
+
+
+def generate_simulated_tracks(
+        move_dirn: float,
+        start_location: Tuple[int, int],
+        grid_shape: Tuple[int, int],
+        memory_parameter: int = 1,
+        scaling_parameter: float = 1.,
+        updraft_field: Optional[np.ndarray] = None,
+        potential_field: Optional[np.ndarray] = None
+):
+    """ Generate an eagle track """
+
+    num_rows, num_cols = grid_shape
+    burnin_length = int(min(num_rows, num_cols) / 10)
+    max_moves = num_rows / 2 * num_cols / 2
+    direction = [0, 0]
     directions = []
-    directions.append(dirn)
-    position = start_loc.copy()
+    directions.append(direction)
+    position = start_location.copy()
     trajectory = []
     trajectory.append(position)
     k = 0
     while k < max_moves:
         row, col = position
-        if k > burnin:
+        if k > burnin_length:  # move away from boundary in initial steps
             if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
                 break
         else:
             row, col = move_away_from_boundary(row, col, num_rows, num_cols)
-        local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
-        local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
-        local_cond = local_cond.clip(min=1e-5)
-        mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
-        q_diff = local_potential_energy[1, 1] - local_potential_energy
-        if np.count_nonzero(q_diff) == 0:
-            q_diff = 1. + np.random.rand(*q_diff.shape) * 1e-1
-            # print('All potentials same!')
-        q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
-        mov_probs = np.multiply(mean_cond, q_diff)
-        mov_probs = mov_probs.flatten()
-        mov_probs -= np.min(mov_probs)
-        mov_probs[4] = 0.
-        vec_bool = get_track_restrictions(0, 0)
-        for idirn in directions[-dirn_restrict:]:
-            vec_bool = np.logical_and(get_track_restrictions(*idirn), vec_bool)
-        rmov_probs = [x * float(y) for x, y in zip(mov_probs, vec_bool)]
-        if np.sum(rmov_probs) != 0:
-            rmov_probs /= np.sum(rmov_probs)
-            rmov_probs = np.power(rmov_probs, nu_par)
-            rmov_probs /= np.sum(rmov_probs)
-            chosen_index = np.random.choice(
-                range(len(rmov_probs)), p=rmov_probs)
+        move_probs = np.ones_like(neighbour_delta_norms_inv)
+        if updraft_field is not None:
+            local_updraft = updraft_field[row - 1:row + 2, col - 1:col + 2]
+            local_updraft = local_updraft.clip(min=1e-06)
+            mean_change = get_harmonic_mean(local_updraft[1, 1], local_updraft)
+            move_probs = np.multiply(move_probs, mean_change)
         else:
-            # print('Sum(mov_probs) is zero!')
-            if np.sum(mov_probs) != 0:
-                mov_probs /= np.sum(mov_probs)
-                mov_probs = np.power(mov_probs, nu_par)
-                mov_probs /= np.sum(mov_probs)
-                chosen_index = np.random.choice(
-                    range(len(mov_probs)), p=mov_probs)
-            else:
-                chosen_index = np.random.choice(range(len(mov_probs)))
-        # print(neighbour_deltas)
+            move_probs = get_directional_probs(move_dirn * np.pi / 180.)
+        if potential_field is not None:
+            local_potential = potential_field[row - 1:row + 2, col - 1:col + 2]
+            potential_diff = local_potential[1, 1] - local_potential
+            potential_diff = np.multiply(potential_diff,
+                                         neighbour_delta_norms_inv)
+            move_probs = np.multiply(move_probs, potential_diff)
+        move_probs = move_probs.flatten()
+        dir_bool = get_track_restrictions(0, 0)
+        for idirn in directions[-memory_parameter:]:
+            dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+        move_probs = generate_move_probabilities(move_probs, move_dirn,
+                                                 scaling_parameter, dir_bool)
+        chosen_index = np.random.choice(range(len(move_probs)), p=move_probs)
         dirn = neighbour_deltas[chosen_index]
         position = [x + y for x, y in zip([row, col], dirn)]
         trajectory.append(position)
         directions.append(dirn)
         k += 1
     return np.array(trajectory, dtype=np.int16)
-
 
 def generate_heuristic_eagle_track(
         ruleset: str,
@@ -259,9 +333,9 @@ def generate_heuristic_eagle_track(
         res: float, # grid resolution
         windspeed: float, # uniform windspeed - needs to be generalized for wtk 
         winddir: float, #uniform winddir - needs to be generalized for wtk 
-        max_moves: int = 200,  #changed from 1000 to 200 for local movements
+        max_moves: int = 1000,  #change from 1000 to 200 for local movements
         #TODO ask Eliot why next param has to be specified here rather than set to int,
-        random_walk_freq: int=400, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+        random_walk_freq: int=300, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
         random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
         random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
 ):
@@ -313,7 +387,7 @@ def generate_heuristic_eagle_track(
 
     #allow for some individual variation in PAM between eagles
     np.random.seed()
-    PAM = PAM + np.random.uniform(-15., 15.) 
+    PAM = PAM + np.random.uniform(-10., 10.) 
     
     # move through domain
     for imove in range(max_moves):
@@ -400,56 +474,105 @@ def generate_heuristic_eagle_track(
     
     return np.stack([iarr,jarr,karr],axis=-1).astype(np.int16) 
 
-def get_starting_indices(
-    ntracks: int,
-    sbounds: List[float],
-    stype: str,
-    twidth: Tuple[float, float],
-    tres: float
-) -> List[int]:
-    """ get starting indices of eagle tracks """
 
-    if (sbounds[1] < sbounds[0] or sbounds[3] < sbounds[2] or
-        sbounds[0] < 0. or sbounds[2] < 0. or sbounds[1] > twidth[0] or
-            sbounds[3] > twidth[1]):
-        raise ValueError('track_start_region incompatible with terrain_width!')
-    res_km = tres / 1000.
-    xind_max = ceil(twidth[0] / res_km)
-    yind_max = ceil(twidth[1] / res_km)
-    xind_low = min(max(floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
-    xind_upp = max(min(ceil(sbounds[1] / res_km), xind_max - 1), 2)
-    yind_low = min(max(floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
-    yind_upp = max(min(ceil(sbounds[3] / res_km), yind_max - 1), 2)
-    xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
-    base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
-    base_count = base_inds.shape[1]
-    if stype == 'structured':
-        idx = np.round(np.linspace(0, base_count - 1, ntracks % base_count))
-        if ntracks > base_count:
-            start_inds = np.tile(base_inds, (1, ntracks // base_count))
-            start_inds = np.hstack(
-                (start_inds, start_inds[:, idx.astype(int)]))
-        else:
-            start_inds = base_inds[:, idx.astype(int)]
-    elif stype == 'random':
-        idx = np.random.randint(0, base_count, ntracks)
-        start_inds = base_inds[:, idx]
-    else:
-        raise ValueError((f'Model:Invalid sim_start_type of {stype}\n'
-                          'Options: structured, random'))
-    start_inds = start_inds.astype(int)
-    return start_inds[0, :], start_inds[1, :]
+# def generate_eagle_track(
+#         conductivity: np.ndarray,
+#         potential: np.ndarray,
+#         move_dirn: float,
+#         start_loc: List[int],
+#         dirn_restrict: int,
+#         nu_par: float
+# ):
+#     """ Generate an eagle track """
 
-#def compute_presence_counts(
-#    tracks: List[np.ndarray],
-#    gridshape: Tuple[int, int]
-#):
-#    """ Count the number of eagles detected at each grid point """
-#    count_mat = np.zeros(gridshape, dtype=np.int16)
-#    for track in tracks:
-#        for move in track:
-#            count_mat[move[0], move[1]] += 1
-#    return count_mat
+#     num_rows, num_cols = conductivity.shape
+#     burnin = int(min(num_rows, num_cols) / 10)
+#     max_moves = num_rows / 2 * num_cols / 2
+#     dirn = [0, 0]
+#     directions = []
+#     directions.append(dirn)
+#     position = start_loc.copy()
+#     trajectory = []
+#     trajectory.append(position)
+#     k = 0
+#     while k < max_moves:
+#         row, col = position
+#         if k > burnin:
+#             if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
+#                 break
+#         else:
+#             row, col = move_away_from_boundary(row, col, num_rows, num_cols)
+#         local_cond = conductivity[row - 1:row + 2, col - 1:col + 2]
+#         local_potential_energy = potential[row - 1:row + 2, col - 1:col + 2]
+#         local_cond = local_cond.clip(min=1e-06)
+#         mean_cond = 2.0 / (1.0 / local_cond[1, 1] + 1.0 / local_cond)
+#         q_diff = local_potential_energy[1, 1] - local_potential_energy
+#         q_diff = np.multiply(q_diff, neighbour_delta_norms_inv)
+#         mov_probs = np.multiply(mean_cond, q_diff)
+#         mov_probs = mov_probs.flatten()
+#         dir_bool = get_track_restrictions(0, 0)
+#         for idirn in directions[-dirn_restrict:]:
+#             dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+#         mov_probs = generate_move_probabilities(mov_probs, move_dirn,
+#                                                 nu_par, dir_bool)
+#         chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
+#         dirn = neighbour_deltas[chosen_index]
+#         position = [x + y for x, y in zip([row, col], dirn)]
+#         trajectory.append(position)
+#         directions.append(dirn)
+#         k += 1
+#     return np.array(trajectory, dtype=np.int16)
+
+
+# def generate_eagle_track_drw(
+#     grid_shape: Tuple[int, int],
+#     start_loc: List[int],
+#     move_dirn: float,
+#     dirn_restrict: int,
+#     nu_par: float
+# ):
+#     """ Generate an eagle track using directed random walk """
+
+#     num_rows, num_cols = grid_shape
+#     burnin = int(min(num_rows, num_cols) / 10)
+#     max_moves = num_rows / 2 * num_cols / 2
+#     dirn = [0, 0]
+#     directions = []
+#     directions.append(dirn)
+#     position = start_loc.copy()
+#     trajectory = []
+#     trajectory.append(position)
+#     k = 0
+#     while k < max_moves:
+#         row, col = position
+#         if k > burnin:
+#             if not (0 < row < num_rows - 1 and 0 < col < num_cols - 1):
+#                 break
+#         else:
+#             row, col = move_away_from_boundary(row, col, num_rows, num_cols)
+#         dir_bool = get_track_restrictions(0, 0)
+#         mov_probs = np.ones_like(dir_bool)
+#         for idirn in directions[-dirn_restrict:]:
+#             dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
+#         mov_probs = generate_move_probabilities(mov_probs, nu_par, dir_bool)
+#         chosen_index = np.random.choice(range(len(mov_probs)), p=mov_probs)
+#         dirn = neighbour_deltas[chosen_index]
+#         position = [x + y for x, y in zip([row, col], dirn)]
+#         trajectory.append(position)
+#         directions.append(dirn)
+#         k += 1
+#     return np.array(trajectory, dtype=np.int16)
+
+def compute_presence_counts(
+    tracks: List[np.ndarray],
+    gridshape: Tuple[int, int]
+):
+    """ Count the number of eagles detected at each grid point """
+    count_mat = np.zeros(gridshape, dtype=np.int16)
+    for track in tracks:
+        for move in track:
+            count_mat[move[0], move[1]] += 1
+    return count_mat
 
 
 def compute_smooth_presence_counts(
@@ -457,14 +580,10 @@ def compute_smooth_presence_counts(
     gridshape: Tuple[int, int],
     radius: float
 ) -> np.ndarray:
+    """ Smothens a matrix using 2D covolution of the circular kernel matrix
+    with the given matrix """
 
-    """ Count the number of eagles detected at each grid point """
-    count_mat = np.zeros(gridshape, dtype=np.int16)
-    for track in tracks:
-        for move in track:
-            count_mat[move[0], move[1]] += 1
-
-    """ Smooth count matrix using 2D convolution of the circular kernel matrix"""
+    count_mat = compute_presence_counts(tracks, gridshape)
     krad = int(radius)
     kernel = np.zeros((2 * krad + 1, 2 * krad + 1))
     y, x = np.ogrid[-krad:krad + 1, -krad:krad + 1]
@@ -472,7 +591,7 @@ def compute_smooth_presence_counts(
     kernel[mask2] = 1
     kernel /= np.sum(kernel)
     presence_prob = ssg.convolve2d(count_mat, kernel, mode='same')
-    #presence_prob /= np.amax(presence_prob)
+    # presence_prob /= np.amax(presence_prob)
     return presence_prob.astype(np.float32)
 
 def compute_smooth_presence_counts_HSSRS(
@@ -495,7 +614,7 @@ def compute_smooth_presence_counts_HSSRS(
     kernel[mask2] = 1
     kernel /= np.sum(kernel)
     presence_prob = ssg.convolve2d(count_mat, kernel, mode='same')
-    #presence_prob /= np.amax(presence_prob)
+    # presence_prob /= np.amax(presence_prob)
     return presence_prob.astype(np.float32)
     
 def harmonic_mean(aval: float, bval: float, minval: float = 1e-10) -> float:

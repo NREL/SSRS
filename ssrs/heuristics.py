@@ -11,7 +11,8 @@ See the actions module for available action functions and descriptions of their
 action parameters.
 
 """
-from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead, local_moves,look_ahead)
+from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead,look_ahead)
+from .actions_local import (local_moves)
 
 rulesets = {}
 

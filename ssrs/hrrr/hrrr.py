@@ -172,7 +172,7 @@ class HRRR:
 
     def wind_velocity_direction_at_altitude(
         self,
-        southwest_lonlat: Tuple[float, float],
+        center_lonlat: Tuple[float, float],
         ground_level_m: float,
         height_above_ground_m: float,
         extent_km_lat=3.0,
@@ -266,9 +266,9 @@ class HRRR:
             warnings.simplefilter('ignore')
             uv_grd = self.get_xarray_for_regex(grib_field, remove_grib=remove_grib)
 
-        mask = self.mask_at_coordinates(
+        mask = self.centered_mask_at_coordinates(
             uv_grd,
-            southwest_lonlat=southwest_lonlat,
+            center_lonlat=center_lonlat,
             extent_km_lat=extent_km_lat,
             extent_km_lon=extent_km_lon,
             fringe_deg_lat=fringe_deg_lat,
@@ -282,6 +282,16 @@ class HRRR:
         lons = np.array(lons_data_array).flatten()
         lats = lats[~np.isnan(lats)]
         lons = lons[~np.isnan(lons)]
+
+        # Transform the lat/lon to x, y
+        xs, ys = raster.transform_coordinates(
+            in_crs='EPSG:4326',
+            out_crs='ESRI:102008',
+            in_x=lons,
+            in_y=lats
+        )
+
+        # bilinear interpolation in scipy
 
         # Calculate the number of points that were found
         n = float(mask.sum())
@@ -305,6 +315,8 @@ class HRRR:
             'direction_deg': direction_deg,
             'lats': lats,
             'lons': lons,
+            'xs': xs,
+            'ys': ys,
             'grib_field': grib_field,
             'n': n
         }
@@ -341,6 +353,76 @@ class HRRR:
 
         return data
 
+    @staticmethod
+    def centered_mask_at_coordinates(
+        data,
+        center_lonlat,
+        extent_km_lat=3.0,
+        extent_km_lon=3.0, 
+        fringe_deg_lat=0.15, 
+        fringe_deg_lon=0.9
+    ):
+        """
+        Parameters
+        ----------
+        data: xarray.Dataset
+            The dataset being masked.
+
+        center_lonlat: Tuple[float, float]
+            The center of the latitude and longitude to retrieve.
+
+        extent_km_lat: float
+            The extent of the mask in the latitude direction in units of
+            kilometers.
+
+        extent_km_lon: float
+            The extent of the mask in the longitude direction in units of
+            kilometers.
+
+        fringe_deg_lat: float
+            The number of degrees in the latitude directionadded to the 
+            edges of the extent in units of degrees.
+
+        fringe_deg_lon: float
+            The number of degrees in the longitude direction to add to edges
+            of the extent in degrees.
+
+        Returns
+        -------
+        xarray.core.dataarray.DataArray
+            The mask to be used with the coordinates of the xarray dataset.
+        """
+
+        # Convert extent in meters to degrees
+        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
+        radius_of_earth_km = 6371
+        extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
+        extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
+
+        # Extract lon and lat
+        center_lon, center_lat = center_lonlat
+
+        # # longitude in degrees East (unusual; for GRIB)
+        # min_lat = center_lat - fringe_deg_lat
+        # min_lon = 180 - center_lon - fringe_deg_lon
+        # max_lat = min_lat + extent_deg_lat + fringe_deg_lat
+        # max_lon = min_lon + extent_deg_lon + fringe_deg_lon
+
+        # longitude in degrees East (unusual; for GRIB)
+        min_lat = center_lat - (extent_deg_lat / 2.0) - (fringe_deg_lat / 2.0)
+        max_lat = center_lat + (extent_deg_lat / 2.0) + (fringe_deg_lat / 2.0)
+        min_lon = 180 - center_lon - (extent_deg_lon / 2.0) - (fringe_deg_lon / 2.0)
+        max_lon = 180 - center_lon + (extent_deg_lon / 2.0) + (fringe_deg_lon / 2.0)
+
+        # Construct the mask
+        latc = data.coords['latitude']
+        lonc = data.coords['longitude']
+        latc_mask = (latc >= min_lat) & (latc <= max_lat)
+        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
+        mask = latc_mask & lonc_mask
+
+        return mask
+    
     @staticmethod
     def mask_at_coordinates(
         data,

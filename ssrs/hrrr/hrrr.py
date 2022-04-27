@@ -208,8 +208,8 @@ class HRRR:
 
         Parameters
         ----------
-        southwest_lonlat: Tuple[float, float]
-            The southwest corner of the area to query.
+        center_lonlat: Tuple[float, float]
+            Center of the area to query.
         
         ground_level_m: float
             The height of the ground above sea level in meters at the point
@@ -266,6 +266,16 @@ class HRRR:
             warnings.simplefilter('ignore')
             uv_grd = self.get_xarray_for_regex(grib_field, remove_grib=remove_grib)
 
+        # Find x, y of the center location given
+        center_lon, center_lat = center_lonlat
+        center_x, center_y = raster.transform_coordinates(
+            in_crs='EPSG:4326',
+            out_crs='ESRI:102008',
+            in_x=center_lon,
+            in_y=center_lat
+        )
+
+        # Create the selection mask
         mask = self.centered_mask_at_coordinates(
             uv_grd,
             center_lonlat=center_lonlat,
@@ -275,7 +285,7 @@ class HRRR:
             fringe_deg_lon=fringe_deg_lon
         )
 
-        # Extract that lats and lons that were found
+        # Extract that lats and lons that were found in the mask
         lats_data_array = uv_grd.coords['latitude'].where(mask)
         lons_data_array = uv_grd.coords['longitude'].where(mask)
         lats = np.array(lats_data_array).flatten()
@@ -283,7 +293,13 @@ class HRRR:
         lats = lats[~np.isnan(lats)]
         lons = lons[~np.isnan(lons)]
 
-        # Transform the lat/lon to x, y
+        # Transform lons back to degrees west. As they come out of the
+        # GRIB file, they are in degrees east.
+
+        # lats = lats + 180
+        # lons = lons + 180
+
+        # Transform the lats/lons to x, y
         xs, ys = raster.transform_coordinates(
             in_crs='EPSG:4326',
             out_crs='ESRI:102008',
@@ -313,6 +329,8 @@ class HRRR:
         return {
             'speed': speed,
             'direction_deg': direction_deg,
+            'center_x': center_x,
+            'center_y': center_y,
             'lats': lats,
             'lons': lons,
             'xs': xs,

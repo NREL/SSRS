@@ -22,6 +22,9 @@ The default arguments (*args) include:
     Principle axis of migration, clockwise from north [deg]
 * windspeed: float
 * winddir: float
+* threshold: float, minimum vertical air velocity to sustain flight, varies with species
+* lookaheaddist: float, distance that an eagle can see ahead and assess potential sources of lift
+* maxx, maxxy: int, size of domain
 * wo_interp: function
     Orographic updraft field w_o(x,y) that can be evaluated at an
     arbitrary location [m/s]

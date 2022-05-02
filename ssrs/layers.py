@@ -192,8 +192,8 @@ def compute_random_thermals(
     """ Returns field of smoothed random thermals from lognornal dist"""
     ysize, xsize = aspect.shape
     wt_init = np.zeros([ysize, xsize])
-    border_x = int(0.1 * xsize)
-    border_y = int(0.1 * ysize)
+    border_x = int(0.05 * xsize)
+    border_y = int(0.05 * ysize)
     # border with no thermals used to reduce problems of circling out of the domain
     for i in range(border_y, ysize - border_y):
         for j in range(border_x, xsize - border_x):
@@ -213,7 +213,25 @@ def compute_random_thermals(
 
     return wt
 
-
+#def compute_terrain_linearity_index(
+#    elevation: np.ndarray,
+#    aspect: np.ndarray,
+#    min_updraft_val: float = 0.
+#) -> np.ndarray:
+#    """ UNFINISHED Returns a measure of terrain linearity based on contiguous regions of similar aspect """
+#    ysize, xsize = aspect.shape
+#    for m in range(1, ysize):
+#        for n in range(1, xsize):
+#            count[m,n]=0.
+#            for i in range(m-1,m+1)
+#                for j in range(n-1,n+1)
+#                    if abs(aspect[i,j]-aspect[m,n])<5:
+#                        count[m,n]=count[m,n]+1
+#   
+#    return tli
+        
+        
+        
 # def compute_thermals(
 #     grid_size: Tuple[int, int],
 #     res: float,

@@ -8,27 +8,29 @@ config_base = Config(
     run_name='centralPA1_fall_testfullmodel',
     sim_movement='heuristics',
     movement_model='heuristics',
+    movement_ruleset='step_ahead_look_ahead', # dir_random_walk,step_ahead_drw,step_ahead_look_ahead
     
     out_dir='./output',
     max_cores=16,
     
-    movement_ruleset='step_ahead_look_ahead', # dir_random_walk,step_ahead_drw,step_ahead_look_ahead,lookahead,mixed
     random_walk_freq=300, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
     random_walk_step_range=(30,60), # when a random walk does occur, the number of random steps will occur in this range
-    look_ahead_dist = 2000.0, #distance outward that bird will scan for strong updrafts
+    
+    look_ahead_dist = 3000.0, #distance outward (m) that bird will scan for strong updrafts
+    updraft_threshold=0.85,  
     
     thermals_realization_count=10,
-    thermal_intensity_scale=2.5, #1 gives weak random field, 3 gives v strong random field    
-    updraft_threshold=0.85,
+    thermal_intensity_scale=2, #1 gives weak random field, 3 gives v strong random field    
     
     southwest_lonlat=(-78.1, 40.35),  # (lon, lat) for southwest pt, no integers!
     region_width_km=(30., 40.),  # terrain width (xwidth, ywidth) in km
     resolution=30., # meters
     
-    track_direction=180., #202.5,
+    track_direction=202.5, #202.5,
     track_start_region=(1, 29, 39.5, 39.5),  #xmin, xmax, ymin, ymax
     #track_start_region=(12, 18, 15, 25),  #xmin, xmax, ymin, ymax. placed centrally for random walk case
-    track_count=100,  #per thermals realization
+    track_start_type='structured',  # structured, random
+    track_count=50,  #per thermals realization
     
     # plotting related
     fig_height=6.,
@@ -39,7 +41,7 @@ config_uniform_north = replace(
     config_base,
     sim_mode='uniform',
     uniform_winddirn=315.,
-    uniform_windspeed=6.,
+    uniform_windspeed=8.,
 )
 
 
@@ -78,9 +80,12 @@ if __name__ == '__main__':
 #            os.rename(sim.mode_data_dir, f'{sim.mode_data_dir}_{j}')
         
         sim = Simulator(cfg)
-        sim.simulate_tracks_HSSRS()
+
         sim.plot_terrain_features()
+        sim.plot_orographic_updrafts()
+        sim.plot_thermal_updrafts()
         #sim.plot_wtk_layers()
         #sim.plot_directional_potentials()
+        sim.simulate_tracks_HSSRS()
         sim.plot_simulated_tracks_HSSRS()
         sim.plot_presence_map_HSSRS()

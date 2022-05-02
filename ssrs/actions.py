@@ -43,8 +43,8 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
 
-def random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                step=50.0,halfsector=90.0):
+def random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,theshold,lookaheaddist,maxx,maxy,
+                wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=90.0):
     """Perform a random movement, neglecting the PAM
 
     Notes:
@@ -72,8 +72,8 @@ def random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,ma
     return cur_pos + delta,step_wt
 
 
-def dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                step=50.0,halfsector=15.0):
+def dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=15.0):
     cur_pos = trajectory[-1]
     """Perform a random movement along the principle axis of migration (PAM)
 
@@ -92,8 +92,9 @@ def dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,max
     
     return cur_pos + delta,step_wt
 
-def step_ahead_drw(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                step=50.0,dist=50.0,look_ahead_dist=2000.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
+def step_ahead_drw(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
+                maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
         If thermal lift is detected, go to thermal soar and glide movement
         If no updraft above threshold, do a directed random walk step
@@ -114,7 +115,7 @@ def step_ahead_drw(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx
         step_wt=0.5  #entering thermal
         trajectory.append(new_pos)
         track_weight.append(step_wt)
-        new_pos,step_wt = thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,
+        new_pos,step_wt = thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                         wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0,
         uniform_winddirn=uniform_winddirn)
     
@@ -147,14 +148,13 @@ def step_ahead_drw(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx
         step_wt=1.  #using orographic lift
     else:
         # no usable updraft found adjacent, do a directed random walk step
-        new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,
-                                  wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                                  step=step,halfsector=15.0)
+        new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                                  wo_interp,wo_sm_interp,wt_interp,elev_interp,step=step,halfsector=15.0)
     return new_pos,step_wt
 
 
-def step_ahead_look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                    step=50.0,dist=50.0,look_ahead_dist=2000.0,halfsector=30,Nsearch=10,threshold=0.85,sigma=0.0):
+def step_ahead_look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                    wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values, but
         If thermal lift is detected, go to thermal soar and glide movement
         If no useable updraft nearby, go to the look-ahead movement
@@ -176,7 +176,7 @@ def step_ahead_look_ahead(trajectory,directions,track_weight,PAM,windspeed,windd
         step_wt=0.5  #entering thermal
         trajectory.append(new_pos)
         track_weight.append(step_wt)
-        new_pos,step_wt=thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,
+        new_pos,step_wt=thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                     wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0)
     
     elif wo_max1 > threshold and (elev_wo_max1 > elev_wo_max2):
@@ -209,70 +209,13 @@ def step_ahead_look_ahead(trajectory,directions,track_weight,PAM,windspeed,windd
     else:
         # no usable updraft found adjacent, look ahead for strong updraft region
         # TODO: should we add secondary search parameters as kwargs?
-        new_pos,step_wt = look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,
-                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=step,look_ahead_dist=look_ahead_dist,halfsector=45,Nsearch=10,threshold=threshold,sigma=0.0)
+        new_pos,step_wt = look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=step,halfsector=45,Nsearch=10,sigma=0.0)
     
     return new_pos,step_wt
 
-def look_ahead_old(trajectory,directions,PAM,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-               step=50.0,dist=100.0,halfsector=45.0,Nsearch=5,threshold=0.85,sigma=0.0):
-    """Perform a movement based on some knowledge of the flowfield ahead
-    searching along an arc of radius dist
-
-    **DEPRECATED** -- use look_ahead instead
-
-    Notes:
-    - Currently, only information from the previous position is used.
-
-    Additional parameters
-    ---------------------
-    step: float
-        Distance [m] to move in one step
-    dist: float
-        Search distance [m] to look ahead
-    halfsector: float
-        Search points are along an arc, spanning the previous direction
-        of movement +/- halfsector [deg]
-    Nsearch: int
-        Number of search points along the lookahead arc
-    threshold: float
-        Updraft strength [m/s] for which the movement is influenced
-    sigma: float
-        Uncertainty [deg] in the resulting movement direction, if the
-        updraft threshold is exceeded in the lookahead arc
-    """
-    cur_pos = trajectory[-1]
-    last_dir = directions[-1]
-    ref_ang = np.arctan2(last_dir[1],last_dir[0]) # previous movement angle (counterclockwise from +x)
-    # search for usable updrafts
-    ang0 = ref_ang - np.radians(halfsector)
-    ang1 = ref_ang + np.radians(halfsector)
-    search_arc = np.linspace(ang0, ang1, Nsearch)
-    search_x = cur_pos[0] + dist * np.cos(search_arc)
-    search_y = cur_pos[1] + dist * np.sin(search_arc)
-    check_w = wo_interp(search_x, search_y, grid=False)
-    w_max = np.max(check_w)
-    # decide what to do with search information
-    if w_max > threshold:
-        # go towards max updraft
-        idxmax = np.argmax(w_max)
-        best_dir = search_arc[idxmax]
-        if sigma > 0:
-            # add additional uncertainty
-            best_dir = np.random.normal(best_dir, scale=np.radians(sigma))
-        delta = step * np.array([np.cos(best_dir),np.sin(best_dir)])
-        new_pos = cur_pos + delta
-    else:
-        # no usable updraft found, do a random walk
-        new_pos = dir_random_walk(trajectory,directions,PAM,
-                                  wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                                  step=step,halfsector=halfsector)
-    return new_pos
-
-
-def look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                  step=50.0,look_ahead_dist=1000.0,rangedelta=250.0,halfsector=45.0,
-                  Nsearch=5,threshold=0.85,sigma=0.0):
+def look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,rangedelta=250.0,halfsector=45.0,Nsearch=5,sigma=0.0):
     """Perform a movement based on sampling the updraft field ahead,
     searching within a sector out to radius `dist` in
     radial increments of `rangedelta`
@@ -281,8 +224,8 @@ def look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,max
     cur_pos = trajectory[-1]
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
            
-    num = int(look_ahead_dist/rangedelta)
-    assert num > 0, f'look_ahead_dist={look_ahead_dist} should be greater than rangedelta={rangedelta}'
+    num = int(lookaheaddist/rangedelta)
+    assert num > 0, f'look_ahead_distance={look_ahead_dist} should be greater than rangedelta={rangedelta}'
     wo_best = np.zeros(num,dtype=float)
     loc_wobest = np.zeros(num,dtype=float)
     dir_wobest = np.zeros(num,dtype=float)
@@ -292,7 +235,7 @@ def look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,max
     elev_wobest = np.zeros(num,dtype=float) 
     rad_dist = np.zeros(num,dtype=float)
 
-    for k,radius in enumerate(np.arange(rangedelta, look_ahead_dist, rangedelta)):
+    for k,radius in enumerate(np.arange(rangedelta, lookaheaddist, rangedelta)):
         # search sector of smoothed wo and wt in successive arcs with rangedelta
         # increment in radius
         numsearchlocs = int(radius/25.)
@@ -360,8 +303,8 @@ def look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,max
         #new_pos = []
         #step_wt=[]
         for _ in range(randy2):
-            new_pos,step_wt =dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                                step=step,halfsector=15.0)
+            new_pos,step_wt =dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
+                maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=step,halfsector=15.0)
             if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
                 break
             trajectory.append(new_pos)
@@ -430,8 +373,8 @@ def searcharc_w(trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_
     return wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2
 
 
-def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                        step=50.0,halfsector=180.0,threshold=0.85):
+def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0):
     """Three part movement is taken whenever thermal lift > threshold is encountered
             1. search for center of thermal using the searcharc() function
             2. circle and drift downwind for specified number of times (4 to 12 times)
@@ -484,6 +427,7 @@ def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,
     #circlesteps=np.random.randint(32, 96) #number of steps circling
     soar_rad=np.random.uniform(30, 100) #soaring radius
 
+    #TODO this assumes a constant windfield everywhere. Need to code for WTK with u(x,y) and v(x,y)
     uwind=windspeed*np.cos(np.radians(270.-winddir))
     vwind=windspeed*np.sin(np.radians(270.-winddir))
 
@@ -499,7 +443,7 @@ def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,
            break
         directions.append(delta)
         trajectory.append(new_pos)
-        circle_wt=0.5*np.exp(-2*float(i)/float(circlesteps)) #we assume thermalling eagle risk decays rapidly as it circles up
+        circle_wt=0.5*np.exp(-1*float(i)/float(circlesteps)) #we assume thermalling eagle risk decays rapidly as it circles up
         step_wt=circle_wt
         track_weight.append(step_wt)
         cur_pos=new_pos
@@ -512,8 +456,8 @@ def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,
     #glide using the DRW function
     #new_pos = []
     for i in range(glidesteps):
-        new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                            step=step,halfsector=5.)      
+        new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
+                            maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=step,halfsector=5.)      
         glide_wt=0.5*float(i)/float(glidesteps) #note that weighting increases linearly from 0 to 0.5 as end of glide is reached
         step_wt=glide_wt
         delta = new_pos - trajectory[-1]

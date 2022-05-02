@@ -230,8 +230,6 @@ class Simulator(Config):
             fname = self._get_orograph_fname(case_id, self.mode_data_dir)
             np.save(f'{fname}.npy', orograph.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
-
-#### THIS PART HERE with real_id, see also lines 318 and 502
     
     def compute_thermal_updrafts(self, case_id: str):
         """ Computes updrafts for the particular case """
@@ -562,6 +560,8 @@ class Simulator(Config):
                             self.resolution,
                             self.uniform_windspeed,  #TODO needs to be generalized to wind from WTK
                             self.uniform_winddirn,   #TODO needs to be generalized to wind from WTK
+                            self.updraft_threshold,
+                            self.look_ahead_dist,
                             **hssrs_kwargs
                         ), starting_locs_PAM)
             
@@ -697,40 +697,59 @@ class Simulator(Config):
                 fname = f'{self._get_id_string(case_id, real_id)}_updraft.png'
                 fpath = os.path.join(self.mode_fig_dir, fname)
                 self.save_fig(fig, fpath, show)
-
-    def plot_thermal_updrafts(self, plot_turbs=True, show=False) -> None:
-        """ Plot estimated thermal updrafts """
-        for case_id in self.case_ids:
-            thermal = np.load(self._get_thermal_fpath(case_id))
-            fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(6, int(round(np.mean(thermal)))), 6)
-            curm = axs.imshow(thermal, cmap='viridis',
-                              extent=self.extent, origin='lower',
-                              vmin=0, vmax=maxval)
-            cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-            cbar.set_label('Thermal updraft (m/s)')
-            if plot_turbs:
-                self.plot_turbine_locations(axs)
-            fname = os.path.join(self.mode_fig_dir, f'{case_id}_thermal.png')
-            self.save_fig(fig, fname, show)
     
-    def plot_updrafts(self, plot_turbs=True, show=False) -> None:
+    def plot_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
         """ Plot estimated thermal updrafts """
         for case_id in self.case_ids:
             orograph = np.load(self._get_orograph_fpath(case_id))
-            thermal = np.load(self._get_thermal_fpath(case_id))
-            sum=orograph+thermal
             fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(5, int(round(np.mean(thermal)))), 5)
-            curm = axs.imshow(sum, cmap='viridis',
+            maxval = min(max(2, int(round(np.mean(orograph)))), 2)
+            curm = axs.imshow(orograph, cmap='viridis',
                               extent=self.extent, origin='lower',
                               vmin=0, vmax=maxval)
             cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-            cbar.set_label('Wo + Wt (m/s)')
+            cbar.set_label('Orographic updraft velocity (m/s)')
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            fname = os.path.join(self.mode_fig_dir, f'{case_id}_wtot.png')
+            fname = os.path.join(self.mode_fig_dir, f'{case_id}_orographic_updrafts.png')
             self.save_fig(fig, fname, show)
+    
+    def plot_thermal_updrafts(self, plot_turbs=True, show=False) -> None:
+        """ Plot estimated thermal updrafts """
+        for case_id in self.case_ids:
+            for real_id in range(self.thermals_realization_count):
+                fname_thermal = self._get_thermal_fname(case_id, real_id, self.mode_data_dir)
+                thermal=np.load(f'{fname_thermal}.npy')
+                fig, axs = plt.subplots(figsize=self.fig_size)
+                maxval = min(max(6, int(round(np.mean(thermal)))), 6)
+                curm = axs.imshow(thermal, cmap='viridis',
+                              extent=self.extent, origin='lower',
+                              vmin=0, vmax=maxval)
+                cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+                cbar.set_label('Thermal updraft velocity (m/s)')
+                if plot_turbs:
+                    self.plot_turbine_locations(axs)
+                fname = f'{self._get_id_string(case_id, real_id)}_thermal_updrafts.png'
+                fpath = os.path.join(self.mode_fig_dir, fname)
+                self.save_fig(fig, fpath, show)
+    
+#    def plot_updrafts(self, plot_turbs=True, show=False) -> None:
+#        """ Plot estimated thermal updrafts """
+#        for case_id in self.case_ids:
+#            orograph = np.load(self._get_orograph_fpath(case_id))
+#            thermal = np.load(self._get_thermal_fpath(case_id))
+#            sum=orograph+thermal
+#            fig, axs = plt.subplots(figsize=self.fig_size)
+#            maxval = min(max(5, int(round(np.mean(thermal)))), 5)
+#            curm = axs.imshow(sum, cmap='viridis',
+#                              extent=self.extent, origin='lower',
+#                              vmin=0, vmax=maxval)
+#            cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+#            cbar.set_label('Wo + Wt (m/s)')
+#            if plot_turbs:
+#                self.plot_turbine_locations(axs)
+#            fname = os.path.join(self.mode_fig_dir, f'{case_id}_wtot.png')
+#            self.save_fig(fig, fname, show)
 
     def plot_sm_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
         """ Plot orographic updrafts """
@@ -794,13 +813,14 @@ class Simulator(Config):
         axs.set_ylim([self.extent[2], self.extent[3]])
         return fig, axs
 
-    def _plot_presence_HSSRS(self, in_prob, in_val, plot_turbs, wfarm_level=False):
+    def _plot_presence_HSSRS(self, in_prob, countmax, in_val, plot_turbs, wfarm_level=False):
         """Plots a presence density """
         fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=1.0))
+                       vmin=0.0,vmax=self.track_count*self.thermals_realization_count/100.) #using absolute scale = # birds/100
+                       #norm=LogNorm(vmin=0, vmax=self.track_count*self.thermals_realization_count/100.)) #note changed vmax
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:
@@ -812,11 +832,12 @@ class Simulator(Config):
         
         xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
         ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
-        axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
-            '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d\nn thermal realizations = %3d'
+        axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km) = %2.1f'\
+            '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'\
+            '\nn thermal realizations = %3d\nmax_count/n_tracks = %4.2f'
             % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
             self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,
-            self.track_count*self.thermals_realization_count,self.thermals_realization_count),
+            self.track_count*self.thermals_realization_count,self.thermals_realization_count,100.*countmax/(self.track_count*self.thermals_realization_count)),
             fontsize='xx-small',color='black')
             
         return fig, axs
@@ -845,22 +866,23 @@ class Simulator(Config):
                     tracks = pickle.load(fobj)
                 prprob = compute_smooth_presence_counts_HSSRS(
                     tracks, self.gridsize, int(round(krad)))
-                prprob /= np.amax(prprob)
+                #prprob /= np.amax(prprob)
                 case_prob += prprob
                 if plot_all:
                     fig, _ = self._plot_presence_HSSRS(prprob, minval, plot_turbs)
                     fname = self._get_presence_fname(case_id, real_id,
                                                      self.mode_fig_dir)
                     self.save_fig(fig, f'{fname}.png', show)
-            print('Max presence prob =',np.amax(case_prob))
-            case_prob /= np.amax(case_prob)
+            #case_prob /= np.amax(case_prob)
             summary_prob += case_prob
-            fig, _ = self._plot_presence_HSSRS(case_prob, minval, plot_turbs)
+            print('Max summary presence count =',np.amax(summary_prob))
+            countmax=np.amax(summary_prob)
+            fig, _ = self._plot_presence_HSSRS(case_prob, countmax, minval, plot_turbs)
             fname = f'{self._get_id_string(case_id)}_presence.png'
             fpath = os.path.join(self.mode_fig_dir, fname)
             self.save_fig(fig, fpath, show)
-        summary_prob /= np.amax(summary_prob)
-        
+        #summary_prob /= np.amax(summary_prob)
+
         fname = os.path.join(self.mode_data_dir, 'summary_presence')
         np.save(f'{fname}.npy', summary_prob.astype(np.float32))
         if len(self.case_ids) > 1:

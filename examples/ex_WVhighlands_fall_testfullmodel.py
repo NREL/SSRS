@@ -29,6 +29,7 @@ config_base = Config(
     track_direction=180., #202.5,
     track_start_region=(1, 29, 39.5, 39.5),  #xmin, xmax, ymin, ymax
     #track_start_region=(12, 18, 15, 25),  #xmin, xmax, ymin, ymax. placed centrally for random walk case
+    track_start_type='random',  # structured, random
     track_count=100,  #per thermals realization
     
     # plotting related
@@ -81,6 +82,7 @@ if __name__ == '__main__':
         sim = Simulator(cfg)
         sim.simulate_tracks_HSSRS()
         sim.plot_terrain_features()
+        sim.plot_updrafts()
         #sim.plot_wtk_layers()
         #sim.plot_directional_potentials()
         sim.plot_simulated_tracks_HSSRS()

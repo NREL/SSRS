@@ -6,7 +6,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
                     step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
                     
     """
-        ***UNFINISHED CODE*** intent is to perform a sequence of moves based on lift and then update move_dir
+    perform a sequence of moves based on updraft fields, then update move_dir and repeat
                     
     """
     cur_pos = trajectory[-1]
@@ -14,7 +14,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
  
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
 
-    move_dir=last_move_dir+np.random.uniform(-135,+135)
+    move_dir=last_move_dir+np.random.uniform(-90,+90)
     if move_dir < 0:
         move_dir=360.+move_dir
     if move_dir > 360:
@@ -161,6 +161,18 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     soar_rad=np.random.uniform(30, 100) #soaring radius
 
     #TODO this assumes a constant windfield everywhere. Need to code for WTK with u(x,y) and v(x,y)
+    
+    #allow for some random variation in uniform wind speed and direction
+    v=windspeed
+    alpha=winddir
+    np.random.seed()
+    windspeed = windspeed + np.random.uniform(-0.1*v,0.1*v)
+    winddir = winddir + np.random.uniform(-10,10)
+    if winddir < 0:
+        winddir=360.+winddir
+    if winddir > 360:
+        winddir=winddir-360.
+        
     uwind=windspeed*np.cos(np.radians(270.-winddir))
     vwind=windspeed*np.sin(np.radians(270.-winddir))
 

@@ -444,7 +444,7 @@ def generate_heuristic_eagle_track(
             except IndexError:
                 kwargs = {}
             new_pos, step_wt = action(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
-                wo_interp,wo_sm_interp,wt_interp,elev_interp,**kwargs) 
+                wo_interp,wo_sm_interp,wt_interp,elev_interp) 
         
         # TODO: can do some validation here (to accept/reject new_pos)
 

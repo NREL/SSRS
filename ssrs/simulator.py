@@ -622,7 +622,7 @@ class Simulator(Config):
     def plot_simulated_tracks_HSSRS(self, plot_turbs=True, show=False) -> None:
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
-        lwidth = 0.15 if self.track_count > 251 else 0.4
+        lwidth = 0.3 if self.track_count > 251 else 0.6
         elevation = self.get_terrain_elevation()
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
@@ -636,7 +636,7 @@ class Simulator(Config):
                     tracks = pickle.load(fobj)
                     for itrack in tracks:
                         axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
-                                 markersize=1.0)
+                                 markersize=2.0)
                         axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
                                  '-r', linewidth=lwidth, alpha=0.5)
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
@@ -652,7 +652,7 @@ class Simulator(Config):
                 rect = mpatches.Rectangle((left, bottom), width * 1000.,
                                           hght * 1000., alpha=0.2,
                                           edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                #axs.add_patch(rect)
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 

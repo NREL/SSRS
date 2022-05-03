@@ -209,7 +209,7 @@ class HRRR:
         Parameters
         ----------
         center_lonlat: Tuple[float, float]
-            Center of the area to query.
+            Center of the area to query. Longitude is in degrees west.
         
         ground_level_m: float
             The height of the ground above sea level in meters at the point
@@ -246,8 +246,9 @@ class HRRR:
             number of points the values were averaged over, and the grib
             field/message used to find the u and v values.
         """
-        nearest_pressures = self.nearest_pressures(ground_level_m)
-        closest_pressure_above = nearest_pressures['closest_pressure_above']
+
+        # Determine the altitude to query the HRRR file using rules
+        # explained in the docstring.
 
         if height_above_ground_m > 0.0 and height_above_ground_m < 45.0:
             grib_field = f'(U|V)GRD:10 m above ground:anl'
@@ -258,9 +259,14 @@ class HRRR:
             u_data_var = 'u'
             v_data_var = 'v'
         else:
+            nearest_pressures = self.nearest_pressures(ground_level_m)
+            closest_pressure_above = nearest_pressures['closest_pressure_above']
             grib_field = f'(U|V)GRD:{closest_pressure_above} mb'
             u_data_var = 'u'
             v_data_var = 'v'
+
+        # Read the cached or download a new GRIB file. Catch warnings that Herbie
+        # gernates when finding the GRIB data.
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -275,7 +281,10 @@ class HRRR:
             in_y=center_lat
         )
 
-        # Create the selection mask
+        # Create the selection mask. Note: longitude in the mask is
+        # converted to degrees east when the mask is created because
+        # the underlying GRB file is stored with degrees east.
+
         mask = self.centered_mask_at_coordinates(
             uv_grd,
             center_lonlat=center_lonlat,
@@ -293,17 +302,21 @@ class HRRR:
         lats = lats[~np.isnan(lats)]
         lons = lons[~np.isnan(lons)]
 
-        # Transform lons back to degrees west. As they come out of the
-        # GRIB file, they are in degrees east.
+        # Remember that the longitude arrays are in degrees east.
+        # But the conversion to x and y with raster.transform_coordinates
+        # requires degrees west. Convert the longitude back to degrees
+        # west here.
 
-        # lats = lats + 180
-        # lons = lons + 180
+        lons = lons - 180.0
+
+        # Find x, y of the center location given
+        center_lon, center_lat = center_lonlat
 
         # Transform the lats/lons to x, y
         xs, ys = raster.transform_coordinates(
             in_crs='EPSG:4326',
             out_crs='ESRI:102008',
-            in_x=lons,
+            in_x=lons * -1.0,
             in_y=lats
         )
 
@@ -329,6 +342,8 @@ class HRRR:
         return {
             'speed': speed,
             'direction_deg': direction_deg,
+            'center_lat': center_lat,
+            'center_lon': center_lon,
             'center_x': center_x,
             'center_y': center_y,
             'lats': lats,

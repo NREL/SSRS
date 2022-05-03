@@ -1,4 +1,4 @@
-from math import sqrt, atan2, pi, atan
+from math import sqrt, atan2, pi
 from collections import OrderedDict
 from logging import warning
 from typing import Tuple, Dict
@@ -7,6 +7,7 @@ import warnings
 from herbie.archive import Herbie
 import numpy as np
 import xarray as xr
+from scipy.interpolate import interp2d
 
 from ssrs import raster
 
@@ -326,18 +327,20 @@ class HRRR:
         n = float(mask.sum())
 
         # Mask the u and v values
-        u_points = uv_grd[u_data_var].where(mask)
-        v_points = uv_grd[v_data_var].where(mask)
-        
-        # Average u, v values
-        u = float(u_points.sum()) / n
-        v = float(v_points.sum()) / n
+        us = uv_grd[u_data_var].where(mask, drop=True).values.flatten()
+        vs = uv_grd[v_data_var].where(mask, drop=True).values.flatten()
+        us = us[~np.isnan(us)]
+        vs = vs[~np.isnan(vs)]
+
+        # Use bilinear interpolation to find U and V values
+        u_interp = float(interp2d(xs, ys, us)(center_x, center_y))
+        v_interp = float(interp2d(xs, ys, vs)(center_x, center_y))
 
         # Calculate wind speed and direction
         deg_per_radian = 57.296
         adjustment_to_wind_measurement = 180
-        speed = sqrt(u**2 + v**2)
-        direction_deg = adjustment_to_wind_measurement - atan2(u, v) * deg_per_radian  # Convert radians to degrees
+        speed = sqrt(u_interp**2 + v_interp**2)
+        direction_deg = adjustment_to_wind_measurement - atan2(u_interp, v_interp) * deg_per_radian  # Convert radians to degrees 
 
         return {
             'speed': speed,
@@ -350,6 +353,8 @@ class HRRR:
             'lons': lons,
             'xs': xs,
             'ys': ys,
+            'us': us,
+            'vs': vs,
             'grib_field': grib_field,
             'n': n
         }

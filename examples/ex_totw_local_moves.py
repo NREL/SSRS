@@ -31,9 +31,9 @@ config_base = Config(
     
     track_direction=202.5, #202.5,
     #track_start_region=(24, 26, 24, 26),  #xmin, xmax, ymin, ymax
-    track_start_region=(10, 12, 18, 20),  #xmin, xmax, ymin, ymax
+    track_start_region=(10, 20, 10, 20),  #xmin, xmax, ymin, ymax
     track_start_type='structured',  # structured, random
-    track_count=10,  #per thermals realization
+    track_count=3,  #per thermals realization
     
     # plotting related
     fig_height=6.,

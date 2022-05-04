@@ -306,9 +306,9 @@ class HRRR:
         # Remember that the longitude arrays are in degrees east.
         # But the conversion to x and y with raster.transform_coordinates
         # requires degrees west. Convert the longitude back to degrees
-        # west here.
+        # west here. The number should be negative.
 
-        lons = lons - 180.0
+        lons = (lons - 180.0) * -1.0
 
         # Find x, y of the center location given
         center_lon, center_lat = center_lonlat
@@ -317,11 +317,9 @@ class HRRR:
         xs, ys = raster.transform_coordinates(
             in_crs='EPSG:4326',
             out_crs='ESRI:102008',
-            in_x=lons * -1.0,
+            in_x=lons,
             in_y=lats
         )
-
-        # bilinear interpolation in scipy
 
         # Calculate the number of points that were found
         n = float(mask.sum())

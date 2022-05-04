@@ -178,8 +178,8 @@ class HRRR:
         height_above_ground_m: float,
         extent_km_lat=6.0,
         extent_km_lon=6.0,
-        fringe_deg_lat=0.01,
-        fringe_deg_lon=0.01,
+        fringe_deg_lat=0.03,
+        fringe_deg_lon=0.03,
         remove_grib: bool = False
     ):
         """

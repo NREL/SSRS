@@ -176,10 +176,10 @@ class HRRR:
         center_lonlat: Tuple[float, float],
         ground_level_m: float,
         height_above_ground_m: float,
-        extent_km_lat=3.0,
-        extent_km_lon=3.0,
-        fringe_deg_lat=0.15,
-        fringe_deg_lon=0.9,
+        extent_km_lat=6.0,
+        extent_km_lon=6.0,
+        fringe_deg_lat=0.01,
+        fringe_deg_lon=0.01,
         remove_grib: bool = False
     ):
         """
@@ -336,7 +336,7 @@ class HRRR:
 
         # Calculate wind speed and direction
         deg_per_radian = 57.296
-        adjustment_to_wind_measurement = 180
+        adjustment_to_wind_measurement = 360
         speed = sqrt(u_interp**2 + v_interp**2)
         direction_deg = adjustment_to_wind_measurement - atan2(u_interp, v_interp) * deg_per_radian  # Convert radians to degrees 
 

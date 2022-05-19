@@ -58,6 +58,15 @@ class Config:
     thermals_realization_count: bool = 0  # number of realizations of thermals
     updraft_threshold: float = 0.75  # only use updrafts higher than this
     movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
+    orographic_model: str = 'original'  # original, improved
+
+    # Improved orographic model parameters (used if `orographic_model` == 'improved')
+    h: float = 80.                                    # height of interest, height of flight
+    uniform_windspeed_h : float = uniform_windspeed   # windspeed at height h
+    uniform_winddirn_h : float = uniform_winddirn     # wind dir at height h (for generality)
+    href: float = 80.                                 # reference height
+    uniform_windspeed_href : float = 10.              # windspeed at ref height
+    uniform_winddirn_href : float = uniform_winddirn  # wind dir at ref height (for generality)
 
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north

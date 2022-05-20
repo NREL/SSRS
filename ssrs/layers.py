@@ -7,20 +7,72 @@ from typing import Tuple
 import random
 from scipy import ndimage
 from .hrrr import HRRR
+from .config import Config
 
 
 def compute_orographic_updraft(
+    elev: np.ndarray,
+    wspeed: np.ndarray,
+    wdirn: np.ndarray,
+    slope: np.ndarray,
+    aspect: np.ndarray,
+    res: float,
+    sx: np.ndarray = None,
+    h: float = 80.,
+    min_updraft_val: float = 0.
+) -> np.ndarray:
+    """ Returns orographic updraft using wind speed, wind direction, slope
+    and aspect """
+    if sx is None:
+        return orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
+    else:
+        return orographic_updraft_improved(wspeed, wdirn, slope, aspect,
+                                           min_updraft_val, elev, res, sx, h)
+
+def orographic_updraft_original(
     wspeed: np.ndarray,
     wdirn: np.ndarray,
     slope: np.ndarray,
     aspect: np.ndarray,
     min_updraft_val: float = 0.
 ) -> np.ndarray:
-    """ Returns orographic updraft using wind speed, wind direction, slope
-    and aspect """
+    """ Return dimensional orographic updraft using Brandes and Ombalski model"""
     aspect_diff = np.maximum(0., np.cos((aspect - wdirn) * np.pi / 180.))
     return np.maximum(min_updraft_val, np.multiply(wspeed, np.multiply(np.sin(
         slope * np.pi / 180.), aspect_diff)))
+
+def orographic_updraft_improved(
+    wspeed: np.ndarray,
+    wdirn: np.ndarray,
+    slope: np.ndarray,
+    aspect: np.ndarray,
+    elev: np.ndarray,
+    res: float,
+    sx: np.ndarray = None,
+    h : float = 80.,
+    min_updraft_val: float = 0.
+) -> np.ndarray:
+    """ Return dimensional orographic updraft using our improved model"""
+
+    W0prime = orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
+
+    # Compute height adjustment
+    a=0.00004;  b=0.0028;  c=0.8;  d=0.35;  e=0.095;  f=-0.09
+    factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slope)) + e) + f
+    # Compute Sx adjustment
+    factor_sx = 1 + np.tan(np.deg2rad(sx))
+    # Compute terrain complexity adjustment
+    filterSize_in_m = 500
+    filterSize = int(np.floor(filterSize_in_m/res))
+    local_zmean = ndimage.generic_filter(elev, np.mean, footprint=np.ones((filterSize,filterSize)) )
+    local_zmin  = ndimage.generic_filter(elev, np.min,  footprint=np.ones((filterSize,filterSize)) )
+    local_zmax  = ndimage.generic_filter(elev, np.max,  footprint=np.ones((filterSize,filterSize)) )
+    tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
+    factor_tc = 1 + tc*(h/40)
+    # Combine all factors
+    F = factor_tc * factor_sx / factor_height
+
+    return F*W0prime
 
 
 def deardoff_velocity_function(
@@ -128,6 +180,117 @@ def compute_aspect_degrees(z_mat: np.ndarray, res: float):
     aspect[1:-1, 1:-1] = 180. - angle + angle_mod
     return np.nan_to_num(aspect)
 
+def compute_blurred_quantity(quant: np.ndarray, res: float, h: float):
+    '''
+    Calculate a blurred version of a quantity quant based
+    on the height h
+    '''
+
+    sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
+    return ndimage.gaussian_filter(quant, sigma=sigma_in_m/res)
+
+
+def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
+    '''
+    Sx is a measure of topographic shelter or exposure relative to a particular
+    wind direction. Calculates a whole map for all points (xi, yi) in the domain.
+    For each (xi, yi) pair, it uses all v points (xv, yv) upwind of (xi, yi) in
+    the A wind direction, up to dmax.
+    Winstral, A., Marks D. "Simulating wind fields and snow redistribution using
+        terrain-based parameters to model snow accumulation and melt over a semi-
+        arid mountain catchment" Hydrol. Process. 16, 3585–3603 (2002)
+    Usage
+    =====
+    xx, yy : array
+        meshgrid arrays of the region extent coordinates.
+    zagl: arrayi, xr.DataArray
+        Elevation map of the region
+    A: float
+        Wind direction (deg, wind direction convention)
+    dmax: float
+        Upwind extent of the search
+    method: string
+        griddata interpolation method. Options are 'nearest', 'linear', 'cubic'.
+        Recommended linear or cubic.
+    '''
+    from scipy.interpolate import griddata
+    import xarray as xr
+    
+    xx, yy = np.meshgrid(xgrid, ygrid, indexing='ij')
+
+    # get resolution (assumes uniform resolution)
+    res = xx[1,0] - xx[0,0]
+    npoints = 1+int(dmax/res)
+    if dmax < res:
+        raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
+    
+    # Get upstream direction
+    A = A%360
+    if    A==0:   upstreamDirX=0;  upstreamDirY=-1
+    elif  A==90:  upstreamDirX=-1; upstreamDirY=0
+    elif  A==180: upstreamDirX=0;  upstreamDirY=1
+    elif  A==270: upstreamDirX=1;  upstreamDirY=0
+    elif  A>0  and A<90:   upstreamDirX=-1; upstreamDirY=-1
+    elif  A>90  and A<180:  upstreamDirX=-1; upstreamDirY=1
+    elif  A>180 and A<270:  upstreamDirX=1;  upstreamDirY=1
+    elif  A>270 and A<360:  upstreamDirX=1;  upstreamDirY=-1
+
+    # change angle notation
+    ang = np.deg2rad(270-A)
+
+    # array for interpolation using griddata
+    points = np.array( (xx.flatten(), yy.flatten()) ).T
+    if isinstance(zagl, xr.DataArray):
+        zagl = zagl.values
+    values = zagl.flatten()
+
+    # create rotated grid. This way we sample into a interpolated grid that has the exact points we need
+    xmin = min(xx[:,0]);  xmax = max(xx[:,0])
+    ymin = min(yy[0,:]);  ymax = max(yy[0,:])
+    if A%90 == 0:
+        # if flow is aligned, we don't need a new grid
+        xrot = xx[:,0]
+        yrot = yy[0,:]
+        xxrot = xx
+        yyrot = yy
+        elevrot = zagl
+    else:
+        xrot = np.arange(xmin, xmax+0.1, abs(res*np.cos(ang)))
+        yrot = np.arange(ymin, ymax+0.1, abs(res*np.sin(ang)))
+        xxrot, yyrot = np.meshgrid(xrot, yrot, indexing='ij')
+        elevrot = griddata( points, values, (xxrot, yyrot), method=method )
+
+    # create empty rotated Sx array
+    Sxrot = np.empty(np.shape(elevrot));  Sxrot[:,:] = np.nan
+
+    for i, xi in enumerate(xrot):
+        if verbose: print(f'Computing Sx... {100*(i+1)/len(xrot):.1f}%  ', end='\r')
+        for j, yi in enumerate(yrot):
+
+            # Get elevation profile along the direction asked
+            isel = np.linspace(i-upstreamDirX*npoints+upstreamDirX, i, npoints, dtype=int)
+            jsel = np.linspace(j-upstreamDirY*npoints+upstreamDirY, j, npoints, dtype=int)
+            try:
+                xsel = xrot[isel]
+                ysel = yrot[jsel]
+                elev = elevrot[isel,jsel]
+            except IndexError:
+                # At the borders, can't get a valid positions
+                xsel = np.zeros(np.size(isel))  
+                ysel = np.zeros(np.size(jsel))
+                elev = np.zeros(np.size(isel))
+
+            # elevation of (xi, yi), for convenience
+            elevi = elev[-1]
+
+            Sxrot[i,j] = np.nanmax(np.rad2deg( np.arctan( (elev[:-1] - elevi)/(((xsel[:-1]-xi)**2 + (ysel[:-1]-yi)**2)**0.5) ) ))
+
+    # interpolate results back to original grid
+    pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
+    Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )
+
+    return Sx
+
 
 def compute_slope_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
     """ Compute slope using richdem package
@@ -213,106 +376,6 @@ def compute_random_thermals(
     wt = ndimage.gaussian_filter(wt_init, sigma=4, mode='constant')
 
     return wt
-
-
-def calcSx(xx, yy, zagl, A, dmax, method='linear', verbose=False):
-    '''
-    Sx is a measure of topographic shelter or exposure relative to a particular
-    wind direction. Calculates a whole map for all points (xi, yi) in the domain.
-    For each (xi, yi) pair, it uses all v points (xv, yv) upwind of (xi, yi) in
-    the A wind direction, up to dmax.
-    Winstral, A., Marks D. "Simulating wind fields and snow redistribution using
-        terrain-based parameters to model snow accumulation and melt over a semi-
-        arid mountain catchment" Hydrol. Process. 16, 3585–3603 (2002)
-    Usage
-    =====
-    xx, yy : array
-        meshgrid arrays of the region extent coordinates.
-    zagl: arrayi, xr.DataArray
-        Elevation map of the region
-    A: float
-        Wind direction (deg, wind direction convention)
-    dmax: float
-        Upwind extent of the search
-    method: string
-        griddata interpolation method. Options are 'nearest', 'linear', 'cubic'.
-        Recommended linear or cubic.
-    '''
-    from scipy.interpolate import griddata
-    import xarray as xr
-    
-    # get resolution (assumes uniform resolution)
-    res = xx[1,0] - xx[0,0]
-    npoints = 1+int(dmax/res)
-    if dmax < res:
-        raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
-    
-    # Get upstream direction
-    A = A%360
-    if    A==0:   upstreamDirX=0;  upstreamDirY=-1
-    elif  A==90:  upstreamDirX=-1; upstreamDirY=0
-    elif  A==180: upstreamDirX=0;  upstreamDirY=1
-    elif  A==270: upstreamDirX=1;  upstreamDirY=0
-    elif  A>0  and A<90:   upstreamDirX=-1; upstreamDirY=-1
-    elif  A>90  and A<180:  upstreamDirX=-1; upstreamDirY=1
-    elif  A>180 and A<270:  upstreamDirX=1;  upstreamDirY=1
-    elif  A>270 and A<360:  upstreamDirX=1;  upstreamDirY=-1
-
-    # change angle notation
-    ang = np.deg2rad(270-A)
-
-    # array for interpolation using griddata
-    points = np.array( (xx.flatten(), yy.flatten()) ).T
-    if isinstance(zagl, xr.DataArray):
-        zagl = zagl.values
-    values = zagl.flatten()
-
-    # create rotated grid. This way we sample into a interpolated grid that has the exact points we need
-    xmin = min(xx[:,0]);  xmax = max(xx[:,0])
-    ymin = min(yy[0,:]);  ymax = max(yy[0,:])
-    if A%90 == 0:
-        # if flow is aligned, we don't need a new grid
-        xrot = xx[:,0]
-        yrot = yy[0,:]
-        xxrot = xx
-        yyrot = yy
-        elevrot = zagl
-    else:
-        xrot = np.arange(xmin, xmax+0.1, abs(res*np.cos(ang)))
-        yrot = np.arange(ymin, ymax+0.1, abs(res*np.sin(ang)))
-        xxrot, yyrot = np.meshgrid(xrot, yrot, indexing='ij')
-        elevrot = griddata( points, values, (xxrot, yyrot), method=method )
-
-    # create empty rotated Sx array
-    Sxrot = np.empty(np.shape(elevrot));  Sxrot[:,:] = np.nan
-
-    for i, xi in enumerate(xrot):
-        if verbose: print(f'Computing Sx... {100*(i+1)/len(xrot):.1f}%  ', end='\r')
-        for j, yi in enumerate(yrot):
-
-            # Get elevation profile along the direction asked
-            isel = np.linspace(i-upstreamDirX*npoints+upstreamDirX, i, npoints, dtype=int)
-            jsel = np.linspace(j-upstreamDirY*npoints+upstreamDirY, j, npoints, dtype=int)
-            try:
-                xsel = xrot[isel]
-                ysel = yrot[jsel]
-                elev = elevrot[isel,jsel]
-            except IndexError:
-                # At the borders, can't get a valid positions
-                xsel = np.zeros(np.size(isel))  
-                ysel = np.zeros(np.size(jsel))
-                elev = np.zeros(np.size(isel))
-
-            # elevation of (xi, yi), for convenience
-            elevi = elev[-1]
-
-            Sxrot[i,j] = np.nanmax(np.rad2deg( np.arctan( (elev[:-1] - elevi)/(((xsel[:-1]-xi)**2 + (ysel[:-1]-yi)**2)**0.5) ) ))
-
-    # interpolate results back to original grid
-    pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
-    Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )
-
-    return Sx
 
 
 def getRandomPointsWeighted (weight, n, nRealization=1):

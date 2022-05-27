@@ -76,11 +76,18 @@ class Simulator(Config):
             json.dump(self.__dict__, cfile, ensure_ascii=False, indent=2)
 
         # Determine grid size of the region
-        print(f'Terrain resolution = {self.resolution} m')
+        print(f'Analysis resolution = {self.resolution} m')
         xsize = int(round((self.region_width_km[0] * 1000. / self.resolution)))
         ysize = int(round((self.region_width_km[1] * 1000. / self.resolution)))
         self.gridsize = (ysize, xsize)
-        print(f'Terrain grid size = {self.gridsize}')
+        print(f'Analysis grid size = {self.gridsize} elements')
+
+        # Determine high-res terrain grid size of the region
+        print(f'Terrain resolution = {self.resolution_terrain} m')
+        xsize_terrain = int(round((self.region_width_km[0] * 1000. / self.resolution_terrain)))
+        ysize_terrain = int(round((self.region_width_km[1] * 1000. / self.resolution_terrain)))
+        self.gridsize_terrain = (ysize_terrain, xsize_terrain)
+        print(f'Terrain grid size = {self.gridsize_terrain} elements')
 
         # figure out bounds in both lon/lat and in projected crs
         proj_west, proj_south = transform_coordinates(
@@ -92,6 +99,12 @@ class Simulator(Config):
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
             self.bounds, self.projected_crs, self.lonlat_crs)
+
+        # Get meshgrids for pcolormesh plotting
+        xgrid_terrain, ygrid_terrain = self.get_terrain_grid()
+        self.xx_terrain, self.yy_terrain = np.meshgrid(xgrid_terrain, ygrid_terrain, indexing='ij')
+        xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
+        self.xx, self.yy = np.meshgrid(xgrid, ygrid, indexing='ij')
 
         # download terrain layers from USGS's 3DEP dataset
         self.region = Terrain(self.lonlat_bounds, self.data_dir)
@@ -149,9 +162,10 @@ class Simulator(Config):
             #self.compute_orographic_updrafts_using_wtk()
         else:
             print(f'Uniform mode: Wind speed = {self.uniform_windspeed_h} m/s')
-            print(f'Uniform mode: Wind dirn = {self.uniform_winddirn_h} deg(cw)')
+            print(f'Uniform mode: Wind dirn = {self.uniform_winddirn_h} deg (cw)')
             self.case_ids = [self._get_uniform_id()]
             #self.compute_orographic_updraft_uniform()
+        print(f'Case id is {self.case_ids}')
 
         # get terrain slope and aspect
 #        self.get_terrain_slope()
@@ -162,8 +176,8 @@ class Simulator(Config):
 #            self.get_terrain_sx()
 
         # Get meshgrid for pcolormesh plotting
-        xgrid, ygrid = self.get_terrain_grid()
-        self.xx, self.yy = np.meshgrid(xgrid, ygrid, indexing='ij')
+        #xgrid, ygrid = self.get_terrain_grid()
+        #self.xx, self.yy = np.meshgrid(xgrid, ygrid, indexing='ij')
 
         # Calculate the orographic updraft based on mode
         if self.sim_mode.lower() != 'uniform':
@@ -190,7 +204,7 @@ class Simulator(Config):
         fname = self._get_terrain_quantity_fname(self.case_ids[0],'elev', self.mode_data_dir)
         if not os.path.isfile(f'{fname}.npy'):
             np.save(f'{fname}.npy', elev.astype(np.float32))
-        return self.get_terrain_layer('Elevation')
+        return elev
 
     #def get_terrain_slope(self):
     #    """ Returns data for terrain layer inprojected crs """
@@ -251,13 +265,9 @@ class Simulator(Config):
 
         elif self.slopeAspectMode == 'compute':
             try:
-                #print(f'inside get_terrain_aspect, try')
                 aspect = self.load_terrain_quantity(self.case_id, 'aspect')
-                #print(f'tried, aspect is {aspect}')
             except Exception as _:
-                #print(f'inside get_terrain_aspect, except')
                 aspect = self.compute_aspect_degrees_case()
-                #print(f'except, aspect is {aspect}')
             return aspect
         else:
             raise ValueError ('Mode can only compute or download')
@@ -273,19 +283,24 @@ class Simulator(Config):
 
     def get_terrain_layer(self, lname: str):
         """ Returns data for terrain layer inprojected crs """
+        print(f'  -Getting terrain data at {self.resolution_terrain} m resolution') 
         ldata = get_raster_in_projected_crs(
             self.region.get_raster_fpath(self.terrain_layers[lname]),
-            self.bounds, self.gridsize, self.resolution, self.projected_crs)
+            self.bounds, self.gridsize_terrain, self.resolution_terrain, self.projected_crs)
         return ldata
 
-    def get_terrain_grid(self):
+    def get_terrain_grid(self, resolution = None, gridsize = None ):
         """ Returns xgrid and ygrid for the terrain """
+        if resolution is None:  resolution = self.resolution_terrain
+        if gridsize is None:      gridsize = self.gridsize_terrain
+        #if resolution is None:
+        #    resolution=self.resolution
         xgrid = np.linspace(self.bounds[0],
-                            self.bounds[0] + (self.gridsize[1] - 1) *
-                            self.resolution, self.gridsize[1])
+                            self.bounds[0] + (gridsize[1] - 1) *
+                            resolution, gridsize[1])
         ygrid = np.linspace(self.bounds[1],
-                            self.bounds[1] + (self.gridsize[0] - 1) *
-                            self.resolution, self.gridsize[0])
+                            self.bounds[1] + (gridsize[0] - 1) *
+                            resolution, gridsize[0])
         return xgrid, ygrid
 
 
@@ -294,7 +309,6 @@ class Simulator(Config):
 
     def compute_sx_case(self) -> None:
         """ Computes and saves Sx quantity """
-        #print('Computing shelter angle Sx..')
         xgrid, ygrid = self.get_terrain_grid()
         elev = self.get_terrain_elevation()
         sx = compute_sx(xgrid, ygrid, elev, self.uniform_winddirn_href) 
@@ -308,7 +322,7 @@ class Simulator(Config):
         if self.orographic_model.lower() != 'original':
             print('This should only print if model is NOT original. Comment out blur function')
             elev = compute_blurred_quantity(elev, self.resolution, self.h)
-        slope = compute_slope_degrees(elev, self.resolution)
+        slope = compute_slope_degrees(elev, self.resolution_terrain)
         fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
         np.save(f'{fname}.npy', slope.astype(np.float32))
         return slope
@@ -319,7 +333,7 @@ class Simulator(Config):
         if self.orographic_model.lower() != 'original':
             print('This should only print if model is NOT original')
             elev = compute_blurred_quantity(elev, self.resolution, self.h)
-        aspect = compute_aspect_degrees(elev, self.resolution)
+        aspect = compute_aspect_degrees(elev, self.resolution_terrain)
         fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
         np.save(f'{fname}.npy', aspect.astype(np.float32))
         return aspect
@@ -329,22 +343,24 @@ class Simulator(Config):
         print(f'Computing orographic updrafts using {self.orographic_model} model..')
         slope = self.get_terrain_slope()
         aspect = self.get_terrain_aspect()
-        #print(f'-- aspect is {aspect}')
         elev = self.get_terrain_elevation()
         if self.orographic_model.lower() == 'original':
-            wspeed = self.uniform_windspeed_h * np.ones(self.gridsize)
-            wdirn = self.uniform_winddirn_h * np.ones(self.gridsize)
+            wspeed = self.uniform_windspeed_h * np.ones(self.gridsize_terrain)
+            wdirn = self.uniform_winddirn_h * np.ones(self.gridsize_terrain)
             h = self.h
             sx = None
         else:
-            wspeed = self.uniform_windspeed_href * np.ones(self.gridsize)
-            wdirn = self.uniform_winddirn_href * np.ones(self.gridsize)
+            wspeed = self.uniform_windspeed_href * np.ones(self.gridsize_terrain)
+            wdirn = self.uniform_winddirn_href * np.ones(self.gridsize_terrain)
             h = self.href
             sx = self.get_terrain_sx()
-        orograph = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
-                                              self.resolution, sx, h)
+        orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
+                                              self.resolution_terrain, sx, h)
+        # upsample from `resolution_terrain` to `resolution`
+        orograph = self.upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
         fname = self._get_orograph_fname(self.case_ids[0], self.mode_data_dir)
         np.save(f'{fname}.npy', orograph.astype(np.float32))
+        np.save(f'{fname}_terrainResolution.npy', orograph_fine.astype(np.float32))
 
 #   def estimate_thermal_updraft(self) -> None:
 #       """ Estimating thermal updrafts"""
@@ -375,12 +391,25 @@ class Simulator(Config):
             else:
                 h = self.href
                 sx = self.get_terrain_sx()
-            orograph = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
-                                                 self.resolution, sx, h)
+            orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
+                                                 self.resolution_terrain, sx, h)
+            # upsample from `resolution_terrain` to `resolution`
+            orograph = self.upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
             fname = self._get_orograph_fname(case_id, self.mode_data_dir)
-            # downsample
             np.save(f'{fname}.npy', orograph.astype(np.float32))
+            np.save(f'{fname}_terrainResolution.npy', orograph_fine.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
+
+
+    def upsample_field(self, field, source_res, target_res):
+        """ Upsamples a high-resolution field to a lower resolution """
+        if not  (target_res/source_res).is_integer():
+           raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
+                             f'multiple of terrain resolution, {self.resolution_terrain} m')
+        ratio = int(target_res/source_res)
+        print(f'Upsampling from {source_res} m to {target_res} m')
+        return field[::ratio,::ratio]
+
 
 #### THIS PART HERE with real_id, see also lines 318 and 502
     
@@ -549,6 +578,7 @@ class Simulator(Config):
         threshold_str = f't{int(self.updraft_threshold*100)}'
         mov_str = f'{self.movement_model}'
         out_str = f'{case_id}_{dirn_str}_{threshold_str}_{mov_str}'
+        print(f'full case string: {out_str}')
         if real_id is not None:
             out_str += f'_r{int(real_id)}'
         return out_str
@@ -558,30 +588,30 @@ class Simulator(Config):
         fname = f'{self._get_id_string(case_id, real_id)}_potential'
         return os.path.join(dirname, fname)
 
-    def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
-        """ Plot directional potential """
-        if self.movement_model == 'fluid-flow':
-            print('Plotting directional potential..')
-            for case_id in self.case_ids:
-                updrafts = self.load_updrafts(case_id, apply_threshold=True)
-                for real_id, _ in enumerate(updrafts):
-                    fname = self._get_potential_fname(case_id, real_id,
-                                                      self.mode_data_dir)
-                    potential = np.load(f'{fname}.npy')
-                    fig, axs = plt.subplots(figsize=self.fig_size)
-                    lvls = np.linspace(0., np.amax(potential), 11)
-                    curm = axs.contourf(potential, lvls, cmap='cividis',
-                                        origin='lower',
-                                        extent=self.extent)
-                    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-                    cbar.set_label('Directional potential')
-                    if plot_turbs:
-                        self.plot_turbine_locations(axs)
-                    axs.set_xlim([self.extent[0], self.extent[1]])
-                    axs.set_ylim([self.extent[2], self.extent[3]])
-                    fname = self._get_potential_fname(case_id, real_id,
-                                                      self.mode_fig_dir)
-                    self.save_fig(fig, f'{fname}.png', show)
+#    def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
+#        """ Plot directional potential """
+#        if self.movement_model == 'fluidflow':
+#            print('Plotting directional potential..')
+#            for case_id in self.case_ids:
+#                updrafts = self.load_updrafts(case_id, apply_threshold=True)
+#                for real_id, _ in enumerate(updrafts):
+#                    fname = self._get_potential_fname(case_id, real_id,
+#                                                      self.mode_data_dir)
+#                    potential = np.load(f'{fname}.npy')
+#                    fig, axs = plt.subplots(figsize=self.fig_size)
+#                    lvls = np.linspace(0., np.amax(potential), 11)
+#                    curm = axs.contourf(potential, lvls, cmap='cividis',
+#                                        origin='lower',
+#                                        extent=self.extent)
+#                    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+#                    cbar.set_label('Directional potential')
+#                    if plot_turbs:
+#                        self.plot_turbine_locations(axs)
+#                    axs.set_xlim([self.extent[0], self.extent[1]])
+#                    axs.set_ylim([self.extent[2], self.extent[3]])
+#                    fname = self._get_potential_fname(case_id, real_id,
+#                                                      self.mode_fig_dir)
+#                    self.save_fig(fig, f'{fname}.png', show)
 
 ########### Simulate and plot tracks ###########
 
@@ -769,8 +799,9 @@ class Simulator(Config):
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
         lwidth = 0.15 if self.track_count > 251 else 0.4
-        elevation = self.get_terrain_elevation()
-        xgrid, ygrid = self.get_terrain_grid()
+        # Use analysis-resolution information
+        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             for real_id, _ in enumerate(updrafts):
@@ -910,6 +941,7 @@ class Simulator(Config):
                       show=False, plot='imshow',figsize=None,vmax=None) -> None:
         """ Plot updrafts with or without applying the threshold """
         print('Plotting updraft fields..')
+        # Updraft field is on the coarse analysis grid
         if figsize is None: figsize=self.fig_size
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold)
@@ -961,7 +993,7 @@ class Simulator(Config):
         slope = self.get_terrain_slope()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx, self.yy, slope.T, cmap='magma_r')
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, slope.T, cmap='magma_r')
         else:
             curm = axs.imshow(slope, cmap='magma_r', extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
@@ -1108,7 +1140,8 @@ class Simulator(Config):
     ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
-        elevation = self.get_terrain_elevation()
+        # Use analysis-resolution information
+        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
@@ -1154,7 +1187,8 @@ class Simulator(Config):
     ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
-        elevation = self.get_terrain_elevation()
+        # Use analysis-resolution information
+        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
@@ -1250,7 +1284,8 @@ class Simulator(Config):
     ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
-        elevation = self.get_terrain_elevation()
+        # Use analysis-resolution information
+        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         xloc, yloc = self.turbines.get_locations_for_this_project(pname)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
@@ -1303,7 +1338,8 @@ class Simulator(Config):
     ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
-        elevation = self.get_terrain_elevation()
+        # Use analysis-resolution information
+        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         xloc, yloc = self.turbines.get_locations_for_this_project(pname)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
@@ -1349,7 +1385,8 @@ class Simulator(Config):
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
         lwidth = 0.1 if self.track_count > 251 else 0.4
-        #elevation = self.get_terrain_elevation()
+        # Use analysis-resolution information
+        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
             thermal = np.load(self._get_thermal_fpath(case_id))
@@ -1465,7 +1502,7 @@ class Simulator(Config):
         slope = self.get_terrain_slope()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx, self.yy, slope.T, cmap='magma_r')
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, slope.T, cmap='magma_r')
         else:
             curm = axs.imshow(slope, cmap='magma_r', extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
@@ -1480,7 +1517,7 @@ class Simulator(Config):
         aspect = self.get_terrain_aspect()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx, self.yy, aspect.T, cmap=cmap, vmin=0, vmax=360)
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, aspect.T, cmap=cmap, vmin=0, vmax=360)
         else:
             curm = axs.imshow(aspect, cmap=cmap,
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
@@ -1590,7 +1627,7 @@ class Simulator(Config):
         """ Returns case id for uniform mode """
         return (f's{int(self.uniform_windspeed_h)}'
                 f'd{int(self.uniform_winddirn_h)}'
-                f'th{int(self.thermal_intensity_scale)}')
+                f'thInt{int(self.thermal_intensity_scale)}')
 
     def _interpolate_wtk_vardata(
         self,

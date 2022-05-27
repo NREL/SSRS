@@ -29,11 +29,12 @@ class Config:
     look_ahead_dist: float = 2000.0
     thermal_intensity_scale: float = 2.0 # #1 gives weak random thermal field, 3 gives v strong random thermal field
     
-    # parameters defining the terrain
+    # parameters defining the domain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
     region_width_km: Tuple[float, float] = (60., 50.)
-    resolution: int = 100.  # desired terrain resolution (meters)
+    resolution_terrain: int = 10.   # terrain resolution for aspect and slope computations (meters)
+    resolution: int = 100.          # desired analysis resolution (meters)
 
     # parameters for uniform mode
     uniform_winddirn: float = 270.  # northerly = 0., easterly = 90, westerly=270
@@ -67,6 +68,9 @@ class Config:
     href: float = 80.                                 # reference height
     uniform_windspeed_href : float = 10.              # windspeed at ref height
     uniform_winddirn_href : float = uniform_winddirn  # wind dir at ref height (for generality)
+
+    # Option for slope and aspect
+    slopeAspectMode: str = 'compute'                # 'download' or 'compute'
 
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north

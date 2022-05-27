@@ -21,7 +21,8 @@ from .turbines import TurbinesUSWTB
 from .config import Config
 from .layers import (compute_orographic_updraft, compute_aspect_degrees,
                      compute_slope_degrees, compute_random_thermals,
-                     get_above_threshold_speed)
+                     get_above_threshold_speed, compute_blurred_quantity,
+                     compute_sx)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 
@@ -95,11 +96,19 @@ class Simulator(Config):
         # download terrain layers from USGS's 3DEP dataset
         self.region = Terrain(self.lonlat_bounds, self.data_dir)
         try:
-            self.terrain_layers = {
-                'Elevation': 'DEM',
-              #  'Slope': 'Slope Degrees',
-              #  'Aspect': 'Aspect Degrees'
-            }
+            if self.slopeAspectMode == 'download':
+                self.terrain_layers = {
+                    'Elevation': 'DEM',
+                    'Slope': 'Slope Degrees',
+                    'Aspect': 'Aspect Degrees'
+                }
+            elif self.slopeAspectMode == 'compute':
+                self.terrain_layers = {
+                    'Elevation': 'DEM',
+                }
+            else:
+                raise ValueError ('Mode can only be compute or download')
+
             self.region.download(self.terrain_layers.values())
         except Exception as _:
             print('Connection issues with 3DEP WMS service! Trying SRTM1..')
@@ -177,6 +186,10 @@ class Simulator(Config):
 
     def get_terrain_elevation(self):
         """ Returns data for terrain layer inprojected crs """
+        elev =  self.get_terrain_layer('Elevation')
+        fname = self._get_terrain_quantity_fname(self.case_ids[0],'elev', self.mode_data_dir)
+        if not os.path.isfile(f'{fname}.npy'):
+            np.save(f'{fname}.npy', elev.astype(np.float32))
         return self.get_terrain_layer('Elevation')
 
     #def get_terrain_slope(self):
@@ -203,23 +216,52 @@ class Simulator(Config):
 
     def get_terrain_slope(self):
         """ Returns data for terrain layer inprojected crs """
-        try:
-            slope = self.load_terrain_quantity(self.case_id, 'slope')
-        except Exception as _:
-            slope = self.compute_slope_degrees_case()
-        return slope
+        if self.slopeAspectMode == 'download':
+            try:
+                slope = self.get_terrain_layer('Slope')
+                fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
+                if not os.path.isfile(f'{fname}.npy'):
+                    np.save(f'{fname}.npy', slope.astype(np.float32))
+            except Exception as _:
+                elev = self.get_terrain_elevation()
+                slope = compute_slope_degrees(elev, self.resolution)
+            return slope
+
+        elif self.slopeAspectMode == 'compute':
+            try:
+                slope = self.load_terrain_quantity(self.case_id, 'slope')
+            except Exception as _:
+                slope = self.compute_slope_degrees_case()
+            return slope
+        else:
+            raise ValueError ('Mode can only be compute or download')
 
     def get_terrain_aspect(self):
         """ Returns data for terrain layer inprojected crs """
-        try:
-            #print(f'inside get_terrain_aspect, try')
-            aspect = self.load_terrain_quantity(self.case_id, 'aspect')
-            #print(f'tried, aspect is {aspect}')
-        except Exception as _:
-            #print(f'inside get_terrain_aspect, except')
-            aspect = self.compute_aspect_degrees_case()
-            #print(f'except, aspect is {aspect}')
-        return aspect
+        if self.slopeAspectMode == 'download':
+            try:
+                aspect = self.get_terrain_layer('Aspect')
+                fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
+                if not os.path.isfile(f'{fname}.npy'):
+                    np.save(f'{fname}.npy', aspect.astype(np.float32))
+            except Exception as _:
+                elev = self.get_terrain_elevation()
+                aspect = compute_aspect_degrees(elev, self.resolution)
+            return aspect
+
+        elif self.slopeAspectMode == 'compute':
+            try:
+                #print(f'inside get_terrain_aspect, try')
+                aspect = self.load_terrain_quantity(self.case_id, 'aspect')
+                #print(f'tried, aspect is {aspect}')
+            except Exception as _:
+                #print(f'inside get_terrain_aspect, except')
+                aspect = self.compute_aspect_degrees_case()
+                #print(f'except, aspect is {aspect}')
+            return aspect
+        else:
+            raise ValueError ('Mode can only compute or download')
+
 
     def get_terrain_sx(self):
         """ Returns data for terrain layer inprojected crs """
@@ -252,7 +294,7 @@ class Simulator(Config):
 
     def compute_sx_case(self) -> None:
         """ Computes and saves Sx quantity """
-        print('Computing shelter angle Sx..')
+        #print('Computing shelter angle Sx..')
         xgrid, ygrid = self.get_terrain_grid()
         elev = self.get_terrain_elevation()
         sx = compute_sx(xgrid, ygrid, elev, self.uniform_winddirn_href) 
@@ -262,9 +304,9 @@ class Simulator(Config):
 
     def compute_slope_degrees_case(self) -> None:
         """ Computes and saves slope """
-        if self.orographic_model.lower() == 'original':
-            elev = self.get_terrain_elevation()
-        else:
+        elev = self.get_terrain_elevation()
+        if self.orographic_model.lower() != 'original':
+            print('This should only print if model is NOT original. Comment out blur function')
             elev = compute_blurred_quantity(elev, self.resolution, self.h)
         slope = compute_slope_degrees(elev, self.resolution)
         fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
@@ -273,9 +315,9 @@ class Simulator(Config):
 
     def compute_aspect_degrees_case(self) -> None:
         """ Computes and saves aspect """
-        if self.orographic_model.lower() == 'original':
-            elev = self.get_terrain_elevation()
-        else:
+        elev = self.get_terrain_elevation()
+        if self.orographic_model.lower() != 'original':
+            print('This should only print if model is NOT original')
             elev = compute_blurred_quantity(elev, self.resolution, self.h)
         aspect = compute_aspect_degrees(elev, self.resolution)
         fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
@@ -336,6 +378,7 @@ class Simulator(Config):
             orograph = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
                                                  self.resolution, sx, h)
             fname = self._get_orograph_fname(case_id, self.mode_data_dir)
+            # downsample
             np.save(f'{fname}.npy', orograph.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
 
@@ -373,6 +416,7 @@ class Simulator(Config):
         """ Load specific quantity for the particular case """
         fname = self._get_terrain_quantity_fname(case_id, quant, self.mode_data_dir)
         metric = np.load(f'{fname}.npy')
+        print(f'Loading {fname}.npy')
         return metric
 
 #    def load_sx(self, case_id: str):
@@ -1297,17 +1341,19 @@ class Simulator(Config):
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
 
-    def plot_terrain_aspect(self, plot_turbs=True, show=False, plot='imshow', figsize=None) -> None:
+    def plot_terrain_aspect(self, plot_turbs=True, show=False, plot='imshow', cmap='twilight', figsize=None) -> None:
         """ Plots terrain aspect """
         if figsize is None: figsize=self.fig_size
         aspect = self.get_terrain_aspect()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx, self.yy, aspect.T, cmap='hsv', vmin=0, vmax=360)
+            curm = axs.pcolormesh(self.xx, self.yy, aspect.T, cmap=cmap, vmin=0, vmax=360)
         else:
-            curm = axs.imshow(aspect, cmap='hsv',
+            curm = axs.imshow(aspect, cmap=cmap,
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+        cbar.ax.set_yticks([0,45,90,135,180,225,270,315,360])
+        cbar.ax.set_yticklabels(['N','NE','E','SE','S','SW','W','NW','N'])
         cbar.set_label('Aspect (Degrees)')
         if plot_turbs:
             self.plot_turbine_locations(axs)

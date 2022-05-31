@@ -12,9 +12,10 @@ import pathos.multiprocessing as mp
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.cm as cm
 from scipy.interpolate import griddata
 from scipy import ndimage #db - for smoothing updraft field
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, ListedColormap
 from .terrain import Terrain
 from .wtk import WTK
 from .turbines import TurbinesUSWTB
@@ -168,6 +169,7 @@ class Simulator(Config):
         print(f'Case id is {self.case_ids}')
 
         print(f'Reference height is {self.href}')
+        print(f'Analysis height is {self.h}')
 
         # Get meshgrid for pcolormesh plotting
         #xgrid, ygrid = self.get_terrain_grid()
@@ -209,7 +211,7 @@ class Simulator(Config):
                 fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
                 if not os.path.isfile(f'{fname}.npy'):
                     np.save(f'{fname}.npy', slope.astype(np.float32))
-            except Exception as _:
+            except OSError:
                 elev = self.get_terrain_elevation()
                 slope = compute_slope_degrees(elev, self.resolution)
             return slope
@@ -219,9 +221,9 @@ class Simulator(Config):
                 slopefname_str = 'slope'
                 if self.orographic_model.lower() != 'original':
                     slopefname_str += f'_blur{int(self.h)}m'
-                slope = self.load_terrain_quantity(self.case_id, slopefname_str)
+                slope = self.load_terrain_quantity(self.case_ids[0], slopefname_str)
                 print(f'Found slope map. Loading it..')
-            except Exception as _:
+            except OSError:
                 slope = self.compute_slope_degrees_case()
             return slope
         else:
@@ -235,7 +237,7 @@ class Simulator(Config):
                 fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
                 if not os.path.isfile(f'{fname}.npy'):
                     np.save(f'{fname}.npy', aspect.astype(np.float32))
-            except Exception as _:
+            except OSError:
                 elev = self.get_terrain_elevation()
                 aspect = compute_aspect_degrees(elev, self.resolution)
             return aspect
@@ -245,9 +247,9 @@ class Simulator(Config):
                 aspectfname_str = 'aspect'
                 if self.orographic_model.lower() != 'original':
                     aspectfname_str += f'_blur{int(self.h)}m'
-                aspect = self.load_terrain_quantity(self.case_id, aspectfname_str)
+                aspect = self.load_terrain_quantity(self.case_ids[0], aspectfname_str)
                 print(f'Found aspect map. Loading it..')
-            except Exception as _:
+            except OSError:
                 aspect = self.compute_aspect_degrees_case()
             return aspect
         else:
@@ -258,9 +260,8 @@ class Simulator(Config):
         """ Returns data for terrain layer inprojected crs """
         try:
             sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}'
-            sx = self.load_terrain_quantity(self.case_id, sxfname_str)
-            print(f'Found Sx map for {int(self.uniform_winddirn_href)}m. Loading it..')
-        except Exception as _:
+            sx = self.load_terrain_quantity(self.case_ids[0], sxfname_str)
+        except OSError:
             sx = self.compute_sx_case() 
         return sx
 
@@ -307,7 +308,7 @@ class Simulator(Config):
         elev = self.get_terrain_elevation()
         slopefname_str = 'slope'
         if self.orographic_model.lower() != 'original':
-            print('Computing blurred version of slope map..')
+            print('Getting blurred version of slope map..')
             elev = compute_blurred_quantity(elev, self.resolution_terrain, self.h)
             slopefname_str += f'_blur{int(self.h)}m'
         slope = compute_slope_degrees(elev, self.resolution_terrain)
@@ -320,7 +321,7 @@ class Simulator(Config):
         elev = self.get_terrain_elevation()
         aspectfname_str = 'aspect'
         if self.orographic_model.lower() != 'original':
-            print('Computing blurred version of aspect map..')
+            print('Getting blurred version of aspect map..')
             elev = compute_blurred_quantity(elev, self.resolution_terrain, self.h)
             aspectfname_str += f'_blur{int(self.h)}m'
         aspect = compute_aspect_degrees(elev, self.resolution_terrain)
@@ -387,7 +388,7 @@ class Simulator(Config):
             orograph = self.upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
             fname = self._get_orograph_fname(case_id, self.mode_data_dir)
             np.save(f'{fname}.npy', orograph.astype(np.float32))
-            np.save(f'{fname}_terrainResolution.npy', orograph_fine.astype(np.float32))
+            np.save(f'{fname}_highres.npy', orograph_fine.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
 
 
@@ -436,8 +437,12 @@ class Simulator(Config):
         """ Load specific quantity for the particular case """
         fname = self._get_terrain_quantity_fname(case_id, quant, self.mode_data_dir)
         metric = np.load(f'{fname}.npy')
-        print(f'Loading {fname}.npy')
         return metric
+
+    def _get_terrain_quantity_fname(self, case_id: str, quant: str, dirname: str = './'):
+        """ Returns file path for saving terrain quantity data """
+        return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model')
+
 
     def _get_orograph_fname(self, case_id: str, dirname: str = './'):
         """ Returns file path for saving orographic updrafts data """
@@ -445,14 +450,6 @@ class Simulator(Config):
             return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model')
         else:
             return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model_{int(self.h)}m')
-
-    def _get_terrain_quantity_fname(self, case_id: str, quant: str, dirname: str = './'):
-        """ Returns file path for saving terrain quantity data """
-        #if self.orographic_model.lower() == 'original':
-        return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model')
-        #else:
-        #    return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model_{self.h}m')
-
 
     def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
         """ Plots oro updraft and tracks """
@@ -900,21 +897,6 @@ class Simulator(Config):
             fname = os.path.join(self.mode_fig_dir, f'{case_id}_thermal.png')
             self.save_fig(fig, fname, show)
     
-    def plot_terrain_slope(self, plot_turbs=True, show=False, plot='imshow', figsize=None) -> None:
-        """ Plots slope in degrees """
-        if figsize is None: figsize=self.fig_size
-        slope = self.get_terrain_slope()
-        fig, axs = plt.subplots(figsize=figsize)
-        if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, slope.T, cmap='magma_r')
-        else:
-            curm = axs.imshow(slope, cmap='magma_r', extent=self.extent, origin='lower')
-        cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Slope (Degrees)')
-        if plot_turbs:
-            self.plot_turbine_locations(axs)
-        self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
-
     #def plot_updrafts(self, plot_turbs=True, show=False) -> None:
     #    """ Plot estimated thermal updrafts """
     #    for case_id in self.case_ids:
@@ -1441,6 +1423,28 @@ class Simulator(Config):
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)
+
+    def plot_terrain_sx(self, plot_turbs=True, show=False, plot='imshow', cmap=None, figsize=None, **kwargs) -> None:
+        """ Plots sheltering angle in degrees """
+        if cmap is None:
+            # Custom scale for Sx (diverging cmap,light red-black-white)
+            gray = cm.get_cmap('binary_r', 128)
+            red  = cm.get_cmap('Reds',128)
+            mydiv =  np.vstack((red(np.linspace(0, 1, 128)),  gray(np.linspace(0, 1, 128))))
+            cmap = ListedColormap(mydiv, name='RdBl')
+
+        if figsize is None: figsize=self.fig_size
+        sx = self.get_terrain_sx()
+        fig, axs = plt.subplots(figsize=figsize)
+        if plot == 'pcolormesh':
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, sx.T, cmap=cmap, **kwargs)
+        else:
+            curm = axs.imshow(sx, cmap=cmap, extent=self.extent, origin='lower')
+        cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+        cbar.set_label('Sx (Degrees)')
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
+        self.save_fig(fig, os.path.join(self.fig_dir, f'sx_{int(self.uniform_winddirn)}m.png'), show)
 
 
 ########### other useful functions ###########

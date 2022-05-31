@@ -58,14 +58,14 @@ def orographic_updraft_improved(
     W0prime = orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
 
     # Compute height adjustment
+    print('Computing adjusting factors from improved model (1/3)..', end='\r')
     a=0.00004;  b=0.0028;  c=0.8;  d=0.35;  e=0.095;  f=-0.09
-    #print(f'h is {h}')
-    #print(f'slope is {slope}\n shape of slope is {np.shape(slope)}')
-    #factor_height = np.empty_like(slope)
     factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slope)) + e) + f
     # Compute Sx adjustment
+    print('Computing adjusting factors from improved model (2/3)..', end='\r')
     factor_sx = 1 + np.tan(np.deg2rad(sx))
     # Compute terrain complexity adjustment
+    print('Computing adjusting factors from improved model (3/3)..', end='\r')
     filterSize_in_m = 500
     filterSize = int(np.floor(filterSize_in_m/res))
     local_zmean = ndimage.generic_filter(elev, np.mean, footprint=np.ones((filterSize,filterSize)) )
@@ -74,7 +74,7 @@ def orographic_updraft_improved(
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
     factor_tc = 1 + tc*(h/40)
     # Combine all factors
-    #print(f'factor shapes: tc:{np.shape(factor_tc)}\t sx:{np.shape(factor_sx)}\t height:{np.shape(factor_height)}')
+    print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
 
     return F*W0prime

@@ -167,13 +167,7 @@ class Simulator(Config):
             #self.compute_orographic_updraft_uniform()
         print(f'Case id is {self.case_ids}')
 
-        # get terrain slope and aspect
-#        self.get_terrain_slope()
-#        self.get_terrain_aspect()
-#
-#        # Calculate terrain Sx value depending on orographic updraft model
-#        if self.orographic_model.lower() != 'original':
-#            self.get_terrain_sx()
+        print(f'Reference height is {self.href}')
 
         # Get meshgrid for pcolormesh plotting
         #xgrid, ygrid = self.get_terrain_grid()
@@ -206,27 +200,6 @@ class Simulator(Config):
             np.save(f'{fname}.npy', elev.astype(np.float32))
         return elev
 
-    #def get_terrain_slope(self):
-    #    """ Returns data for terrain layer inprojected crs """
-    #    try:
-    #        slope = self.get_terrain_layer('Slope')
-    #    except Exception as _:
-    #        elev = self.get_terrain_elevation()
-    #        if self.orographic_model.lower() != 'original': 
-    #            elev = compute_blurred_quantity(elev, self.resolution, self.h)
-    #        slope = compute_slope_degrees(elev, self.resolution)
-    #    return slope
-
-    #def get_terrain_aspect(self):
-    #    """ Returns data for terrain layer inprojected crs """
-    #    try:
-    #        aspect = self.get_terrain_layer('Aspect')
-    #    except Exception as _:
-    #        elev = self.get_terrain_elevation()
-    #        if self.orographic_model.lower() != 'original': 
-    #            elev = compute_blurred_quantity(elev, self.resolution, self.h)
-    #        aspect = compute_aspect_degrees(elev, self.resolution)
-    #    return aspect
 
     def get_terrain_slope(self):
         """ Returns data for terrain layer inprojected crs """
@@ -243,7 +216,11 @@ class Simulator(Config):
 
         elif self.slopeAspectMode == 'compute':
             try:
-                slope = self.load_terrain_quantity(self.case_id, 'slope')
+                slopefname_str = 'slope'
+                if self.orographic_model.lower() != 'original':
+                    slopefname_str += f'_blur{int(self.h)}m'
+                slope = self.load_terrain_quantity(self.case_id, slopefname_str)
+                print(f'Found slope map. Loading it..')
             except Exception as _:
                 slope = self.compute_slope_degrees_case()
             return slope
@@ -265,7 +242,11 @@ class Simulator(Config):
 
         elif self.slopeAspectMode == 'compute':
             try:
-                aspect = self.load_terrain_quantity(self.case_id, 'aspect')
+                aspectfname_str = 'aspect'
+                if self.orographic_model.lower() != 'original':
+                    aspectfname_str += f'_blur{int(self.h)}m'
+                aspect = self.load_terrain_quantity(self.case_id, aspectfname_str)
+                print(f'Found aspect map. Loading it..')
             except Exception as _:
                 aspect = self.compute_aspect_degrees_case()
             return aspect
@@ -276,14 +257,16 @@ class Simulator(Config):
     def get_terrain_sx(self):
         """ Returns data for terrain layer inprojected crs """
         try:
-            sx = self.load_terrain_quantity(self.case_id, 'sx')
+            sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}'
+            sx = self.load_terrain_quantity(self.case_id, sxfname_str)
+            print(f'Found Sx map for {int(self.uniform_winddirn_href)}m. Loading it..')
         except Exception as _:
             sx = self.compute_sx_case() 
         return sx
 
     def get_terrain_layer(self, lname: str):
         """ Returns data for terrain layer inprojected crs """
-        print(f'  -Getting terrain data at {self.resolution_terrain} m resolution') 
+        #print(f'  -Getting terrain data at {self.resolution_terrain} m resolution') 
         ldata = get_raster_in_projected_crs(
             self.region.get_raster_fpath(self.terrain_layers[lname]),
             self.bounds, self.gridsize_terrain, self.resolution_terrain, self.projected_crs)
@@ -311,36 +294,43 @@ class Simulator(Config):
         """ Computes and saves Sx quantity """
         xgrid, ygrid = self.get_terrain_grid()
         elev = self.get_terrain_elevation()
-        sx = compute_sx(xgrid, ygrid, elev, self.uniform_winddirn_href) 
-        fname = self._get_terrain_quantity_fname(self.case_ids[0],'sx', self.mode_data_dir)
+        sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}'
+        wdirn_sx = (self.uniform_winddirn_href + 180)%360
+        sx = compute_sx(xgrid, ygrid, elev.T, wdirn_sx) 
+        sx = sx.T  # adjust convention
+        fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
         np.save(f'{fname}.npy', sx.astype(np.float32))
         return sx
 
     def compute_slope_degrees_case(self) -> None:
         """ Computes and saves slope """
         elev = self.get_terrain_elevation()
+        slopefname_str = 'slope'
         if self.orographic_model.lower() != 'original':
-            print('This should only print if model is NOT original. Comment out blur function')
-            elev = compute_blurred_quantity(elev, self.resolution, self.h)
+            print('Computing blurred version of slope map..')
+            elev = compute_blurred_quantity(elev, self.resolution_terrain, self.h)
+            slopefname_str += f'_blur{int(self.h)}m'
         slope = compute_slope_degrees(elev, self.resolution_terrain)
-        fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
+        fname = self._get_terrain_quantity_fname(self.case_ids[0],slopefname_str, self.mode_data_dir)
         np.save(f'{fname}.npy', slope.astype(np.float32))
         return slope
 
     def compute_aspect_degrees_case(self) -> None:
         """ Computes and saves aspect """
         elev = self.get_terrain_elevation()
+        aspectfname_str = 'aspect'
         if self.orographic_model.lower() != 'original':
-            print('This should only print if model is NOT original')
-            elev = compute_blurred_quantity(elev, self.resolution, self.h)
+            print('Computing blurred version of aspect map..')
+            elev = compute_blurred_quantity(elev, self.resolution_terrain, self.h)
+            aspectfname_str += f'_blur{int(self.h)}m'
         aspect = compute_aspect_degrees(elev, self.resolution_terrain)
-        fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
+        fname = self._get_terrain_quantity_fname(self.case_ids[0],aspectfname_str, self.mode_data_dir)
         np.save(f'{fname}.npy', aspect.astype(np.float32))
         return aspect
 
     def compute_orographic_updraft_uniform(self) -> None:
         """ Computing orographic updrafts for uniform mode"""
-        print(f'Computing orographic updrafts using {self.orographic_model} model..')
+        print(f'Computing orographic updrafts (uniform mode) using {self.orographic_model} model..')
         slope = self.get_terrain_slope()
         aspect = self.get_terrain_aspect()
         elev = self.get_terrain_elevation()
@@ -355,7 +345,7 @@ class Simulator(Config):
             h = self.href
             sx = self.get_terrain_sx()
         orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
-                                              self.resolution_terrain, sx, h)
+                                                   self.resolution_terrain, sx, h)
         # upsample from `resolution_terrain` to `resolution`
         orograph = self.upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
         fname = self._get_orograph_fname(self.case_ids[0], self.mode_data_dir)
@@ -374,7 +364,7 @@ class Simulator(Config):
 
     def compute_orographic_updrafts_using_wtk(self) -> None:
         """ Computing orographic updrafts using wtk data for all datetimes"""
-        print('Computing orographic updrafts..', end="")
+        print('Computing orographic updrafts (using WTK) using {self.orographic_model} model..', end="")
         slope = self.get_terrain_slope()
         aspect = self.get_terrain_aspect()
         elev = self.get_terrain_elevation()
@@ -407,7 +397,7 @@ class Simulator(Config):
            raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
                              f'multiple of terrain resolution, {self.resolution_terrain} m')
         ratio = int(target_res/source_res)
-        print(f'Upsampling from {source_res} m to {target_res} m')
+        if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
         return field[::ratio,::ratio]
 
 
@@ -424,7 +414,8 @@ class Simulator(Config):
                     case_id, real_id, self.mode_data_dir)
                 np.save(f'{fname}.npy', thermals.astype(np.float32))
         else:
-            print('No thermals requested!', flush=True)
+            #print('No thermals requested!      ', flush=True)
+            print('No thermals requested')
 
     def load_updrafts(self, case_id: str, apply_threshold=True):
         """ Computes updrafts for the particular case """
@@ -448,74 +439,20 @@ class Simulator(Config):
         print(f'Loading {fname}.npy')
         return metric
 
-#    def load_sx(self, case_id: str):
-#        """ Load Sx the particular case """
-#            fname = self._get_sx_fname(case_id, self.mode_data_dir)
-#            sx = np.load(f'{fname}.npy')
-#        return sx
-#
-#    def load_slope(self, case_id: str):
-#        """ Load slope the particular case """
-#            fname = self._get_slope_fname(case_id, self.mode_data_dir)
-#            slope = np.load(f'{fname}.npy')
-#        return slope
-#
-#    def load_aspect(self, case_id: str):
-#        """ Load aspect the particular case """
-#            fname = self._get_aspect_fname(case_id, self.mode_data_dir)
-#            aspect = np.load(f'{fname}.npy')
-#        return aspect
-
     def _get_orograph_fname(self, case_id: str, dirname: str = './'):
         """ Returns file path for saving orographic updrafts data """
-        return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model')
-
-#    def _get_sx_fname(self, case_id: str, dirname: str = './'):
-#        """ Returns file path for saving sx data """
-#        return os.path.join(dirname, f'{case_id}_sx')
+        if self.orographic_model.lower() == 'original':
+            return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model')
+        else:
+            return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model_{int(self.h)}m')
 
     def _get_terrain_quantity_fname(self, case_id: str, quant: str, dirname: str = './'):
         """ Returns file path for saving terrain quantity data """
-        if self.orographic_model.lower() == 'original':
-            return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model')
-        else:
-            return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model_{self.h}m')
+        #if self.orographic_model.lower() == 'original':
+        return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model')
+        #else:
+        #    return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model_{self.h}m')
 
-    #def plot_terrain_elevation(self, plot_turbs=True, show=False) -> None:
-    #    """ Plotting terrain elevation """
-    #    elevation = self.get_terrain_elevation()
-    #    fig, axs = plt.subplots(figsize=self.fig_size)
-    #    curm = axs.imshow(elevation, cmap='terrain',
-    #                      extent=self.extent, origin='lower')
-    #    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-    #    cbar.set_label('Elevation (m)')
-    #    if plot_turbs:
-    #        self.plot_turbine_locations(axs)
-    #    self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
-
-    #def plot_terrain_slope(self, plot_turbs=True, show=False) -> None:
-    #    """ Plots slope in degrees """
-    #    slope = self.get_terrain_slope()
-    #    fig, axs = plt.subplots(figsize=self.fig_size)
-    #    curm = axs.imshow(slope, cmap='magma_r',
-    #                      extent=self.extent, origin='lower')
-    #    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-    #    cbar.set_label('Slope (deg)')
-    #    if plot_turbs:
-    #        self.plot_turbine_locations(axs)
-    #    self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
-
-    #def plot_terrain_aspect(self, plot_turbs=True, show=False) -> None:
-    #    """ Plots terrain aspect """
-    #    aspect = self.get_terrain_aspect()
-    #    fig, axs = plt.subplots(figsize=self.fig_size)
-    #    curm = axs.imshow(aspect, cmap='hsv',
-    #                      extent=self.extent, origin='lower', vmin=0, vmax=360.)
-    #    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-    #    cbar.set_label('Aspect (deg)')
-    #    if plot_turbs:
-    #        self.plot_turbine_locations(axs)
-    #    self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)
 
     def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
         """ Plots oro updraft and tracks """
@@ -588,30 +525,6 @@ class Simulator(Config):
         fname = f'{self._get_id_string(case_id, real_id)}_potential'
         return os.path.join(dirname, fname)
 
-#    def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
-#        """ Plot directional potential """
-#        if self.movement_model == 'fluidflow':
-#            print('Plotting directional potential..')
-#            for case_id in self.case_ids:
-#                updrafts = self.load_updrafts(case_id, apply_threshold=True)
-#                for real_id, _ in enumerate(updrafts):
-#                    fname = self._get_potential_fname(case_id, real_id,
-#                                                      self.mode_data_dir)
-#                    potential = np.load(f'{fname}.npy')
-#                    fig, axs = plt.subplots(figsize=self.fig_size)
-#                    lvls = np.linspace(0., np.amax(potential), 11)
-#                    curm = axs.contourf(potential, lvls, cmap='cividis',
-#                                        origin='lower',
-#                                        extent=self.extent)
-#                    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-#                    cbar.set_label('Directional potential')
-#                    if plot_turbs:
-#                        self.plot_turbine_locations(axs)
-#                    axs.set_xlim([self.extent[0], self.extent[1]])
-#                    axs.set_ylim([self.extent[2], self.extent[3]])
-#                    fname = self._get_potential_fname(case_id, real_id,
-#                                                      self.mode_fig_dir)
-#                    self.save_fig(fig, f'{fname}.png', show)
 
 ########### Simulate and plot tracks ###########
 
@@ -1024,7 +937,7 @@ class Simulator(Config):
         """ Plot orographic updrafts """
         for case_id in self.case_ids:
             orograph = np.load(self._get_orograph_fpath(case_id))
-            wo_smoothed=ndimage.gaussian_filter(orograph, sigma=3, mode='constant') #db added
+            wo_smoothed=ndimage.gaussian_filter(orograph, sigma=3, mode='constant') #db added # rt: resolution independent. needs to be fixed
             fig, axs = plt.subplots(figsize=self.fig_size)
             maxval = min(max(2, int(round(np.mean(orograph)))), 5)
             curm = axs.imshow(wo_smoothed, cmap='viridis',

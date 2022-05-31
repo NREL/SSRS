@@ -28,7 +28,7 @@ def compute_orographic_updraft(
         return orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
     else:
         return orographic_updraft_improved(wspeed, wdirn, slope, aspect,
-                                           min_updraft_val, elev, res, sx, h)
+                                           elev, res, sx, h, min_updraft_val)
 
 def orographic_updraft_original(
     wspeed: np.ndarray,
@@ -59,6 +59,9 @@ def orographic_updraft_improved(
 
     # Compute height adjustment
     a=0.00004;  b=0.0028;  c=0.8;  d=0.35;  e=0.095;  f=-0.09
+    #print(f'h is {h}')
+    #print(f'slope is {slope}\n shape of slope is {np.shape(slope)}')
+    #factor_height = np.empty_like(slope)
     factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slope)) + e) + f
     # Compute Sx adjustment
     factor_sx = 1 + np.tan(np.deg2rad(sx))
@@ -71,6 +74,7 @@ def orographic_updraft_improved(
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
     factor_tc = 1 + tc*(h/40)
     # Combine all factors
+    #print(f'factor shapes: tc:{np.shape(factor_tc)}\t sx:{np.shape(factor_sx)}\t height:{np.shape(factor_height)}')
     F = factor_tc * factor_sx / factor_height
 
     return F*W0prime
@@ -129,7 +133,7 @@ def compute_slope_degrees(z_mat: np.ndarray, res: float):
     numpy array containing slope in degrees
     """
 
-    print('Manually computing slope..')
+    #print('Manually computing slope..')
     slope = np.empty_like(z_mat)
     slope[:, :] = np.nan
     z_1 = z_mat[:-2, 2:]  # upper left
@@ -163,7 +167,7 @@ def compute_aspect_degrees(z_mat: np.ndarray, res: float):
     numpy array containing aspect in degrees
     """
 
-    print('Manually computing aspect..')
+    #print('Manually computing aspect..')
     aspect = np.empty_like(z_mat)
     aspect[:, :] = np.nan
     z_1 = z_mat[:-2, 2:]  # upper left
@@ -192,8 +196,7 @@ def compute_blurred_quantity(quant: np.ndarray, res: float, h: float):
     '''
 
     sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
-    #return ndimage.gaussian_filter(quant, sigma=sigma_in_m/res)
-    return quant
+    return ndimage.gaussian_filter(quant, sigma=sigma_in_m/res)
 
 
 def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
@@ -268,12 +271,10 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
 
     # create empty rotated Sx array
     Sxrot = np.empty(np.shape(elevrot));  Sxrot[:,:] = np.nan
-    print(f'shape of Sxrot is {np.shape(Sxrot)}')
 
-    print(f'npoints is {npoints}')#, xrot is {xrot}. yrot is {yrot}')
     for i, xi in enumerate(xrot):
-        #if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
-        if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ')
+        if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
+        #if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ')
         for j, yi in enumerate(yrot):
 
             # Get elevation profile along the direction asked
@@ -284,7 +285,6 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
                 ysel = yrot[jsel]
                 elev = elevrot[isel,jsel]
             except IndexError:
-                print(f'at the border, i={isel}, j={jsel}')
                 # At the borders, can't get a valid positions
                 xsel = np.zeros(np.size(isel))  
                 ysel = np.zeros(np.size(jsel))
@@ -296,13 +296,114 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
             try:
                 Sxrot[i,j] = np.nanmax(np.rad2deg( np.arctan( (elev[:-1] - elevi)/(((xsel[:-1]-xi)**2 + (ysel[:-1]-yi)**2)**0.5) ) ))
             except IndexError:
-                print(f'elev is {elev}')
-                print(f'xsel is {xsel}')
-                print(f'ysel is {ysel}')
-                print(f'xi is {xi}, yi is {yi}, elevi is {elevi}')
                 raise
 
-    if verbose: print(f'Computing shelter angle Sx..        ', end='\r')
+    if verbose: print(f'Computing shelter angle Sx..        ')#, end='\r')
+    # interpolate results back to original grid
+    pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
+    Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )
+
+    return Sx
+def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
+    '''
+    Sx is a measure of topographic shelter or exposure relative to a particular
+    wind direction. Calculates a whole map for all points (xi, yi) in the domain.
+    For each (xi, yi) pair, it uses all v points (xv, yv) upwind of (xi, yi) in
+    the A wind direction, up to dmax.
+    Winstral, A., Marks D. "Simulating wind fields and snow redistribution using
+        terrain-based parameters to model snow accumulation and melt over a semi-
+        arid mountain catchment" Hydrol. Process. 16, 3585–3603 (2002)
+    Usage
+    =====
+    xx, yy : array
+        meshgrid arrays of the region extent coordinates.
+    zagl: arrayi, xr.DataArray
+        Elevation map of the region
+    A: float
+        Wind direction (deg, wind direction convention)
+    dmax: float
+        Upwind extent of the search
+    method: string
+        griddata interpolation method. Options are 'nearest', 'linear', 'cubic'.
+        Recommended linear or cubic.
+    '''
+    from scipy.interpolate import griddata
+    import xarray as xr
+    
+    xx, yy = np.meshgrid(xgrid, ygrid, indexing='ij')
+
+    # get resolution (assumes uniform resolution)
+    res = xx[1,0] - xx[0,0]
+    npoints = 1+int(dmax/res)
+    if dmax < res:
+        raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
+    
+    # Get upstream direction
+    A = A%360
+    if    A==0:   upstreamDirX=0;  upstreamDirY=-1
+    elif  A==90:  upstreamDirX=-1; upstreamDirY=0
+    elif  A==180: upstreamDirX=0;  upstreamDirY=1
+    elif  A==270: upstreamDirX=1;  upstreamDirY=0
+    elif  A>0  and A<90:   upstreamDirX=-1; upstreamDirY=-1
+    elif  A>90  and A<180:  upstreamDirX=-1; upstreamDirY=1
+    elif  A>180 and A<270:  upstreamDirX=1;  upstreamDirY=1
+    elif  A>270 and A<360:  upstreamDirX=1;  upstreamDirY=-1
+
+    # change angle notation
+    ang = np.deg2rad(270-A)
+
+    # array for interpolation using griddata
+    points = np.array( (xx.flatten(), yy.flatten()) ).T
+    if isinstance(zagl, xr.DataArray):
+        zagl = zagl.values
+    values = zagl.flatten()
+
+    # create rotated grid. This way we sample into a interpolated grid that has the exact points we need
+    xmin = min(xx[:,0]);  xmax = max(xx[:,0])
+    ymin = min(yy[0,:]);  ymax = max(yy[0,:])
+    if A%90 == 0:
+        # if flow is aligned, we don't need a new grid
+        xrot = xx[:,0]
+        yrot = yy[0,:]
+        xxrot = xx
+        yyrot = yy
+        elevrot = zagl
+    else:
+        xrot = np.arange(xmin, xmax+0.1, abs(res*np.cos(ang)))
+        yrot = np.arange(ymin, ymax+0.1, abs(res*np.sin(ang)))
+        xxrot, yyrot = np.meshgrid(xrot, yrot, indexing='ij')
+        elevrot = griddata( points, values, (xxrot, yyrot), method=method )
+
+    # create empty rotated Sx array
+    Sxrot = np.empty(np.shape(elevrot));  Sxrot[:,:] = np.nan
+
+    for i, xi in enumerate(xrot):
+        if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
+        #if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ')
+        for j, yi in enumerate(yrot):
+
+            # Get elevation profile along the direction asked
+            isel = np.linspace(i-upstreamDirX*npoints+upstreamDirX, i, npoints, dtype=int)
+            jsel = np.linspace(j-upstreamDirY*npoints+upstreamDirY, j, npoints, dtype=int)
+            try:
+                xsel = xrot[isel]
+                ysel = yrot[jsel]
+                elev = elevrot[isel,jsel]
+            except IndexError:
+                # At the borders, can't get a valid positions
+                xsel = np.zeros(np.size(isel))  
+                ysel = np.zeros(np.size(jsel))
+                elev = np.zeros(np.size(isel))
+
+            # elevation of (xi, yi), for convenience
+            elevi = elev[-1]
+
+            try:
+                Sxrot[i,j] = np.nanmax(np.rad2deg( np.arctan( (elev[:-1] - elevi)/(((xsel[:-1]-xi)**2 + (ysel[:-1]-yi)**2)**0.5) ) ))
+            except IndexError:
+                raise
+
+    if verbose: print(f'Computing shelter angle Sx..        ')#, end='\r')
     # interpolate results back to original grid
     pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
     Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )

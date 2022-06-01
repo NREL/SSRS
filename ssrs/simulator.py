@@ -23,7 +23,7 @@ from .config import Config
 from .layers import (compute_orographic_updraft, compute_aspect_degrees,
                      compute_slope_degrees, compute_random_thermals,
                      get_above_threshold_speed, compute_blurred_quantity,
-                     compute_sx)
+                     compute_sx, upsample_field, downsample_field)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 
@@ -171,10 +171,6 @@ class Simulator(Config):
         print(f'Reference height is {self.href}')
         print(f'Analysis height is {self.h}')
 
-        # Get meshgrid for pcolormesh plotting
-        #xgrid, ygrid = self.get_terrain_grid()
-        #self.xx, self.yy = np.meshgrid(xgrid, ygrid, indexing='ij')
-
         # Calculate the orographic updraft based on mode
         if self.sim_mode.lower() != 'uniform':
             self.compute_orographic_updrafts_using_wtk()
@@ -259,8 +255,9 @@ class Simulator(Config):
     def get_terrain_sx(self):
         """ Returns data for terrain layer inprojected crs """
         try:
-            sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}'
+            sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
             sx = self.load_terrain_quantity(self.case_ids[0], sxfname_str)
+            print(f'Found sx map for {int(self.uniform_winddirn_href)} deg. Loading it..')
         except OSError:
             sx = self.compute_sx_case() 
         return sx
@@ -291,16 +288,31 @@ class Simulator(Config):
 ########## Computing Updrafts ##########
 
 
-    def compute_sx_case(self) -> None:
-        """ Computes and saves Sx quantity """
-        xgrid, ygrid = self.get_terrain_grid()
-        elev = self.get_terrain_elevation()
-        sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}'
-        wdirn_sx = (self.uniform_winddirn_href + 180)%360
-        sx = compute_sx(xgrid, ygrid, elev.T, wdirn_sx) 
-        sx = sx.T  # adjust convention
-        fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
-        np.save(f'{fname}.npy', sx.astype(np.float32))
+    def compute_sx_case(self, lowres=True) -> None:
+        """ Computes and saves Sx quantity in low-res """
+        if lowres:
+            # Get sx based on low-resolution terrain data
+            print(f'Getting Sx based on {self.resolution} m resolution maps')
+            xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
+            elev = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+            sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
+            wdirn_sx = (self.uniform_winddirn_href + 180)%360
+            sx = compute_sx(xgrid, ygrid, elev.T, wdirn_sx) 
+            sx = sx.T  # adjust convention
+            # Downsample to high-resolution
+            sx = downsample_field(sx, self.resolution, self.resolution_terrain)
+            fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
+            np.save(f'{fname}.npy', sx.astype(np.float32))
+        else:
+            print(f'Getting Sx based on {self.resolution_terrain} m resolution maps')
+            xgrid, ygrid = self.get_terrain_grid()
+            elev = self.get_terrain_elevation()
+            sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_highres'
+            wdirn_sx = (self.uniform_winddirn_href + 180)%360
+            sx = compute_sx(xgrid, ygrid, elev.T, wdirn_sx) 
+            sx = sx.T  # adjust convention
+            fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
+            np.save(f'{fname}.npy', sx.astype(np.float32))
         return sx
 
     def compute_slope_degrees_case(self) -> None:
@@ -346,9 +358,9 @@ class Simulator(Config):
             h = self.href
             sx = self.get_terrain_sx()
         orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
-                                                   self.resolution_terrain, sx, h)
+                                                   self.resolution_terrain, self.resolution,  sx, h)
         # upsample from `resolution_terrain` to `resolution`
-        orograph = self.upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
+        orograph = upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
         fname = self._get_orograph_fname(self.case_ids[0], self.mode_data_dir)
         np.save(f'{fname}.npy', orograph.astype(np.float32))
         np.save(f'{fname}_terrainResolution.npy', orograph_fine.astype(np.float32))
@@ -383,23 +395,32 @@ class Simulator(Config):
                 h = self.href
                 sx = self.get_terrain_sx()
             orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
-                                                 self.resolution_terrain, sx, h)
+                                                 self.resolution_terrain, self.resolution, sx, h)
             # upsample from `resolution_terrain` to `resolution`
-            orograph = self.upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
+            orograph = upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
             fname = self._get_orograph_fname(case_id, self.mode_data_dir)
             np.save(f'{fname}.npy', orograph.astype(np.float32))
             np.save(f'{fname}_highres.npy', orograph_fine.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
 
 
-    def upsample_field(self, field, source_res, target_res):
-        """ Upsamples a high-resolution field to a lower resolution """
-        if not  (target_res/source_res).is_integer():
-           raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
-                             f'multiple of terrain resolution, {self.resolution_terrain} m')
-        ratio = int(target_res/source_res)
-        if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
-        return field[::ratio,::ratio]
+#    def upsample_field(self, field, source_res, target_res):
+#        """ Upsamples a high-resolution field to a lower resolution """
+#        if not (target_res/source_res).is_integer():
+#           raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
+#                             f'multiple of terrain resolution, {self.resolution_terrain} m')
+#        ratio = int(target_res/source_res)
+#        if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
+#        return field[::ratio,::ratio]
+#
+#    def downsample_field(self, field, source_res, target_res):
+#        """ Downsample a low-resolution field to a higher resolution """
+#        if not (source_res/target_res).is_integer():
+#           raise ValueError (f'The high resolution, {self.resolution_terrain} m, should be a '
+#                             f'multiple of low resolution, {self.resolution} m')
+#        ratio = int(source_res/target_res)
+#        if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m')
+#        return ndimage.zoom(field, (ratio, ratio))
 
 
 #### THIS PART HERE with real_id, see also lines 318 and 502
@@ -422,6 +443,7 @@ class Simulator(Config):
         """ Computes updrafts for the particular case """
         fname = self._get_orograph_fname(case_id, self.mode_data_dir)
         orograph = np.load(f'{fname}.npy')
+        print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
         updrafts = [orograph]
         if self.thermals_realization_count > 0:
             for real_id in range(self.thermals_realization_count):
@@ -512,7 +534,6 @@ class Simulator(Config):
         threshold_str = f't{int(self.updraft_threshold*100)}'
         mov_str = f'{self.movement_model}'
         out_str = f'{case_id}_{dirn_str}_{threshold_str}_{mov_str}'
-        print(f'full case string: {out_str}')
         if real_id is not None:
             out_str += f'_r{int(real_id)}'
         return out_str
@@ -710,7 +731,7 @@ class Simulator(Config):
         print('Plotting simulated tracks..')
         lwidth = 0.15 if self.track_count > 251 else 0.4
         # Use analysis-resolution information
-        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
@@ -886,7 +907,7 @@ class Simulator(Config):
         for case_id in self.case_ids:
             thermal = np.load(self._get_thermal_fpath(case_id))
             fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(6, int(round(np.mean(thermal)))), 6)
+            maxval = min(max(6, int(round(np.nanmean(thermal)))), 6)
             curm = axs.imshow(thermal, cmap='viridis',
                               extent=self.extent, origin='lower',
                               vmin=0, vmax=maxval)
@@ -897,23 +918,6 @@ class Simulator(Config):
             fname = os.path.join(self.mode_fig_dir, f'{case_id}_thermal.png')
             self.save_fig(fig, fname, show)
     
-    #def plot_updrafts(self, plot_turbs=True, show=False) -> None:
-    #    """ Plot estimated thermal updrafts """
-    #    for case_id in self.case_ids:
-    #        orograph = np.load(self._get_orograph_fpath(case_id))
-    #        thermal = np.load(self._get_thermal_fpath(case_id))
-    #        sum=orograph+thermal
-    #        fig, axs = plt.subplots(figsize=self.fig_size)
-    #        maxval = min(max(5, int(round(np.mean(thermal)))), 5)
-    #        curm = axs.imshow(sum, cmap='viridis',
-    #                          extent=self.extent, origin='lower',
-    #                          vmin=0, vmax=maxval)
-    #        cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-    #        cbar.set_label('Wo + Wt (m/s)')
-    #        if plot_turbs:
-    #            self.plot_turbine_locations(axs)
-    #        fname = os.path.join(self.mode_fig_dir, f'{case_id}_wtot.png')
-    #        self.save_fig(fig, fname, show)
 
     def plot_sm_orographic_updrafts(self, plot_turbs=True, show=False) -> None:
         """ Plot orographic updrafts """
@@ -921,7 +925,7 @@ class Simulator(Config):
             orograph = np.load(self._get_orograph_fpath(case_id))
             wo_smoothed=ndimage.gaussian_filter(orograph, sigma=3, mode='constant') #db added # rt: resolution independent. needs to be fixed
             fig, axs = plt.subplots(figsize=self.fig_size)
-            maxval = min(max(2, int(round(np.mean(orograph)))), 5)
+            maxval = min(max(2, int(round(np.nanmean(orograph)))), 5)
             curm = axs.imshow(wo_smoothed, cmap='viridis',
                               extent=self.extent, origin='lower',
                               vmin=0, vmax=maxval)
@@ -1036,7 +1040,7 @@ class Simulator(Config):
         """ Plot presence maps """
         print('Plotting presence density map..')
         # Use analysis-resolution information
-        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
@@ -1083,7 +1087,7 @@ class Simulator(Config):
         """ Plot presence maps """
         print('Plotting presence density map..')
         # Use analysis-resolution information
-        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
@@ -1180,7 +1184,7 @@ class Simulator(Config):
         """ Plot presence maps """
         print('Plotting presence density map..')
         # Use analysis-resolution information
-        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         xloc, yloc = self.turbines.get_locations_for_this_project(pname)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
@@ -1234,7 +1238,7 @@ class Simulator(Config):
         """ Plot presence maps """
         print('Plotting presence density map..')
         # Use analysis-resolution information
-        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         xloc, yloc = self.turbines.get_locations_for_this_project(pname)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
@@ -1281,7 +1285,7 @@ class Simulator(Config):
         print('Plotting simulated tracks..')
         lwidth = 0.1 if self.track_count > 251 else 0.4
         # Use analysis-resolution information
-        elevation = self.upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
             thermal = np.load(self._get_thermal_fpath(case_id))

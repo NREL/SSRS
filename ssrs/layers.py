@@ -8,6 +8,7 @@ import random
 from scipy import ndimage
 from .hrrr import HRRR
 from .config import Config
+import pathos.multiprocessing as mp
 
 
 def compute_orographic_updraft(
@@ -16,7 +17,8 @@ def compute_orographic_updraft(
     wdirn: np.ndarray,
     slope: np.ndarray,
     aspect: np.ndarray,
-    res: float,
+    res_terrain: float, # high-res terrain data resolution
+    res: float,         # low-res analysis resolution
     sx: np.ndarray = None,
     h: float = 80.,
     min_updraft_val: float = 0.
@@ -28,7 +30,7 @@ def compute_orographic_updraft(
         return orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
     else:
         return orographic_updraft_improved(wspeed, wdirn, slope, aspect,
-                                           elev, res, sx, h, min_updraft_val)
+                                           elev, res_terrain, res, sx, h, min_updraft_val)
 
 def orographic_updraft_original(
     wspeed: np.ndarray,
@@ -48,7 +50,8 @@ def orographic_updraft_improved(
     slope: np.ndarray,
     aspect: np.ndarray,
     elev: np.ndarray,
-    res: float,
+    res_terrain: float, # high-res terrain data resolution
+    res: float,         # low-res analysis resolution
     sx: np.ndarray = None,
     h : float = 80.,
     min_updraft_val: float = 0.
@@ -67,17 +70,38 @@ def orographic_updraft_improved(
     # Compute terrain complexity adjustment
     print('Computing adjusting factors from improved model (3/3)..', end='\r')
     filterSize_in_m = 500
-    filterSize = int(np.floor(filterSize_in_m/res))
-    local_zmean = ndimage.generic_filter(elev, np.mean, footprint=np.ones((filterSize,filterSize)) )
-    local_zmin  = ndimage.generic_filter(elev, np.min,  footprint=np.ones((filterSize,filterSize)) )
-    local_zmax  = ndimage.generic_filter(elev, np.max,  footprint=np.ones((filterSize,filterSize)) )
+    filterSize = int(np.floor(filterSize_in_m/res_terrain))
+    elev_lowres = upsample_field(elev, res_terrain, res)
+    local_zmean = ndimage.generic_filter(elev_lowres, np.mean, footprint=np.ones((filterSize,filterSize)) )
+    local_zmin  = ndimage.generic_filter(elev_lowres, np.min,  footprint=np.ones((filterSize,filterSize)) )
+    local_zmax  = ndimage.generic_filter(elev_lowres, np.max,  footprint=np.ones((filterSize,filterSize)) )
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
+    tc = downsample_field(tc, res, res_terrain)
     factor_tc = 1 + tc*(h/40)
     # Combine all factors
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
 
     return F*W0prime
+
+
+def upsample_field(field, source_res, target_res):
+    """ Upsamples a high-resolution field to a lower resolution """
+    if not (target_res/source_res).is_integer():
+       raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
+                         f'multiple of terrain resolution, {self.resolution_terrain} m')
+    ratio = int(target_res/source_res)
+    if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
+    return field[::ratio,::ratio]
+
+def downsample_field(field, source_res, target_res):
+    """ Downsample a low-resolution field to a higher resolution """
+    if not (source_res/target_res).is_integer():
+       raise ValueError (f'The high resolution, {self.resolution_terrain} m, should be a '
+                         f'multiple of low resolution, {self.resolution} m')
+    ratio = int(source_res/target_res)
+    if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m      ')
+    return ndimage.zoom(field, (ratio, ratio))
 
 
 def deardoff_velocity_function(
@@ -230,111 +254,7 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
     # get resolution (assumes uniform resolution)
     res = xx[1,0] - xx[0,0]
     npoints = 1+int(dmax/res)
-    if dmax < res:
-        raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
-    
-    # Get upstream direction
-    A = A%360
-    if    A==0:   upstreamDirX=0;  upstreamDirY=-1
-    elif  A==90:  upstreamDirX=-1; upstreamDirY=0
-    elif  A==180: upstreamDirX=0;  upstreamDirY=1
-    elif  A==270: upstreamDirX=1;  upstreamDirY=0
-    elif  A>0  and A<90:   upstreamDirX=-1; upstreamDirY=-1
-    elif  A>90  and A<180:  upstreamDirX=-1; upstreamDirY=1
-    elif  A>180 and A<270:  upstreamDirX=1;  upstreamDirY=1
-    elif  A>270 and A<360:  upstreamDirX=1;  upstreamDirY=-1
-
-    # change angle notation
-    ang = np.deg2rad(270-A)
-
-    # array for interpolation using griddata
-    points = np.array( (xx.flatten(), yy.flatten()) ).T
-    if isinstance(zagl, xr.DataArray):
-        zagl = zagl.values
-    values = zagl.flatten()
-
-    # create rotated grid. This way we sample into a interpolated grid that has the exact points we need
-    xmin = min(xx[:,0]);  xmax = max(xx[:,0])
-    ymin = min(yy[0,:]);  ymax = max(yy[0,:])
-    if A%90 == 0:
-        # if flow is aligned, we don't need a new grid
-        xrot = xx[:,0]
-        yrot = yy[0,:]
-        xxrot = xx
-        yyrot = yy
-        elevrot = zagl
-    else:
-        xrot = np.arange(xmin, xmax+0.1, abs(res*np.cos(ang)))
-        yrot = np.arange(ymin, ymax+0.1, abs(res*np.sin(ang)))
-        xxrot, yyrot = np.meshgrid(xrot, yrot, indexing='ij')
-        elevrot = griddata( points, values, (xxrot, yyrot), method=method )
-
-    # create empty rotated Sx array
-    Sxrot = np.empty(np.shape(elevrot));  Sxrot[:,:] = np.nan
-
-    for i, xi in enumerate(xrot):
-        if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
-        #if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ')
-        for j, yi in enumerate(yrot):
-
-            # Get elevation profile along the direction asked
-            isel = np.linspace(i-upstreamDirX*npoints+upstreamDirX, i, npoints, dtype=int)
-            jsel = np.linspace(j-upstreamDirY*npoints+upstreamDirY, j, npoints, dtype=int)
-            try:
-                xsel = xrot[isel]
-                ysel = yrot[jsel]
-                elev = elevrot[isel,jsel]
-            except IndexError:
-                # At the borders, can't get a valid positions
-                xsel = np.zeros(np.size(isel))  
-                ysel = np.zeros(np.size(jsel))
-                elev = np.zeros(np.size(isel))
-
-            # elevation of (xi, yi), for convenience
-            elevi = elev[-1]
-
-            try:
-                Sxrot[i,j] = np.nanmax(np.rad2deg( np.arctan( (elev[:-1] - elevi)/(((xsel[:-1]-xi)**2 + (ysel[:-1]-yi)**2)**0.5) ) ))
-            except IndexError:
-                raise
-
-    if verbose: print(f'Computing shelter angle Sx..        ')#, end='\r')
-    # interpolate results back to original grid
-    pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
-    Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )
-
-    return Sx
-def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
-    '''
-    Sx is a measure of topographic shelter or exposure relative to a particular
-    wind direction. Calculates a whole map for all points (xi, yi) in the domain.
-    For each (xi, yi) pair, it uses all v points (xv, yv) upwind of (xi, yi) in
-    the A wind direction, up to dmax.
-    Winstral, A., Marks D. "Simulating wind fields and snow redistribution using
-        terrain-based parameters to model snow accumulation and melt over a semi-
-        arid mountain catchment" Hydrol. Process. 16, 3585–3603 (2002)
-    Usage
-    =====
-    xx, yy : array
-        meshgrid arrays of the region extent coordinates.
-    zagl: arrayi, xr.DataArray
-        Elevation map of the region
-    A: float
-        Wind direction (deg, wind direction convention)
-    dmax: float
-        Upwind extent of the search
-    method: string
-        griddata interpolation method. Options are 'nearest', 'linear', 'cubic'.
-        Recommended linear or cubic.
-    '''
-    from scipy.interpolate import griddata
-    import xarray as xr
-    
-    xx, yy = np.meshgrid(xgrid, ygrid, indexing='ij')
-
-    # get resolution (assumes uniform resolution)
-    res = xx[1,0] - xx[0,0]
-    npoints = 1+int(dmax/res)
+    #print(f'Sx calculation: looking upstream 500 m ({npoints} points)')
     if dmax < res:
         raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
     

@@ -26,7 +26,6 @@ def compute_orographic_updraft(
     """ Returns orographic updraft using wind speed, wind direction, slope
     and aspect """
     if sx is None:
-        print('computing original updraft')
         return orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
     else:
         return orographic_updraft_improved(wspeed, wdirn, slope, aspect,
@@ -157,7 +156,6 @@ def compute_slope_degrees(z_mat: np.ndarray, res: float):
     numpy array containing slope in degrees
     """
 
-    #print('Manually computing slope..')
     slope = np.empty_like(z_mat)
     slope[:, :] = np.nan
     z_1 = z_mat[:-2, 2:]  # upper left
@@ -191,7 +189,6 @@ def compute_aspect_degrees(z_mat: np.ndarray, res: float):
     numpy array containing aspect in degrees
     """
 
-    #print('Manually computing aspect..')
     aspect = np.empty_like(z_mat)
     aspect[:, :] = np.nan
     z_1 = z_mat[:-2, 2:]  # upper left
@@ -254,7 +251,6 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
     # get resolution (assumes uniform resolution)
     res = xx[1,0] - xx[0,0]
     npoints = 1+int(dmax/res)
-    #print(f'Sx calculation: looking upstream 500 m ({npoints} points)')
     if dmax < res:
         raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
     
@@ -299,7 +295,6 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
 
     for i, xi in enumerate(xrot):
         if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
-        #if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ')
         for j, yi in enumerate(yrot):
 
             # Get elevation profile along the direction asked
@@ -323,7 +318,7 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
             except IndexError:
                 raise
 
-    if verbose: print(f'Computing shelter angle Sx..        ')#, end='\r')
+    if verbose: print(f'Computing shelter angle Sx..        ')
     # interpolate results back to original grid
     pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
     Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )

@@ -404,27 +404,6 @@ class Simulator(Config):
         print(f'took {get_elapsed_time(start_time)}', flush=True)
 
 
-#    def upsample_field(self, field, source_res, target_res):
-#        """ Upsamples a high-resolution field to a lower resolution """
-#        if not (target_res/source_res).is_integer():
-#           raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
-#                             f'multiple of terrain resolution, {self.resolution_terrain} m')
-#        ratio = int(target_res/source_res)
-#        if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
-#        return field[::ratio,::ratio]
-#
-#    def downsample_field(self, field, source_res, target_res):
-#        """ Downsample a low-resolution field to a higher resolution """
-#        if not (source_res/target_res).is_integer():
-#           raise ValueError (f'The high resolution, {self.resolution_terrain} m, should be a '
-#                             f'multiple of low resolution, {self.resolution} m')
-#        ratio = int(source_res/target_res)
-#        if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m')
-#        return ndimage.zoom(field, (ratio, ratio))
-
-
-#### THIS PART HERE with real_id, see also lines 318 and 502
-    
     def compute_thermal_updrafts(self, case_id: str):
         """ Computes updrafts for the particular case """
         if self.thermals_realization_count > 0:

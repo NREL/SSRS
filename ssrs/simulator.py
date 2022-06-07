@@ -390,7 +390,8 @@ class Simulator(Config):
         fname = f'{self._get_id_string(case_id, real_id)}_tracks'
         return os.path.join(dirname, fname)
 
-    def plot_simulated_tracks(self, plot_turbs=True, show=False) -> None:
+    def plot_simulated_tracks(self, plot_turbs=True, show=False,
+                              fig=None, axs=None, in_alpha=0.25) -> None:
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
         lwidth = 0.15 if self.track_count > 251 else 0.4
@@ -399,7 +400,8 @@ class Simulator(Config):
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             for real_id, _ in enumerate(updrafts):
-                fig, axs = plt.subplots(figsize=self.fig_size)
+                if axs is None:
+                    fig, axs = plt.subplots(figsize=self.fig_size)
                 _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
                                origin='lower', extent=self.extent)
                 fname = self._get_tracks_fname(
@@ -410,7 +412,7 @@ class Simulator(Config):
                         axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
                                  markersize=1.0)
                         axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
-                                 '-r', linewidth=lwidth, alpha=0.5)
+                                 '-r', linewidth=lwidth, alpha=in_alpha)
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
@@ -429,8 +431,9 @@ class Simulator(Config):
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_fig_dir)
-                self.save_fig(fig, f'{fname}.png', show)
-
+                if axs is None:
+                    self.save_fig(fig, f'{fname}.png', show)
+        return fig, axs
 
 ########### Plot updrafts and WTK layers ###########
 
@@ -488,9 +491,11 @@ class Simulator(Config):
 
 ########### Compute and plot presence maps ###########
 
-    def _plot_presence(self, in_prob, in_val, plot_turbs, wfarm_level=False):
+    def _plot_presence(self, in_prob, in_val, fig=None, axs=None,
+                       plot_turbs=False, wfarm_level=False):
         """Plots a presence density """
-        fig, axs = plt.subplots(figsize=self.fig_size)
+        if axs is None:
+            fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
@@ -537,17 +542,17 @@ class Simulator(Config):
                     self.save_fig(fig, f'{fname}.png', show)
             case_prob /= np.amax(case_prob)
             summary_prob += case_prob
-            fig, _ = self._plot_presence(case_prob, minval, plot_turbs)
-            fname = f'{self._get_id_string(case_id)}_presence.png'
-            fpath = os.path.join(self.mode_fig_dir, fname)
-            self.save_fig(fig, fpath, show)
+            # fig, _ = self._plot_presence(case_prob, minval, plot_turbs)
+            # fname = f'{self._get_id_string(case_id)}_presence.png'
+            # fpath = os.path.join(self.mode_fig_dir, fname)
+            # self.save_fig(fig, fpath, show)
         summary_prob /= np.amax(summary_prob)
         fname = os.path.join(self.mode_data_dir, 'summary_presence')
         np.save(f'{fname}.npy', summary_prob.astype(np.float32))
-        if len(self.case_ids) > 1:
-            fig, _ = self._plot_presence(summary_prob, minval, plot_turbs)
-            fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
-            self.save_fig(fig, fpath, show)
+        fig, axs = self._plot_presence(summary_prob, minval, plot_turbs)
+        fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
+        self.save_fig(fig, fpath, show)
+        return fig, axs, summary_prob
 
     def _get_presence_fname(self, case_id: str, real_id: int, dirname: str):
         """ Returns file path for saving presence """
@@ -561,7 +566,8 @@ class Simulator(Config):
         plot_turbs=True,
         show=False,
         minval=0.05,
-        pad: float = 2000.
+        pad: float = 2000.,
+        axs=None
     ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
@@ -641,21 +647,26 @@ class Simulator(Config):
     def plot_terrain_features(self, plot_turbs=True, show=False) -> None:
         """ Plots terrain layers """
         print('Plotting terrain layers..', flush=True)
-        self.plot_terrain_elevation(plot_turbs, show)
-        self.plot_terrain_slope(plot_turbs, show)
-        self.plot_terrain_aspect(plot_turbs, show)
+        _, _ = self.plot_terrain_elevation(plot_turbs, show)
+        _, _ = self.plot_terrain_slope(plot_turbs, show)
+        _, _ = self.plot_terrain_aspect(plot_turbs, show)
 
-    def plot_terrain_elevation(self, plot_turbs=True, show=False) -> None:
+    def plot_terrain_elevation(self, plot_turbs=True, show=False,
+                               fig=None, axs=None, **kwargs) -> None:
         """ Plotting terrain elevation """
         elevation = self.get_terrain_elevation()
-        fig, axs = plt.subplots(figsize=self.fig_size)
+        if axs is None:
+            fig, axs = plt.subplots(figsize=self.fig_size)
         curm = axs.imshow(elevation / 1000., cmap='terrain',
-                          extent=self.extent, origin='lower')
+                          extent=self.extent, origin='lower', **kwargs)
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
         cbar.set_label('Altitude (km)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
-        self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
+        if axs is None:
+            self.save_fig(fig, os.path.join(
+                self.fig_dir, 'elevation.png'), show)
+        return fig, axs
 
     def plot_terrain_slope(self, plot_turbs=True, show=False) -> None:
         """ Plots slope in degrees """
@@ -668,6 +679,7 @@ class Simulator(Config):
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
+        return fig, axs
 
     def plot_terrain_aspect(self, plot_turbs=True, show=False) -> None:
         """ Plots terrain aspect """
@@ -680,6 +692,7 @@ class Simulator(Config):
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)
+        return fig, axs
 
 
 ########### other useful functions ###########

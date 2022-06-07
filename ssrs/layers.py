@@ -93,6 +93,7 @@ def upsample_field(field, source_res, target_res):
     if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
     return field[::ratio,::ratio]
 
+
 def downsample_field(field, source_res, target_res):
     """ Downsample a low-resolution field to a higher resolution """
     if not (source_res/target_res).is_integer():
@@ -100,6 +101,8 @@ def downsample_field(field, source_res, target_res):
                          f'multiple of low resolution, {self.resolution} m')
     ratio = int(source_res/target_res)
     if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m      ')
+    # The input array to ndimage.zoom cannot have NaNs. Replacing NaN with 0
+    field = np.nan_to_num(field)
     return ndimage.zoom(field, (ratio, ratio))
 
 

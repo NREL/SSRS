@@ -3,23 +3,43 @@ over the Appalachian Mountains at 100-m resolution"""
 
 from dataclasses import replace
 from ssrs import Simulator, Config
+import os
 
 config_base = Config(
-    run_name='appalachian',
-    max_cores=16,
+    run_name='wv_appalachians_test',
+    sim_movement='heuristics',
+    movement_model='heuristics',
+    
     out_dir='./output',
-    southwest_lonlat=(-79.7, 39.),  # (lon, lat) for southwest pt
+    max_cores=16,
+    
+    movement_ruleset='step_ahead_look_ahead', # dir_random_walk,step_ahead_drw,step_ahead_look_ahead,lookahead,mixed
+    random_walk_freq=0, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+    random_walk_step_range=(30,60), # when a random walk does occur, the number of random steps will occur in this range
+    look_ahead_dist = 2000.0, #distance outward that bird will scan for strong updrafts
+    
+    thermals_realization_count=1,
+    thermal_intensity_scale=1., #1 gives weak random field, 3 gives v strong random field    
+    updraft_threshold=0.85,
+    
+    southwest_lonlat=(-79.7, 39.),  # (lon, lat) for southwest pt, no integers!
     region_width_km=(70., 60.),  # terrain width (xwidth, ywidth) in km
-    resolution=100.,
-    track_direction=0.,
-    track_start_region=(2, 68, 0, 1),
-    track_count=1000
+    resolution=100., # meters
+    
+    track_direction=202.5,
+    track_start_region=(10, 60, 55, 55),  #xmin, xmax, ymin, ymax
+    #track_start_region=(12, 18, 15, 25),  #xmin, xmax, ymin, ymax. placed centrally for random walk case
+    track_count=50,
+    
+    # plotting related
+    fig_height: float = 6.,
+    fig_dpi: int = 300  # increase this to get finer plots
 )
 
 config_uniform_north = replace(
     config_base,
     sim_mode='uniform',
-    uniform_winddirn=270.,
+    uniform_winddirn=135.,
     uniform_windspeed=10.,
 )
 
@@ -41,13 +61,23 @@ config_seasonal_north = replace(
 )
 
 if __name__ == '__main__':
-
+ 
     configs_to_run = (
         config_uniform_north,
-        config_snapshot_north,
+        #config_snapshot_north,
         # config_seasonal_north
     )
     for i, cfg in enumerate(configs_to_run):
+
+#        for j in range(2):  #allows us to run for multiple realizations of the thermal field
+#            sim = Simulator(cfg)
+#            sim.simulate_tracks()
+#            #sim.plot_terrain_features()
+#            #sim.plot_wtk_layers()
+#            sim.plot_simulation_output()
+#            os.rename(sim.mode_fig_dir, f'{sim.mode_fig_dir}_{j}')
+#            os.rename(sim.mode_data_dir, f'{sim.mode_data_dir}_{j}')
+        
         sim = Simulator(cfg)
         sim.simulate_tracks()
         sim.plot_terrain_features()

@@ -11,9 +11,9 @@ config_jem_base = Config(
     southwest_lonlat=(-106.21, 42.78),  # (lon, lat) for southwest pt
     region_width_km=(50., 50.),  # terrain width (xwidth, ywidth) in km
     resolution=50.,
-    track_direction=0.,
-    track_start_region=(2, 48, 0, 0),
-    track_count=1000
+    track_direction=180.,
+    track_start_region=(2, 48, 49, 49),
+    track_count=500
 )
 
 config_jem_uniform_north = replace(
@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     configs_to_run = (
         config_jem_uniform_north,
-        config_jem_snapshot_north,
+        #config_jem_snapshot_north,
         # config_jem_seasonal_north
     )
     for i, cfg in enumerate(configs_to_run):

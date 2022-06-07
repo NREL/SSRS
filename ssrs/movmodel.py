@@ -3,9 +3,14 @@
 from math import (floor, ceil, sqrt)
 from typing import List, Tuple, Optional
 import numpy as np
+import matplotlib.pyplot as plt #temp for plotting wt_test
+from scipy import ndimage #for smoothing updraft field
 import scipy.signal as ssg
 import scipy.sparse as ss
+from scipy.interpolate import RectBivariateSpline
 
+from .heuristics import rulesets
+from .actions import random_walk
 
 class MovModel:
     """ Class for fluid-flow based model """
@@ -217,6 +222,7 @@ def move_away_from_boundary(row, col, num_rows, num_cols):
     return new_row, new_col
 
 
+
 def generate_move_probabilities(
     in_probs: np.ndarray,
     move_dirn: float,
@@ -317,6 +323,157 @@ def generate_simulated_tracks(
         k += 1
     return np.array(trajectory, dtype=np.int16)
 
+def generate_heuristic_eagle_track(
+        ruleset: str,
+        wo: np.ndarray, # orographic updraft
+        wt: np.ndarray, # thermal updraft
+        elev: np.ndarray, # elevation from DEM - db added
+        start_loc: List[int],
+        PAM: float, # principal axis of migration
+        res: float, # grid resolution
+        windspeed: float, # uniform windspeed - needs to be generalized for wtk 
+        winddir: float, #uniform winddir - needs to be generalized for wtk 
+        max_moves: int = 1000,  #change from 1000 to 200 for local movements
+        #TODO ask Eliot why next param has to be specified here rather than set to int,
+        random_walk_freq: int=300, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+        random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
+        random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
+):
+    
+    assert random_walk_freq >= 0
+    assert (len(random_walk_step_range) == 2)
+
+    """ Generate an eagle track based on heuristics """
+    rules = rulesets[ruleset]
+    num_rows, num_cols = wo.shape
+    # initial conditions
+    # note 1: we simulate actual positions and then convert these back to grid
+    #         indices at the end
+    # note 2: 'i' index (rows) corresponds to y
+    #         'j' index (cols) corresponds to x
+    current_position = np.array([start_loc[1], start_loc[0]]) * res
+    weight_start=np.array(0.5)
+    wo_start=np.array(0.0)
+     #set up a list for adding a altitude-based weighting for each move
+    #weighting applied to moves based on presumed low (wt=1), moderate (wt=0.5), or high flight (wt=0)
+    trajectory = [current_position]  
+    track_weight = [weight_start]
+    track_wo=[wo_start] 
+    
+    ref_ang = np.radians(90.0 - PAM)
+    current_heading = np.array([np.cos(ref_ang), np.sin(ref_ang)])
+    directions = [current_heading]
+    xg = np.arange(num_cols) * res
+    yg = np.arange(num_rows) * res
+    maxx = xg[-1]
+    maxy = yg[-1]
+    
+    # setup updraft and elevation interpolation and smoothed wo for lookahead
+    wo_interp = RectBivariateSpline(xg, yg, wo.T)
+    wo_smoothed=ndimage.gaussian_filter(wo, sigma=3, mode='constant') #db added
+    wo_sm_interp=RectBivariateSpline(xg, yg, wo_smoothed.T) #db added
+    wt_interp = RectBivariateSpline(xg, yg, wt.T)
+    elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
+
+    # estimate spontaneous random walk params if needed
+    if (random_walk_step_range[0] is None) or (random_walk_step_range[1] is None):
+        # set default based on assumed ~2 km dist of travel
+        nstep = int(2000. / random_walk_step_size)
+        random_walk_step_range = (int(0.5*nstep), int(1.5*nstep))
+        #print('Default spontaneous random walk steps:',random_walk_step_range)
+    else:
+        assert (random_walk_step_range[1] >= random_walk_step_range[0]), \
+               'specify random_walk_step_range as (min_random_steps, max_random_steps)'
+
+    #allow for some individual variation in PAM between eagles
+    np.random.seed()
+    PAM = PAM + np.random.uniform(-10., 10.) 
+    
+    # move through domain
+    for imove in range(max_moves):
+        iact = imove % len(rules)
+        next_rule = rules[iact]
+
+        #db added this part
+        #do random walk at some specified frequency
+        randwalk = 0
+        if random_walk_freq > 0:
+            randwalk = np.random.randint(1, random_walk_freq)
+            #randwalk = np.random.randint(1, 10)
+        if randwalk==1:
+            randy2 = np.random.randint(*random_walk_step_range) #number of steps
+            #randy2 = np.random.randint(20,50) #number of steps
+            for i in range(randy2):
+                new_pos,step_wt = random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
+                #if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
+                if not ((0.05*xg[-1] < new_pos[0] < 0.95*xg[-1]) and (0.05*yg[-1] < new_pos[1] < 0.95*yg[-1])):
+                    break #db revised because we were getting a lot of random walks bunched up at the downstream boundary
+                delta = new_pos - trajectory[-1]
+                directions.append(delta)
+                trajectory.append(new_pos)
+                track_weight.append(step_wt)
+                track_wo.append(wo_interp(new_pos[0],new_pos[1], grid=False))
+        if callable(next_rule):
+            new_pos, step_wt = next_rule(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp) 
+        
+        else:
+            assert isinstance(next_rule, tuple)
+            action = next_rule[0]
+            assert callable(action)
+            try:
+                kwargs = next_rule[1]
+            except IndexError:
+                kwargs = {}
+            new_pos, step_wt = action(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,**kwargs) 
+        
+        # TODO: can do some validation here (to accept/reject new_pos)
+
+        # process new positions
+        try:
+            assert len(new_pos[0]) == 2 # TODO: update this for 3-D tracks!
+        except TypeError:
+            # `new_pos` is of the form [new_x, new_y], so we can't take the len
+            # of a float ==> a _single_ new data point was generated -- this is
+            # the default previous behavior
+            new_pos = [new_pos]
+        #else:
+            # Otherwise, `new_pos` is of the form
+            #   [[new_x1,new_y1], [new_x2,new_y2], ..., [new_xN,newyN]]
+            # and the length of the first set of coordinates is the number of
+            # simulated dimensions
+        # This is now generalized to handle 1 or more points
+        last_pos = trajectory[-1]
+        for cur_pos in new_pos:
+            if not ((0 < cur_pos[0] < xg[-1]) and (0 < cur_pos[1] < yg[-1])): 
+                #print('ending after',imove,'moves')
+                break
+            delta = tuple(map(lambda i,j:i-j, cur_pos, last_pos))
+            #delta = cur_pos - last_pos (this gives an error, unsupported operand for tuple)
+            directions.append(delta)
+            trajectory.append(cur_pos)
+            track_weight.append(step_wt)
+            track_wo.append(wo_interp(cur_pos[0],cur_pos[1],grid=False))
+            last_pos = cur_pos
+
+        #wo_vals = wo_interp(new_pos[0],new_pos[1], grid=False)
+        #===end of current action here===
+
+    # trajectory is complete--convert back to grid indices. 
+    trajectory = np.round(np.array(trajectory) / res)
+    #trajectory_3D = np.append(trajectory, track_weight, axis=1). #gives error
+    #trajectory_3D = np.hstack((trajectory, track_weight)). #gives same error
+    track_wt_10000= [x * 10000 for x in track_weight]  #*10000 allows us to store track_wt as integer in the stack
+    
+    #combine traj with track_weight
+    trajectory_3D = np.c_[trajectory,track_wt_10000]
+    np.savetxt('output/traj.csv', trajectory, delimiter=',')
+    
+    iarr = trajectory_3D[:,1]
+    jarr = trajectory_3D[:,0]
+    karr = trajectory_3D[:,2]
+    
+    return np.stack([iarr,jarr,karr],axis=-1).astype(np.int16) 
+
 
 # def generate_eagle_track(
 #         conductivity: np.ndarray,
@@ -406,7 +563,6 @@ def generate_simulated_tracks(
 #         k += 1
 #     return np.array(trajectory, dtype=np.int16)
 
-
 def compute_presence_counts(
     tracks: List[np.ndarray],
     gridshape: Tuple[int, int]
@@ -438,7 +594,29 @@ def compute_smooth_presence_counts(
     # presence_prob /= np.amax(presence_prob)
     return presence_prob.astype(np.float32)
 
+def compute_smooth_presence_counts_HSSRS(
+    tracks: List[np.ndarray],
+    gridshape: Tuple[int, int],
+    radius: float
+) -> np.ndarray:
 
+    """ Count the number of eagles detected at each grid point """
+    count_mat = np.zeros(gridshape, dtype=np.int16)
+    for track in tracks:
+        for move in track:
+            count_mat[move[0], move[1]] += 1*move[2]/10000.  #multiply counts by weighting factor
+    #np.savetxt('output/counts.csv', count_mat, delimiter=',')
+    """ Smooth count matrix using 2D convolution of the circular kernel matrix"""
+    krad = int(radius)
+    kernel = np.zeros((2 * krad + 1, 2 * krad + 1))
+    y, x = np.ogrid[-krad:krad + 1, -krad:krad + 1]
+    mask2 = x**2 + y**2 <= krad**2
+    kernel[mask2] = 1
+    kernel /= np.sum(kernel)
+    presence_prob = ssg.convolve2d(count_mat, kernel, mode='same')
+    # presence_prob /= np.amax(presence_prob)
+    return presence_prob.astype(np.float32)
+    
 def harmonic_mean(aval: float, bval: float, minval: float = 1e-10) -> float:
     """ returns harmonic mean of a and b """
     val = minval

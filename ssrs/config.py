@@ -16,8 +16,19 @@ class Config:
     max_cores: int = 8  # maximum of cores to use
     sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+    sim_movement: str = 'fluid-analogy' # fluid-analogy, heuristics
+    sim_seed: int = -1 # random number seed
+
     print_verbose: bool = False  # if want to print verbose
 
+    # H-SSRS parameters (used if `sim_movement` == 'heuristics')
+    movement_ruleset: str = 'default' # TODO: add list of valid options
+    random_walk_freq: int = 300 # if > 0, inverse of how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+    random_walk_step_size: float = 50.0 # when a random walk does occur, the distance traveled in each random movement
+    random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
+    look_ahead_dist: float = 2000.0
+    thermal_intensity_scale: float = 2.0 # #1 gives weak random thermal field, 3 gives v strong random thermal field
+    
     # parameters defining the terrain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
@@ -46,16 +57,20 @@ class Config:
     # parameters defining the updraft calculation
     thermals_realization_count: bool = 0  # number of realizations of thermals
     updraft_threshold: float = 0.75  # only use updrafts higher than this
-    movement_model: str = 'fluidflow'  # fluid-flow, drw, heuristics
+    movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
 
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
     track_count: str = 1000  # number of simulated eagle tracks
     track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2)
-    track_start_type: str = 'random'  # structured, random
+    track_start_type: str = 'structured'  # structured, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves
 
+    # plotting related
+    fig_height: float = 6.
+    fig_dpi: int = 300  # increase this to get finer plots
+    
     # turbine related
     turbine_minimum_hubheight: float = 50.  # for select turbine locations
     turbine_mrkr_styles = ('1k', '2k', '3k', '4k',

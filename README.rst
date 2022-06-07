@@ -158,7 +158,18 @@ Here is a description of the parameters available to the users to vary:
     max_cores: int = 8  # maximum number of cores to use
     sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+<<<<<<< HEAD
+    sim_seed: int = 42  # random number seed (optional)
+
+Note: Specifying `sim_seed` will fix the pseudorandom number sequence for *all
+processors*, which allows the same set of random tracks to be regenerated for a
+given seed. One caveat is that if the `track_start_region` is set up to
+simulate tracks originating from a single location, specifying `sim_seed` with
+`max_cores` > 1 will result in non-unique tracks (because each processor will
+have the same initial condition, with tracks making the same "random" choices). 
+=======
     print_verbose: bool = False # if want to print verbose
+>>>>>>> f7b2656e5d0a957086a57ce1aae6e0d131bd03eb
 
 
 Parameters for setting up the region:

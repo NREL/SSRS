@@ -753,8 +753,9 @@ class Simulator(Config):
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
         lwidth = 0.15 if self.track_count > 251 else 0.4
-        elevation = self.get_terrain_elevation()
-        xgrid, ygrid = self.get_terrain_grid()
+        #elevation = self.get_terrain_elevation()
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             for real_id, _ in enumerate(updrafts):
@@ -863,7 +864,7 @@ class Simulator(Config):
                     maxval=vmax
                 if plot == 'pcolormesh':
                     curm = axs.pcolormesh(self.xx, self.yy, updraft.T,
-                                          cmap='viridis', vmin=0, vmax=maxval)
+                                          cmap='viridis', rasterized=True, vmin=0, vmax=maxval)
                 else:
                     curm = axs.imshow(updraft, cmap='viridis', extent=self.extent,
                                       origin='lower',vmin=0,vmax=maxval)
@@ -959,7 +960,6 @@ class Simulator(Config):
         axs.set_xlim([self.extent[0], self.extent[1]])
         axs.set_ylim([self.extent[2], self.extent[3]])
         return fig, axs
-
 
     def _plot_presence_altamont(self, in_prob, in_val, fig=None, axs=None,
                        plot_turbs=False, wfarm_level=False):
@@ -1110,7 +1110,8 @@ class Simulator(Config):
     ) -> None:
         """ Plot presence maps """
         print('Plotting presence density map..')
-        elevation = self.get_terrain_elevation()
+        #elevation = self.get_terrain_elevation()
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         summary_prob = np.zeros_like(elevation)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
@@ -1143,7 +1144,6 @@ class Simulator(Config):
         fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
         self.save_fig(fig, fpath, show)
         return fig, axs, summary_prob
-
 
     def _get_presence_fname(self, case_id: str, real_id: int, dirname: str):
         """ Returns file path for saving presence """
@@ -1204,6 +1204,46 @@ class Simulator(Config):
             
             fname = f'{case_id}_{int(self.track_direction)}_presence.png'
             self.save_fig(fig, os.path.join(self.mode_fig_dir, fname), show)
+
+    def plot_windplant_presence_map_altamont(
+        self,
+        pname,
+        radius: int = 100.,
+        plot_turbs=True,
+        show=False,
+        minval=0.05,
+        pad: float = 2000.,
+        axs=None
+    ) -> None:
+        """ Plot presence maps """
+        print('Plotting presence density map..')
+        # Use analysis-resolution information
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        summary_prob = np.zeros_like(elevation)
+        xloc, yloc = self.turbines.get_locations_for_this_project(pname)
+        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+        for case_id in self.case_ids:
+            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            case_prob = np.zeros_like(updrafts[0])
+            for real_id, _ in enumerate(updrafts):
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_data_dir)
+                with open(f'{fname}.pkl', 'rb') as fobj:
+                    tracks = pickle.load(fobj)
+                prprob = compute_smooth_presence_counts(
+                    tracks, self.gridsize, krad)
+                prprob /= np.amax(prprob)
+                case_prob += prprob
+            case_prob /= np.amax(case_prob)
+            summary_prob += case_prob
+        summary_prob /= np.amax(summary_prob)
+        fig, axs = self._plot_presence(summary_prob, minval, plot_turbs,
+                                       wfarm_level=True)
+        axs.set_xlim([min(xloc) - pad, max(xloc) + pad])
+        axs.set_ylim([min(yloc) - pad, max(yloc) + pad])
+        fpath = os.path.join(self.mode_fig_dir, f'presence_{pname}.png')
+        self.save_fig(fig, fpath, show)
+
 
     def plot_windplant_presence_map(
         self,
@@ -1356,10 +1396,12 @@ class Simulator(Config):
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
 
+
     def plot_terrain_elevation_altamont(self, plot_turbs=True, show=False,
                                fig=None, axs=None, **kwargs) -> None:
         """ Plotting terrain elevation """
-        elevation = self.get_terrain_elevation()
+        #elevation = self.get_terrain_elevation()
+        elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
         if axs is None:
             fig, axs = plt.subplots(figsize=self.fig_size)
         curm = axs.imshow(elevation / 1000., cmap='terrain',
@@ -1374,13 +1416,14 @@ class Simulator(Config):
         return fig, axs
 
 
+
     def plot_terrain_slope(self, plot_turbs=True, show=False, plot='imshow', figsize=None) -> None:
         """ Plots slope in degrees """
         if figsize is None: figsize=self.fig_size
         slope = self.get_terrain_slope()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, slope.T, cmap='magma_r')
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, slope.T, cmap='magma_r', rasterized=True)
         else:
             curm = axs.imshow(slope, cmap='magma_r', extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
@@ -1395,7 +1438,7 @@ class Simulator(Config):
         aspect = self.get_terrain_aspect()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, aspect.T, cmap=cmap, vmin=0, vmax=360)
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, aspect.T, cmap=cmap, vmin=0, vmax=360, rasterized=True)
         else:
             curm = axs.imshow(aspect, cmap=cmap,
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
@@ -1420,7 +1463,7 @@ class Simulator(Config):
         sx = self.get_terrain_sx()
         fig, axs = plt.subplots(figsize=figsize)
         if plot == 'pcolormesh':
-            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, sx.T, cmap=cmap, **kwargs)
+            curm = axs.pcolormesh(self.xx_terrain, self.yy_terrain, sx.T, cmap=cmap, rasterized=True, **kwargs)
         else:
             curm = axs.imshow(sx, cmap=cmap, extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)

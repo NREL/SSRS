@@ -373,7 +373,7 @@ class Simulator(Config):
 
     def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
         """ Plot directional potential """
-        if self.movement_model == 'fluidflow':
+        if self.movement_model == 'fluid-flow':
             print('Plotting directional potential..')
             for case_id in self.case_ids:
                 updrafts = self.load_updrafts(case_id, apply_threshold=True)
@@ -420,7 +420,7 @@ class Simulator(Config):
                 if self.sim_seed > 0:
                     np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
-                if self.movement_model == 'fluidflow':
+                if self.movement_model == 'fluid-flow':
                     potential = self.get_directional_potential(
                         updraft, case_id, real_id)
                     print(f'{id_str}: Simulating {self.track_count} tracks..',

@@ -66,7 +66,7 @@ class Config:
     uniform_windspeed_h : float = uniform_windspeed   # windspeed at height h
     uniform_winddirn_h : float = uniform_winddirn     # wind dir at height h (for generality)
     href: float = 80.                                 # reference height
-    uniform_windspeed_href : float = 10.              # windspeed at ref height
+    uniform_windspeed_href : float = uniform_windspeed  # windspeed at ref height
     uniform_winddirn_href : float = uniform_winddirn  # wind dir at ref height (for generality)
 
     # Option for slope and aspect

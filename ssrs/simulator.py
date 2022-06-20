@@ -346,6 +346,11 @@ class Simulator(Config):
         print(f'Computing orographic updrafts (uniform mode) using {self.orographic_model} model..')
         slope = self.get_terrain_slope()
         aspect = self.get_terrain_aspect()
+
+
+        # make the bottom corner zero
+        #slope[0:int(self.gridsize[0]*22),0:int(self.gridsize[1])] = 0.0
+
         elev = self.get_terrain_elevation()
         if self.orographic_model.lower() == 'original':
             wspeed = self.uniform_windspeed_h * np.ones(self.gridsize_terrain)
@@ -357,10 +362,25 @@ class Simulator(Config):
             wdirn = self.uniform_winddirn_href * np.ones(self.gridsize_terrain)
             h = self.href
             sx = self.get_terrain_sx()
+        # save files here instead of layers.compute_orographic_updraft
+        print('Dumping wspd, wdir, slope and aspect as used by compute_orographic_updraft')
+        np.save(os.path.join(self.data_dir,'wspeed.npy'),wspeed)
+        np.save(os.path.join(self.data_dir,'wdirn.npy'),wdirn)
+        np.save(os.path.join(self.data_dir,'slope.npy'),slope)
+        np.save(os.path.join(self.data_dir,'aspect.npy'),aspect)
+
+
         orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
                                                    self.resolution_terrain, self.resolution,  sx, h)
         # upsample from `resolution_terrain` to `resolution`
         orograph = upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
+
+        # let's load a updraft field fromm alt_study branch and use it here to see if the tracks are the same
+        #orograph = np.load('/home/rthedin/SSRS/notebooks/altamont_fws/output/alt_test_rerunRimple_ssrs_env_scratch/data/orograph.npy')
+# the approach above works flawlessly. I do have an issue on how I compute terrain metrics
+
+        np.save(os.path.join(self.data_dir,'orograph_fine.npy'),orograph_fine)
+        np.save(os.path.join(self.data_dir,'orograph.npy'),orograph)
         fname = self._get_orograph_fname(self.case_ids[0], self.mode_data_dir)
         np.save(f'{fname}.npy', orograph.astype(np.float32))
         np.save(f'{fname}_terrainResolution.npy', orograph_fine.astype(np.float32))
@@ -795,6 +815,59 @@ class Simulator(Config):
         return fig, axs
 
 
+    def plot_simulated_tracks_altamont_zoom(self, plot_turbs=True, show=False,
+                              fig=None, axs=None, in_alpha=0.25) -> None:
+        """ Plots simulated tracks
+          This function zooms the terrain data and plots the same tracks on top of the zoomed-in terrain
+        """
+        print('Plotting simulated tracks..')
+        lwidth = 0.15 if self.track_count > 251 else 0.4
+        elevation = self.get_terrain_elevation()
+        #elevation = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+       
+        # manually crop the elevation map
+        elevation = elevation[0:int(self.gridsize[0]),0:int(self.gridsize[1])]
+        xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
+        for case_id in self.case_ids:
+            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            for real_id, _ in enumerate(updrafts):
+                if axs is None:
+                    fig, axs = plt.subplots(figsize=self.fig_size)
+                _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
+                               origin='lower', extent=self.extent)
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_data_dir)
+                with open(f'{fname}.pkl', 'rb') as fobj:
+                    tracks = pickle.load(fobj)
+                    for itrack in tracks:
+                        axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
+                                 markersize=1.0)
+                        axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
+                                 '-r', linewidth=lwidth, alpha=in_alpha)
+                _, _ = create_gis_axis(fig, axs, None, self.km_bar)
+                if plot_turbs:
+                    self.plot_turbine_locations(axs)
+                left = self.extent[0] + self.track_start_region[0] * 1000.
+                bottom = self.extent[2] + \
+                    self.track_start_region[2] * 1000.
+                width = self.track_start_region[1] - \
+                    self.track_start_region[0]
+                hght = self.track_start_region[3] - \
+                    self.track_start_region[2]
+                rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                          hght * 1000., alpha=0.2,
+                                          edgecolor='none', facecolor='b')
+                axs.add_patch(rect)
+                axs.set_xlim([self.extent[0], self.extent[1]])
+                axs.set_ylim([self.extent[2], self.extent[3]])
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_fig_dir)
+                if axs is None:
+                    #self.save_fig(fig, f'{fname}.png', show)
+                    pass
+        return fig, axs
+
+
     def plot_simulated_tracks_HSSRS(self, plot_turbs=True, show=False) -> None:
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
@@ -847,6 +920,62 @@ class Simulator(Config):
                 self.save_fig(fig, f'{fname}.png', show)
                 
 ########### Plot updrafts and WTK layers ###########
+
+    def plot_updrafts_zoom(self, apply_threshold=True, plot_turbs=True,
+                      show=False, plot='imshow',figsize=None,maxval=None,in_alpha=0.25) -> None:
+        """ Plot updrafts with or without applying the threshold
+        function to zoom on the lower left region
+        """
+        print('Plotting updraft fields..')
+        # Updraft field is on the coarse analysis grid
+        lwidth = 0.15 if self.track_count > 251 else 0.4
+        xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
+        if figsize is None: figsize=self.fig_size
+        for case_id in self.case_ids:
+            updrafts = self.load_updrafts(case_id, apply_threshold)
+            for real_id, updraft in enumerate(updrafts):
+
+                # get the corner and re-size so everything else is the same
+                updraft = updraft[0:int(self.gridsize[0]/5),0:int(self.gridsize[1]/5)]
+                updraft = downsample_field(updraft,50, 10)
+               
+                fig, axs = plt.subplots(figsize=self.fig_size)
+                if maxval is None:
+                    maxval = min(max(1, int(round(np.nanmean(updraft)))), 5)
+                
+                if plot == 'pcolormesh':
+                    #xx = self.xx[0:int(self.gridsize[0]/5),0:int(self.gridsize[1]/5)]
+                    #yy = self.yy[0:int(self.gridsize[0]/5),0:int(self.gridsize[1]/5)]
+                    xx = self.xx
+                    yy = self.yy
+                    curm = axs.pcolormesh(xx, yy, updraft.T,
+                                          cmap='viridis', rasterized=True, vmin=0, vmax=maxval)
+                else:
+                    curm = axs.imshow(updraft, cmap='viridis', extent=self.extent,
+                                      origin='lower',vmin=0,vmax=maxval)
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_data_dir)
+                with open(f'{fname}.pkl', 'rb') as fobj:
+                    tracks = pickle.load(fobj)
+                    for itrack in tracks:
+                        #axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
+                        #         markersize=1.0)
+                        axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
+                                 '-r', linewidth=lwidth, alpha=in_alpha)
+                cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+                if real_id == 0:
+                    lbl = 'Orographic updraft (m/s)'
+                else:
+                    lbl = 'Orographic + Thermal (m/s)'
+                if apply_threshold:
+                    lbl += ', usable'
+                cbar.set_label(lbl)
+                if plot_turbs:
+                    self.plot_turbine_locations(axs)
+                fname = f'{self._get_id_string(case_id, real_id)}_updraft.png'
+                fpath = os.path.join(self.mode_fig_dir, fname)
+                #self.save_fig(fig, fpath, show)
+
 
     def plot_updrafts(self, apply_threshold=True, plot_turbs=True,
                       show=False, plot='imshow',figsize=None,vmax=None) -> None:

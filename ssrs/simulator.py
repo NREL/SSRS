@@ -806,6 +806,53 @@ class Simulator(Config):
                     case_id, real_id, self.mode_fig_dir)
                 self.save_fig(fig, f'{fname}.png', show)
 
+
+    def plot_simulated_tracks_altamont(self, plot_turbs=True, show=False,
+                              fig=None, axs=None, in_alpha=0.25) -> None:
+        """ Plots simulated tracks """
+        print('Plotting simulated tracks..')
+        lwidth = 0.15 if self.track_count > 251 else 0.4
+        elevation = self.get_terrain_elevation()
+        xgrid, ygrid = self.get_terrain_grid()
+        for case_id in self.case_ids:
+            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            for real_id, _ in enumerate(updrafts):
+                if axs is None:
+                    fig, axs = plt.subplots(figsize=self.fig_size)
+                _ = axs.imshow(elevation, alpha=0.75, cmap='Greys',
+                               origin='lower', extent=self.extent)
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_data_dir)
+                with open(f'{fname}.pkl', 'rb') as fobj:
+                    tracks = pickle.load(fobj)
+                    for itrack in tracks:
+                        axs.plot(xgrid[itrack[0, 1]], ygrid[itrack[0, 0]], 'b.',
+                                 markersize=1.0)
+                        axs.plot(xgrid[itrack[:, 1]], ygrid[itrack[:, 0]],
+                                 '-r', linewidth=lwidth, alpha=in_alpha)
+                _, _ = create_gis_axis(fig, axs, None, self.km_bar)
+                if plot_turbs:
+                    self.plot_turbine_locations(axs)
+                left = self.extent[0] + self.track_start_region[0] * 1000.
+                bottom = self.extent[2] + \
+                    self.track_start_region[2] * 1000.
+                width = self.track_start_region[1] - \
+                    self.track_start_region[0]
+                hght = self.track_start_region[3] - \
+                    self.track_start_region[2]
+                rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                          hght * 1000., alpha=0.2,
+                                          edgecolor='none', facecolor='b')
+                axs.add_patch(rect)
+                axs.set_xlim([self.extent[0], self.extent[1]])
+                axs.set_ylim([self.extent[2], self.extent[3]])
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_fig_dir)
+                if axs is None:
+                    self.save_fig(fig, f'{fname}.png', show)
+        return fig, axs
+
+
     def plot_simulated_tracks_HSSRS(self, plot_turbs=True, show=False) -> None:
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
@@ -1003,6 +1050,26 @@ class Simulator(Config):
         axs.set_ylim([self.extent[2], self.extent[3]])
         return fig, axs
 
+
+    def _plot_presence_altamont(self, in_prob, in_val, fig=None, axs=None,
+                       plot_turbs=False, wfarm_level=False):
+        """Plots a presence density """
+        if axs is None:
+            fig, axs = plt.subplots(figsize=self.fig_size)
+        in_prob[in_prob <= in_val] = 0.
+        _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
+                       cmap='Reds', alpha=0.75,
+                       norm=LogNorm(vmin=in_val, vmax=1.0))
+        if wfarm_level:
+            _, _ = create_gis_axis(fig, axs, None, 1.)
+        else:
+            _, _ = create_gis_axis(fig, axs, None, self.km_bar)
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
+        axs.set_xlim([self.extent[0], self.extent[1]])
+        axs.set_ylim([self.extent[2], self.extent[3]])
+        return fig, axs
+
     def _plot_presence_HSSRS(self, in_prob, in_val, plot_turbs, wfarm_level=False):
         """Plots a presence density """
         fig, axs = plt.subplots(figsize=self.fig_size)
@@ -1120,6 +1187,51 @@ class Simulator(Config):
             fig, _ = self._plot_presence(summary_prob, minval, plot_turbs)
             fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
             self.save_fig(fig, fpath, show)
+
+    def plot_presence_map_altamont(
+        self,
+        plot_turbs=False,
+        radius: float = 1000.,
+        show=False,
+        minval=0.1,
+        plot_all: bool = False
+    ) -> None:
+        """ Plot presence maps """
+        print('Plotting presence density map..')
+        elevation = self.get_terrain_elevation()
+        summary_prob = np.zeros_like(elevation)
+        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+        for case_id in self.case_ids:
+            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            case_prob = np.zeros_like(updrafts[0])
+            for real_id, _ in enumerate(updrafts):
+                fname = self._get_tracks_fname(
+                    case_id, real_id, self.mode_data_dir)
+                with open(f'{fname}.pkl', 'rb') as fobj:
+                    tracks = pickle.load(fobj)
+                prprob = compute_smooth_presence_counts(
+                    tracks, self.gridsize, int(round(krad)))
+                prprob /= np.amax(prprob)
+                case_prob += prprob
+                if plot_all:
+                    fig, _ = self._plot_presence(prprob, minval, plot_turbs)
+                    fname = self._get_presence_fname(case_id, real_id,
+                                                     self.mode_fig_dir)
+                    self.save_fig(fig, f'{fname}.png', show)
+            case_prob /= np.amax(case_prob)
+            summary_prob += case_prob
+            # fig, _ = self._plot_presence(case_prob, minval, plot_turbs)
+            # fname = f'{self._get_id_string(case_id)}_presence.png'
+            # fpath = os.path.join(self.mode_fig_dir, fname)
+            # self.save_fig(fig, fpath, show)
+        summary_prob /= np.amax(summary_prob)
+        fname = os.path.join(self.mode_data_dir, 'summary_presence')
+        np.save(f'{fname}.npy', summary_prob.astype(np.float32))
+        fig, axs = self._plot_presence(summary_prob, minval, plot_turbs)
+        fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
+        self.save_fig(fig, fpath, show)
+        return fig, axs, summary_prob
+
 
     def _get_presence_fname(self, case_id: str, real_id: int, dirname: str):
         """ Returns file path for saving presence """
@@ -1328,6 +1440,24 @@ class Simulator(Config):
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
+
+    def plot_terrain_elevation_altamont(self, plot_turbs=True, show=False,
+                               fig=None, axs=None, **kwargs) -> None:
+        """ Plotting terrain elevation """
+        elevation = self.get_terrain_elevation()
+        if axs is None:
+            fig, axs = plt.subplots(figsize=self.fig_size)
+        curm = axs.imshow(elevation / 1000., cmap='terrain',
+                          extent=self.extent, origin='lower', **kwargs)
+        cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+        cbar.set_label('Altitude (km)')
+        if plot_turbs:
+            self.plot_turbine_locations(axs)
+        if axs is None:
+            self.save_fig(fig, os.path.join(
+                self.fig_dir, 'elevation.png'), show)
+        return fig, axs
+
 
     def plot_terrain_slope(self, plot_turbs=True, show=False, plot='imshow', figsize=None) -> None:
         """ Plots slope in degrees """

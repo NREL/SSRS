@@ -860,7 +860,7 @@ class Simulator(Config):
 ########### Plot updrafts and WTK layers ###########
 
     def plot_updrafts(self, apply_threshold=True, plot_turbs=True,
-                      show=False, plot='imshow',figsize=None) -> None:
+                      show=False, plot='imshow',figsize=None,vmax=None) -> None:
         """ Plot updrafts with or without applying the threshold """
         print('Plotting updraft fields..')
         if figsize is None: figsize=self.fig_size
@@ -868,7 +868,10 @@ class Simulator(Config):
             updrafts = self.load_updrafts(case_id, apply_threshold)
             for real_id, updraft in enumerate(updrafts):
                 fig, axs = plt.subplots(figsize=self.fig_size)
-                maxval = min(max(1, int(round(np.mean(updraft)))), 5)
+                if vmax is None:
+                    maxval = min(max(1, int(round(np.mean(updraft)))), 5)
+                else:
+                    maxval=vmax
                 if plot == 'pcolormesh':
                     curm = axs.pcolormesh(self.xx, self.yy, updraft.T,
                                           cmap='viridis', vmin=0, vmax=maxval)

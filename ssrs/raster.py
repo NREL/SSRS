@@ -128,14 +128,15 @@ def transform_coordinates(
 
     # Perform the transformation
     while True:
+        # The transform call does not work the first time around. The while True
+        # is here to make sure it goes through again. (Why??) RT
         try:
             out_x, out_y = transform(in_crs, out_crs, in_x, in_y)
-        except:
+        except rs._err.CPLE_AppDefinedError:
+            # rasterio._err.CPLE_AppDefinedError: Network error when accessing a remote resource
             continue
         else:
             break
-    # except Exception as _:
-    #     raise ValueError(f'Invalid coordinates {in_x}, {in_y}!') from None
 
     # reshape output to match the input numpy array
     if 'out_shape' in locals():

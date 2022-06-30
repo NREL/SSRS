@@ -11,7 +11,7 @@ from .config import Config
 import pathos.multiprocessing as mp
 
 
-def compute_orographic_updraft(
+def calcOrographicUpdraft(
     elev: np.ndarray,
     wspeed: np.ndarray,
     wdirn: np.ndarray,
@@ -26,12 +26,12 @@ def compute_orographic_updraft(
     """ Returns orographic updraft using wind speed, wind direction, slope
     and aspect """
     if sx is None:
-        return orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
+        return calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
     else:
-        return orographic_updraft_improved(wspeed, wdirn, slope, aspect,
+        return calcOrographicUpdraft_improved(wspeed, wdirn, slope, aspect,
                                            elev, res_terrain, res, sx, h, min_updraft_val)
 
-def orographic_updraft_original(
+def calcOrographicUpdraft_original(
     wspeed: np.ndarray,
     wdirn: np.ndarray,
     slope: np.ndarray,
@@ -43,7 +43,7 @@ def orographic_updraft_original(
     return np.maximum(min_updraft_val, np.multiply(wspeed, np.multiply(np.sin(
         slope * np.pi / 180.), aspect_diff)))
 
-def orographic_updraft_improved(
+def calcOrographicUpdraft_improved(
     wspeed: np.ndarray,
     wdirn: np.ndarray,
     slope: np.ndarray,
@@ -57,7 +57,7 @@ def orographic_updraft_improved(
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using our improved model"""
 
-    W0prime = orographic_updraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
+    W0prime = calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
 
     # Compute height adjustment
     print('Computing adjusting factors from improved model (1/3)..', end='\r')
@@ -84,21 +84,25 @@ def orographic_updraft_improved(
     return F*W0prime
 
 
-def upsample_field(field, source_res, target_res):
+def upsample_field(field, source_res, target_res, method='old'):
     """ Upsamples a high-resolution field to a lower resolution """
     if not (target_res/source_res).is_integer():
-       raise ValueError (f'The analysis resolution, {self.resolution} m, should be a '
-                         f'multiple of terrain resolution, {self.resolution_terrain} m')
+       raise ValueError (f'The analysis resolution, {target_res} m, should be a '
+                         f'multiple of terrain resolution, {source_res} m')
     ratio = int(target_res/source_res)
     if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
-    return field[::ratio,::ratio]
+    if method == 'old':
+        return field[::ratio,::ratio]
+    else:
+        field = np.nan_to_num(field)
+        return ndimage.zoom(field, (1/ratio, 1/ratio))  # this will probably be enough
 
 
 def downsample_field(field, source_res, target_res):
     """ Downsample a low-resolution field to a higher resolution """
     if not (source_res/target_res).is_integer():
-       raise ValueError (f'The high resolution, {self.resolution_terrain} m, should be a '
-                         f'multiple of low resolution, {self.resolution} m')
+       raise ValueError (f'The high resolution, {target_res} m, should be a '
+                         f'multiple of low resolution, {source_res} m')
     ratio = int(source_res/target_res)
     if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m      ')
     # The input array to ndimage.zoom cannot have NaNs. Replacing NaN with 0
@@ -144,7 +148,7 @@ def compute_thermal_updraft(
     return np.maximum(min_updraft_val, np.multiply(deardoff_vel, emat))
 
 
-def compute_slope_degrees(z_mat: np.ndarray, res: float):
+def calcSlopeDegrees(z_mat: np.ndarray, res: float):
     """ Calculate local terrain slope using 3x3 stencil
 
     Parameters:
@@ -177,7 +181,7 @@ def compute_slope_degrees(z_mat: np.ndarray, res: float):
     return np.nan_to_num(slope)
 
 
-def compute_aspect_degrees(z_mat: np.ndarray, res: float):
+def calcAspectDegrees(z_mat: np.ndarray, res: float):
     """ Calculate local terrain aspect using 3x3 stencil
 
     Parameters:
@@ -213,7 +217,7 @@ def compute_aspect_degrees(z_mat: np.ndarray, res: float):
     aspect = (-aspect+90)%360
     return np.nan_to_num(aspect)
 
-def compute_blurred_quantity(quant: np.ndarray, res: float, h: float):
+def blurQuantity(quant: np.ndarray, res: float, h: float):
     '''
     Calculate a blurred version of a quantity quant based
     on the height h
@@ -223,7 +227,7 @@ def compute_blurred_quantity(quant: np.ndarray, res: float, h: float):
     return ndimage.gaussian_filter(quant, sigma=sigma_in_m/res)
 
 
-def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
+def calcSx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
     '''
     Sx is a measure of topographic shelter or exposure relative to a particular
     wind direction. Calculates a whole map for all points (xi, yi) in the domain.
@@ -329,7 +333,7 @@ def compute_sx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
     return Sx
 
 
-def compute_slope_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
+def calcSlopeDegrees_richdem(z_mat: np.ndarray, res: float) -> np.ndarray:
     """ Compute slope using richdem package
 
     Parameters:
@@ -349,7 +353,7 @@ def compute_slope_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
     return out
 
 
-def compute_aspect_richdem_degrees(z_mat: np.ndarray, res: float) -> np.ndarray:
+def calcAspectDegrees_richdem(z_mat: np.ndarray, res: float) -> np.ndarray:
     """ Compute aspect using richdem package
 
     Parameters:
@@ -663,10 +667,10 @@ def compute_adjusted_orographic_updraft (
     # Get terrain quantities
     sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
     zblur = ndimage.gaussian_filter(elevation, sigma=sigma_in_m/res)
-    slopeblur = compute_slope_degrees(zblur, res)
-    aspectblur = compute_aspect_degrees(zblur, res)
-    slope = compute_slope_degrees(elevation, res)
-    aspect = compute_aspect_degrees(elevation, res)
+    slopeblur = calcSlopeDegrees(zblur, res)
+    aspectblur = calcAspectDegrees(zblur, res)
+    slope = calcSlopeDegrees(elevation, res)
+    aspect = calcAspectDegrees(elevation, res)
 
     # Calculate adjusting factors
     factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slopeblur)) + e) + f

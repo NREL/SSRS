@@ -8,22 +8,23 @@ import random
 from typing import List, Tuple, Optional
 from datetime import datetime
 from dataclasses import asdict
+import requests
 import pathos.multiprocessing as mp
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.cm as cm
 from scipy.interpolate import griddata
-from scipy import ndimage #db - for smoothing updraft field
+from scipy import ndimage
 from matplotlib.colors import LogNorm, ListedColormap
 from .terrain import Terrain
 from .wtk import WTK
 from .turbines import TurbinesUSWTB
 from .config import Config
-from .layers import (compute_orographic_updraft, compute_aspect_degrees,
-                     compute_slope_degrees, compute_random_thermals,
-                     get_above_threshold_speed, compute_blurred_quantity,
-                     compute_sx, upsample_field, downsample_field)
+from .layers import (calcOrographicUpdraft, calcAspectDegrees,
+                     calcSlopeDegrees, compute_random_thermals,
+                     get_above_threshold_speed, blurQuantity,
+                     calcSx, upsample_field, downsample_field)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 
@@ -124,8 +125,12 @@ class Simulator(Config):
                 raise ValueError ('Mode can only be compute or download')
 
             self.region.download(self.terrain_layers.values())
+        except requests.exceptions.ReadTimeout:
+            print('Timeout issues with 3DEP WMS service. It might be worth stop and try again. Trying SRTM1..')
+            self.terrain_layers = {'Elevation': 'SRTM1'}
+            self.region.download(self.terrain_layers.values())
         except Exception as _:
-            print('Connection issues with 3DEP WMS service! Trying SRTM1..')
+            print('Unknown issue with 3DEP WMS service. Trying SRTM1..')
             self.terrain_layers = {'Elevation': 'SRTM1'}
             self.region.download(self.terrain_layers.values())
 
@@ -165,7 +170,7 @@ class Simulator(Config):
             print(f'Uniform mode: Wind speed = {self.uniform_windspeed_h} m/s')
             print(f'Uniform mode: Wind dirn = {self.uniform_winddirn_h} deg (cw)')
             self.case_ids = [self._get_uniform_id()]
-            #self.compute_orographic_updraft_uniform()
+            #self.self.compute_orographic_updrafts_uniform()
         print(f'Case id is {self.case_ids}')
 
         print(f'Reference height is {self.href}')
@@ -175,7 +180,7 @@ class Simulator(Config):
         if self.sim_mode.lower() != 'uniform':
             self.compute_orographic_updrafts_using_wtk()
         else:
-            self.compute_orographic_updraft_uniform()
+            self.compute_orographic_updrafts_uniform()
 
 
         for case_id in self.case_ids:
@@ -187,6 +192,7 @@ class Simulator(Config):
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
         print('SSRS Simulator initiation done.')
+
 
 ########## terrain related functions ############
 
@@ -204,12 +210,13 @@ class Simulator(Config):
         if self.slopeAspectMode == 'download':
             try:
                 slope = self.get_terrain_layer('Slope')
-                fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
-                if not os.path.isfile(f'{fname}.npy'):
-                    np.save(f'{fname}.npy', slope.astype(np.float32))
+                #fname = self._get_terrain_quantity_fname(self.case_ids[0],'slope', self.mode_data_dir)
+                #if not os.path.isfile(f'{fname}.npy'):
+                #    np.save(f'{fname}.npy', slope.astype(np.float32))
             except OSError:
-                elev = self.get_terrain_elevation()
-                slope = compute_slope_degrees(elev, self.resolution)
+                print('---- This should NOT be printed. This is downloaded, it should always find the layer')
+                #elev = self.get_terrain_elevation()
+                #slope = CalcSlopeDegrees(elev, self.resolution)
             return slope
 
         elif self.slopeAspectMode == 'compute':
@@ -220,6 +227,7 @@ class Simulator(Config):
                 slope = self.load_terrain_quantity(self.case_ids[0], slopefname_str)
                 print(f'Found slope map. Loading it..')
             except OSError:
+                print('- this should NOT be printed if straight up calling get_terrain_slope')
                 slope = self.compute_slope_degrees_case()
             return slope
         else:
@@ -230,12 +238,13 @@ class Simulator(Config):
         if self.slopeAspectMode == 'download':
             try:
                 aspect = self.get_terrain_layer('Aspect')
-                fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
-                if not os.path.isfile(f'{fname}.npy'):
-                    np.save(f'{fname}.npy', aspect.astype(np.float32))
+                #fname = self._get_terrain_quantity_fname(self.case_ids[0],'aspect', self.mode_data_dir)
+                #if not os.path.isfile(f'{fname}.npy'):
+                #    np.save(f'{fname}.npy', aspect.astype(np.float32))
             except OSError:
-                elev = self.get_terrain_elevation()
-                aspect = compute_aspect_degrees(elev, self.resolution)
+                print('--- This should NOT be printed. This is downloaded, it should always find the layer')
+                #elev = self.get_terrain_elevation()
+                #aspect = CalcAspectDegrees(elev, self.resolution)
             return aspect
 
         elif self.slopeAspectMode == 'compute':
@@ -246,6 +255,7 @@ class Simulator(Config):
                 aspect = self.load_terrain_quantity(self.case_ids[0], aspectfname_str)
                 print(f'Found aspect map. Loading it..')
             except OSError:
+                print('- this should NOT be printed if straight up calling get_terrain_aspect')
                 aspect = self.compute_aspect_degrees_case()
             return aspect
         else:
@@ -297,22 +307,22 @@ class Simulator(Config):
             elev = upsample_field(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
             sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
             wdirn_sx = (self.uniform_winddirn_href + 180)%360
-            sx = compute_sx(xgrid, ygrid, elev.T, wdirn_sx) 
+            sx = calcSx(xgrid, ygrid, elev.T, wdirn_sx) 
             sx = sx.T  # adjust convention
             # Downsample to high-resolution
             sx = downsample_field(sx, self.resolution, self.resolution_terrain)
-            fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
-            np.save(f'{fname}.npy', sx.astype(np.float32))
         else:
             print(f'Getting Sx based on {self.resolution_terrain} m resolution maps')
             xgrid, ygrid = self.get_terrain_grid()
             elev = self.get_terrain_elevation()
             sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_highres'
             wdirn_sx = (self.uniform_winddirn_href + 180)%360
-            sx = compute_sx(xgrid, ygrid, elev.T, wdirn_sx) 
+            sx = calcSx(xgrid, ygrid, elev.T, wdirn_sx) 
             sx = sx.T  # adjust convention
-            fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
-            np.save(f'{fname}.npy', sx.astype(np.float32))
+        
+        fname = self._get_terrain_quantity_fname(self.case_ids[0],sxfname_str, self.mode_data_dir)
+        np.save(f'{fname}_calculatedBasedOnElev.npy', sx.astype(np.float32))
+        np.save(f'{fname}.npy', sx.astype(np.float32))
         return sx
 
     def compute_slope_degrees_case(self) -> None:
@@ -321,10 +331,12 @@ class Simulator(Config):
         slopefname_str = 'slope'
         if self.orographic_model.lower() != 'original':
             print('Getting blurred version of slope map..')
-            elev = compute_blurred_quantity(elev, self.resolution_terrain, self.h)
+            elev = blurQuantity(elev, self.resolution_terrain, self.h)
             slopefname_str += f'_blur{int(self.h)}m'
-        slope = compute_slope_degrees(elev, self.resolution_terrain)
+        print('Calculating slope based elevation map..')
+        slope = calcSlopeDegrees(elev, self.resolution_terrain) # actually calculate it
         fname = self._get_terrain_quantity_fname(self.case_ids[0],slopefname_str, self.mode_data_dir)
+        np.save(f'{fname}_calculatedBasedOnElev.npy', slope.astype(np.float32))
         np.save(f'{fname}.npy', slope.astype(np.float32))
         return slope
 
@@ -334,14 +346,16 @@ class Simulator(Config):
         aspectfname_str = 'aspect'
         if self.orographic_model.lower() != 'original':
             print('Getting blurred version of aspect map..')
-            elev = compute_blurred_quantity(elev, self.resolution_terrain, self.h)
+            elev = blurQuantity(elev, self.resolution_terrain, self.h)
             aspectfname_str += f'_blur{int(self.h)}m'
-        aspect = compute_aspect_degrees(elev, self.resolution_terrain)
+        print('Calculating aspect based elevation map..')
+        aspect = calcAspectDegrees(elev, self.resolution_terrain) # actually calculating it
         fname = self._get_terrain_quantity_fname(self.case_ids[0],aspectfname_str, self.mode_data_dir)
+        np.save(f'{fname}_calculatedBasedOnElev.npy', aspect.astype(np.float32))
         np.save(f'{fname}.npy', aspect.astype(np.float32))
         return aspect
 
-    def compute_orographic_updraft_uniform(self) -> None:
+    def compute_orographic_updrafts_uniform(self) -> None:
         """ Computing orographic updrafts for uniform mode"""
         print(f'Computing orographic updrafts (uniform mode) using {self.orographic_model} model..')
         slope = self.get_terrain_slope()
@@ -362,28 +376,29 @@ class Simulator(Config):
             wdirn = self.uniform_winddirn_href * np.ones(self.gridsize_terrain)
             h = self.href
             sx = self.get_terrain_sx()
-        # save files here instead of layers.compute_orographic_updraft
-        print('Dumping wspd, wdir, slope and aspect as used by compute_orographic_updraft')
-        np.save(os.path.join(self.data_dir,'wspeed.npy'),wspeed)
-        np.save(os.path.join(self.data_dir,'wdirn.npy'),wdirn)
-        np.save(os.path.join(self.data_dir,'slope.npy'),slope)
-        np.save(os.path.join(self.data_dir,'aspect.npy'),aspect)
+        # save files here instead of layers.calcOrographicUpdraft
+        print('Dumping wspd, wdir, slope and aspect as used by calcOrographicUpdraft')
+        np.save(os.path.join(self.data_dir,'wspeed_asUsedBycalcOrographicUpdraft.npy'),wspeed)
+        np.save(os.path.join(self.data_dir,'wdirn_asUsedBycalcOrographicUpdraft.npy' ),wdirn)
+        np.save(os.path.join(self.data_dir,'slope_asUsedBycalcOrographicUpdraft.npy' ),slope)
+        np.save(os.path.join(self.data_dir,'aspect_asUsedBycalcOrographicUpdraft.npy'),aspect)
 
 
-        orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
+        updraft_fine = calcOrographicUpdraft(elev, wspeed, wdirn, slope, aspect,
                                                    self.resolution_terrain, self.resolution,  sx, h)
         # upsample from `resolution_terrain` to `resolution`
-        orograph = upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
+        updraft = upsample_field(updraft_fine, self.resolution_terrain, self.resolution)
 
         # let's load a updraft field fromm alt_study branch and use it here to see if the tracks are the same
-        #orograph = np.load('/home/rthedin/SSRS/notebooks/altamont_fws/output/alt_test_rerunRimple_ssrs_env_scratch/data/orograph.npy')
-# the approach above works flawlessly. I do have an issue on how I compute terrain metrics
+        #updraft = np.load('/home/rthedin/SSRS/notebooks/altamont_fws/output/alt_test_rerunRimple_ssrs_env_scratch/data/orograph.npy')
+        # the approach above works flawlessly. I do have an issue on how I compute terrain metrics
 
-        np.save(os.path.join(self.data_dir,'orograph_fine.npy'),orograph_fine)
-        np.save(os.path.join(self.data_dir,'orograph.npy'),orograph)
-        fname = self._get_orograph_fname(self.case_ids[0], self.mode_data_dir)
-        np.save(f'{fname}.npy', orograph.astype(np.float32))
-        np.save(f'{fname}_terrainResolution.npy', orograph_fine.astype(np.float32))
+        #np.save(os.path.join(self.data_dir,'updraft_fine.npy'),updraft_fine)
+        #np.save(os.path.join(self.data_dir,'updraft.npy'),updraft)
+
+        fname = self._get_orographicupdraft_fname(self.case_ids[0], self.mode_data_dir)
+        np.save(f'{fname}_lowres_ascomputedBycalcOrographicUpdraft_upsampled.npy', updraft.astype(np.float32))
+        np.save(f'{fname}_terrainResolution_ascomputedBycalcOrographicUpdraft.npy', updraft_fine.astype(np.float32))
 
 #   def estimate_thermal_updraft(self) -> None:
 #       """ Estimating thermal updrafts"""
@@ -414,13 +429,13 @@ class Simulator(Config):
             else:
                 h = self.href
                 sx = self.get_terrain_sx()
-            orograph_fine = compute_orographic_updraft(elev, wspeed, wdirn, slope, aspect,
+            updraft_fine = calcOrographicUpdraft(elev, wspeed, wdirn, slope, aspect,
                                                  self.resolution_terrain, self.resolution, sx, h)
             # upsample from `resolution_terrain` to `resolution`
-            orograph = upsample_field(orograph_fine, self.resolution_terrain, self.resolution)
-            fname = self._get_orograph_fname(case_id, self.mode_data_dir)
-            np.save(f'{fname}.npy', orograph.astype(np.float32))
-            np.save(f'{fname}_highres.npy', orograph_fine.astype(np.float32))
+            updraft = upsample_field(updraft_fine, self.resolution_terrain, self.resolution)
+            fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
+            np.save(f'{fname}.npy',updraft.astype(np.float32))
+            np.save(f'{fname}_highres.npy', updraft_fine.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
 
 
@@ -440,15 +455,15 @@ class Simulator(Config):
 
     def load_updrafts(self, case_id: str, apply_threshold=True):
         """ Computes updrafts for the particular case """
-        fname = self._get_orograph_fname(case_id, self.mode_data_dir)
-        orograph = np.load(f'{fname}.npy')
+        fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
+        updraft = np.load(f'{fname}.npy')
         print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
-        updrafts = [orograph]
+        updrafts = [updraft]
         if self.thermals_realization_count > 0:
             for real_id in range(self.thermals_realization_count):
                 fname = self._get_thermal_fname(
                     case_id, real_id, self.mode_data_dir)
-                updrafts.append(orograph + np.load(f'{fname}.npy'))
+                updrafts.append(updraft + np.load(f'{fname}.npy'))
         if apply_threshold:
             updrafts = [get_above_threshold_speed(
                 ix, self.updraft_threshold) for ix in updrafts]
@@ -465,12 +480,12 @@ class Simulator(Config):
         return os.path.join(dirname, f'{case_id}_{quant}_{self.orographic_model}Model')
 
 
-    def _get_orograph_fname(self, case_id: str, dirname: str = './'):
+    def _get_orographicupdraft_fname(self, case_id: str, dirname: str = './'):
         """ Returns file path for saving orographic updrafts data """
         if self.orographic_model.lower() == 'original':
-            return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model')
+            return os.path.join(dirname, f'{case_id}_orographicupdraft_{self.orographic_model}Model')
         else:
-            return os.path.join(dirname, f'{case_id}_orograph_{self.orographic_model}Model_{int(self.h)}m')
+            return os.path.join(dirname, f'{case_id}_orographicupdraft_{self.orographic_model}Model_{int(self.h)}m')
 
     def plot_simulation_output(self, plot_turbs=True, show=False) -> None:
         """ Plots oro updraft and tracks """
@@ -650,7 +665,7 @@ class Simulator(Config):
 #            print(f'{tmp_str}: Simulating {self.track_count} tracks..',
 #                  end="", flush=True)
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
-            orograph = np.load(self._get_orograph_fpath(case_id)) #for heuristic model
+            orographicupdraft = np.load(self._get_orographicupdraft_fpath(case_id)) #for heuristic model
             elevation = self.get_terrain_elevation() #for heuristic model
                                 
             #for real_id, updraft in enumerate(updrafts):  #this did not work for heuristics
@@ -663,7 +678,7 @@ class Simulator(Config):
                 
                 if self.sim_movement == 'fluid-analogy':
                     potential = self.get_directional_potential(
-                        updraft, case_id, real_id)
+                        orographicupdraft, case_id, real_id)
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
 
@@ -671,10 +686,10 @@ class Simulator(Config):
                         tracks = pool.map(lambda start_loc: generate_simulated_tracks(
                             self.track_direction,
                             start_loc,
-                            updraft.shape,
+                            orographicupdraft.shape,
                             self.track_dirn_restrict,
                             self.track_stochastic_nu,
-                            updraft,
+                            orographicupdraft,
                             potential
                         ), starting_locs)
                
@@ -686,7 +701,7 @@ class Simulator(Config):
                         tracks = pool.map(lambda start_loc: generate_simulated_tracks(
                             self.track_direction,
                             start_loc,
-                            updraft.shape,
+                            orographicupdraft.shape,
                             self.track_dirn_restrict,
                             self.track_stochastic_nu
                         ), starting_locs)
@@ -694,15 +709,15 @@ class Simulator(Config):
                 elif self.sim_movement == 'heuristics':
                     
                     fname_thermal = self._get_thermal_fname(case_id, real_id, self.mode_data_dir)
-                    thermal=np.load(f'{fname_thermal}.npy')
+                    thermalupdraft=np.load(f'{fname_thermal}.npy')
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                         end="", flush=True)
                     
                     with mp.Pool(num_cores) as pool:
                         tracks = pool.map(lambda inp: generate_heuristic_eagle_track(
                             self.movement_ruleset,
-                            orograph,
-                            thermal,
+                            orographicupdraft,
+                            thermalupdraft,
                             elevation,                                          #db added
                             inp[:2], #start_loc
                             inp[2], #PAM
@@ -1437,7 +1452,7 @@ class Simulator(Config):
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
             thermal = np.load(self._get_thermal_fpath(case_id))
-            orograph = np.load(self._get_orograph_fpath(case_id))
+            orograph = np.load(self._get_orographicupdraft_fpath(case_id))
             w_tot=thermal+orograph
             fig, axs = plt.subplots(figsize=self.fig_size)
             _ = axs.imshow(w_tot, cmap='viridis',   #cmap was previously 'Greys' and alpha parameter
@@ -1677,9 +1692,9 @@ class Simulator(Config):
             fig.savefig(fpath, bbox_inches='tight', dpi=self.fig_dpi)
             plt.close(fig)
 
-    def _get_orograph_fpath(self, case_id: str):
+    def _get_orographicupdraft_fpath(self, case_id: str):
         """ Returns file path for saving orographic updrafts data """
-        return os.path.join(self.mode_data_dir, f'{case_id}_orograph_{self.orographic_model}Model.npy')
+        return os.path.join(self.mode_data_dir, f'{case_id}_orograpicupdraft_{self.orographic_model}Model.npy')
 
     def _get_thermal_fpath(self, case_id: str):
         """ Returns file path for saving thermal updrafts data """

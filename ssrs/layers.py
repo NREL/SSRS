@@ -39,9 +39,13 @@ def calcOrographicUpdraft_original(
     min_updraft_val: float = 0.
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using Brandes and Ombalski model"""
-    aspect_diff = np.maximum(0., np.cos((aspect - wdirn) * np.pi / 180.))
-    return np.maximum(min_updraft_val, np.multiply(wspeed, np.multiply(np.sin(
-        slope * np.pi / 180.), aspect_diff)))
+
+    sinterm = np.sin(np.deg2rad(slope))
+    costerm = np.cos(np.deg2rad(aspect-wdirn))
+    w0 = wspeed * sinterm * costerm
+    w0_abovemin = np.maximum(min_updraft_val, w0)
+    return w0_abovemin
+    
 
 def calcOrographicUpdraft_improved(
     wspeed: np.ndarray,
@@ -77,6 +81,7 @@ def calcOrographicUpdraft_improved(
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
     tc = downsample_field(tc, res, res_terrain)
     factor_tc = 1 + tc*(h/40)
+    
     # Combine all factors
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height

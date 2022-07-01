@@ -12,40 +12,57 @@ import pathos.multiprocessing as mp
 
 
 def calcOrographicUpdraft(
-    elev: np.ndarray,
-    wspeed: np.ndarray,
-    wdirn: np.ndarray,
-    slope: np.ndarray,
-    aspect: np.ndarray,
-    res_terrain: float, # high-res terrain data resolution
-    res: float,         # low-res analysis resolution
-    sx: np.ndarray = None,
+    elev: np.ndarray,    # high-res 
+    wspeed: np.ndarray,  # high-res
+    wdirn: np.ndarray,   # high-res
+    slope: np.ndarray,   # high-res
+    aspect: np.ndarray,  # high-res
+    res_terrain: float,  # high-res terrain data resolution
+    res: float,          # low-res analysis resolution
+    sx: np.ndarray = None, # low-res
     h: float = 80.,
     min_updraft_val: float = 0.
 ) -> np.ndarray:
-    """ Returns orographic updraft using wind speed, wind direction, slope
-    and aspect """
+    """
+    Returns orographic updraft using wind speed, wind direction, slope
+    and aspect.
+
+    Returns low-res coarsened field
+    
+    """
     if sx is None:
-        return calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
+        #returns low-res
+        return calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect,
+                                              res_terrain, res, min_updraft_val)
     else:
+        # returns low-res
         return calcOrographicUpdraft_improved(wspeed, wdirn, slope, aspect,
-                                           elev, res_terrain, res, sx, h, min_updraft_val)
+                                              elev, res_terrain, res, sx, h, min_updraft_val)
+
 
 def calcOrographicUpdraft_original(
     wspeed: np.ndarray,
     wdirn: np.ndarray,
     slope: np.ndarray,
     aspect: np.ndarray,
+    res_terrain: float, # high-res terrain data resolution
+    res: float,         # low-res analysis resolution
     min_updraft_val: float = 0.
 ) -> np.ndarray:
-    """ Return dimensional orographic updraft using Brandes and Ombalski model"""
+    """ Return dimensional orographic updraft using Brandes and Ombalski model
+    
+        Receives high-res array, returns coarsened updraft field
+    """
 
     sinterm = np.sin(np.deg2rad(slope))
     costerm = np.cos(np.deg2rad(aspect-wdirn))
     w0 = wspeed * sinterm * costerm
+
     w0_abovemin = np.maximum(min_updraft_val, w0)
-    return w0_abovemin
+    w0_abovemin_coarse = highRes2lowRes(w0_abovemin, res_terrain, res)
     
+    return w0_abovemin_coarse
+
 
 def calcOrographicUpdraft_improved(
     wspeed: np.ndarray,
@@ -55,18 +72,21 @@ def calcOrographicUpdraft_improved(
     elev: np.ndarray,
     res_terrain: float, # high-res terrain data resolution
     res: float,         # low-res analysis resolution
-    sx: np.ndarray = None,
+    sx: np.ndarray = None, # low-res
     h : float = 80.,
     min_updraft_val: float = 0.
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using our improved model"""
 
-    W0prime = calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect, min_updraft_val)
+    # Get coarse orographic using BO04's model
+    w0prime = calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect,
+                                             res_terrain, res, min_updraft_val)
 
     # Compute height adjustment
     print('Computing adjusting factors from improved model (1/3)..', end='\r')
     a=0.00004;  b=0.0028;  c=0.8;  d=0.35;  e=0.095;  f=-0.09
-    factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slope)) + e) + f
+    slope_lowres = highRes2lowRes(slope, res_terrain, res)
+    factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slope_lowres)) + e) + f  # low-res
     # Compute Sx adjustment
     print('Computing adjusting factors from improved model (2/3)..', end='\r')
     factor_sx = 1 + np.tan(np.deg2rad(sx))
@@ -74,45 +94,72 @@ def calcOrographicUpdraft_improved(
     print('Computing adjusting factors from improved model (3/3)..', end='\r')
     filterSize_in_m = 500
     filterSize = int(np.floor(filterSize_in_m/res_terrain))
-    elev_lowres = upsample_field(elev, res_terrain, res)
+    elev_lowres = highRes2lowRes(elev, res_terrain, res)
     local_zmean = ndimage.generic_filter(elev_lowres, np.mean, footprint=np.ones((filterSize,filterSize)) )
     local_zmin  = ndimage.generic_filter(elev_lowres, np.min,  footprint=np.ones((filterSize,filterSize)) )
     local_zmax  = ndimage.generic_filter(elev_lowres, np.max,  footprint=np.ones((filterSize,filterSize)) )
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
-    tc = downsample_field(tc, res, res_terrain)
-    factor_tc = 1 + tc*(h/40)
+    #tc = downsample_field(tc, res, res_terrain)
+    factor_tc = 1 + tc*(h/40)  # low-res
     
     # Combine all factors
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
 
-    return F*W0prime
+    return F*w0prime
 
 
-def upsample_field(field, source_res, target_res, method='old'):
-    """ Upsamples a high-resolution field to a lower resolution """
-    if not (target_res/source_res).is_integer():
-       raise ValueError (f'The analysis resolution, {target_res} m, should be a '
-                         f'multiple of terrain resolution, {source_res} m')
-    ratio = int(target_res/source_res)
-    if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
-    if method == 'old':
-        return field[::ratio,::ratio]
-    else:
-        field = np.nan_to_num(field)
-        return ndimage.zoom(field, (1/ratio, 1/ratio))  # this will probably be enough
+# def upsample_field(field, source_res, target_res, method='old'):
+#     """ Upsamples a high-resolution field to a lower resolution """
+#     if not (target_res/source_res).is_integer():
+#        raise ValueError (f'The analysis resolution, {target_res} m, should be a '
+#                          f'multiple of terrain resolution, {source_res} m')
+#     ratio = int(target_res/source_res)
+#     if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
+#     if method == 'old':
+#         return field[::ratio,::ratio]
+#     else:
+#         field = np.nan_to_num(field)
+#         return ndimage.zoom(field, (1/ratio, 1/ratio))  # this will probably be enough
 
 
-def downsample_field(field, source_res, target_res):
-    """ Downsample a low-resolution field to a higher resolution """
-    if not (source_res/target_res).is_integer():
-       raise ValueError (f'The high resolution, {target_res} m, should be a '
-                         f'multiple of low resolution, {source_res} m')
-    ratio = int(source_res/target_res)
-    if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m      ')
-    # The input array to ndimage.zoom cannot have NaNs. Replacing NaN with 0
-    field = np.nan_to_num(field)
-    return ndimage.zoom(field, (ratio, ratio))
+# def downsample_field(field, source_res, target_res):
+#     """ Downsample a low-resolution field to a higher resolution """
+#     if not (source_res/target_res).is_integer():
+#        raise ValueError (f'The high resolution, {target_res} m, should be a '
+#                          f'multiple of low resolution, {source_res} m')
+#     ratio = int(source_res/target_res)
+#     if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m      ')
+#     # The input array to ndimage.zoom cannot have NaNs. Replacing NaN with 0
+#     field = np.nan_to_num(field)
+#     return ndimage.zoom(field, (ratio, ratio))
+
+def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
+    """
+    Upsamples a high-resolution field to a lower resolution
+
+    It works by first creating a gaussian filter with std of 30 m on the high-res
+    field, keeping the same resolution. Then, the data is resampled at the target
+    low resolution (coarsened) using scipy.ndimage.zoom.
+
+    The value of the filter can be changed using the sigma_in_m varible.
+    """
+
+    ratio = res_h/res_l
+    if ratio == 1:
+        # same resolution, nothing to do here
+        return field
+
+    sigma = sigma_in_m/res_h
+    if sigma<=1:
+        print('    ! Low resolution terrain data. Consider ',
+              'increasing the resolution (`resolution_terrain`).')
+
+    filtered = ndimage.gaussian_filter(field, sigma=sigma)
+    field_coarse = ndimage.zoom(filtered,  (ratio, ratio))
+
+    return field_coarse
+
 
 
 def deardoff_velocity_function(

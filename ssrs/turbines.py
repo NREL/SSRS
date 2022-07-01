@@ -42,16 +42,16 @@ class TurbinesUSWTB:
     ):
 
         # load the USWTB turbine dataset in pandas dataframe
-        print('TurbinesUSWTB: Importing turbine data from USWTB..')
+        print('TurbinesUSWTDB: Importing turbine data from USWTDB..')
         try:
             dfraw = pd.read_json(self.url)
-            print('TurbinesUSWTB: Successfully imported turbine data from USWTB..')
+            print('TurbinesUSWTDB: Successfully imported turbine data from USWTDB..')
         except HTTPError as httperr:
             print(f'Connection issues with USWTB database (error code {httperr.code}; ' \
                    'see codes at https://eerscmap.usgs.gov/uswtdb/api-doc/).')
             self.dframe = None
         except Exception as _:
-            print('Unknown connection issues with USWTB database. Please submit a bug report.')
+            print('Unknown connection issues with USWTDB database. Please submit a bug report.')
             self.dframe = None
         else:
             # compute the turbine locations in projected crs, if needed

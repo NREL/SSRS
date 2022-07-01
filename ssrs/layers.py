@@ -12,13 +12,13 @@ import pathos.multiprocessing as mp
 
 
 def calcOrographicUpdraft(
-    elev: np.ndarray,    # high-res 
-    wspeed: np.ndarray,  # high-res
-    wdirn: np.ndarray,   # high-res
-    slope: np.ndarray,   # high-res
-    aspect: np.ndarray,  # high-res
-    res_terrain: float,  # high-res terrain data resolution
-    res: float,          # low-res analysis resolution
+    elev: np.ndarray,      # high-res 
+    wspeed: np.ndarray,    # high-res
+    wdirn: np.ndarray,     # high-res
+    slope: np.ndarray,     # high-res
+    aspect: np.ndarray,    # high-res
+    res_terrain: float,    # high-res terrain data resolution
+    res: float,            # low-res analysis resolution
     sx: np.ndarray = None, # low-res
     h: float = 80.,
     min_updraft_val: float = 0.
@@ -28,14 +28,11 @@ def calcOrographicUpdraft(
     and aspect.
 
     Returns low-res coarsened field
-    
     """
     if sx is None:
-        #returns low-res
         return calcOrographicUpdraft_original(wspeed, wdirn, slope, aspect,
                                               res_terrain, res, min_updraft_val)
     else:
-        # returns low-res
         return calcOrographicUpdraft_improved(wspeed, wdirn, slope, aspect,
                                               elev, res_terrain, res, sx, h, min_updraft_val)
 
@@ -60,7 +57,7 @@ def calcOrographicUpdraft_original(
 
     w0_abovemin = np.maximum(min_updraft_val, w0)
     w0_abovemin_coarse = highRes2lowRes(w0_abovemin, res_terrain, res)
-    
+
     return w0_abovemin_coarse
 
 
@@ -99,7 +96,6 @@ def calcOrographicUpdraft_improved(
     local_zmin  = ndimage.generic_filter(elev_lowres, np.min,  footprint=np.ones((filterSize,filterSize)) )
     local_zmax  = ndimage.generic_filter(elev_lowres, np.max,  footprint=np.ones((filterSize,filterSize)) )
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
-    #tc = downsample_field(tc, res, res_terrain)
     factor_tc = 1 + tc*(h/40)  # low-res
     
     # Combine all factors
@@ -108,31 +104,6 @@ def calcOrographicUpdraft_improved(
 
     return F*w0prime
 
-
-# def upsample_field(field, source_res, target_res, method='old'):
-#     """ Upsamples a high-resolution field to a lower resolution """
-#     if not (target_res/source_res).is_integer():
-#        raise ValueError (f'The analysis resolution, {target_res} m, should be a '
-#                          f'multiple of terrain resolution, {source_res} m')
-#     ratio = int(target_res/source_res)
-#     if ratio>1: print(f'Upsampling orographic field from {source_res} m to {target_res} m')
-#     if method == 'old':
-#         return field[::ratio,::ratio]
-#     else:
-#         field = np.nan_to_num(field)
-#         return ndimage.zoom(field, (1/ratio, 1/ratio))  # this will probably be enough
-
-
-# def downsample_field(field, source_res, target_res):
-#     """ Downsample a low-resolution field to a higher resolution """
-#     if not (source_res/target_res).is_integer():
-#        raise ValueError (f'The high resolution, {target_res} m, should be a '
-#                          f'multiple of low resolution, {source_res} m')
-#     ratio = int(source_res/target_res)
-#     if ratio>1: print(f'Downsampling sx field from {source_res} m to {target_res} m      ')
-#     # The input array to ndimage.zoom cannot have NaNs. Replacing NaN with 0
-#     field = np.nan_to_num(field)
-#     return ndimage.zoom(field, (ratio, ratio))
 
 def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
     """
@@ -159,7 +130,6 @@ def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
     field_coarse = ndimage.zoom(filtered,  (ratio, ratio))
 
     return field_coarse
-
 
 
 def deardoff_velocity_function(
@@ -666,80 +636,80 @@ def compute_thermals_3d(
 
 
 
-def compute_adjusted_orographic_updraft (
-    wspeedAtRefHeight: np.ndarray,
-    wdirn: np.ndarray,
-    elevation: np.ndarray,
-    tc: float,
-    res: float,
-    h: float = 80,
-    #min_updraft_val: float = -5.,
-    returnOriginal: bool =False
-) -> np.ndarray:
-    '''
-    Returns the dimensional adjusted orographic updraft value
+# def compute_adjusted_orographic_updraft (
+#     wspeedAtRefHeight: np.ndarray,
+#     wdirn: np.ndarray,
+#     elevation: np.ndarray,
+#     tc: float,
+#     res: float,
+#     h: float = 80,
+#     #min_updraft_val: float = -5.,
+#     returnOriginal: bool =False
+# ) -> np.ndarray:
+#     '''
+#     Returns the dimensional adjusted orographic updraft value
    
-    Parameters:
-    ===========
-    wspeedAtRefHeight:
-        Wind speed at a reference height, often 80 m AGL
-    wdirn:
-        Wind direction at a reference height
-    elevation:
-        Your z_mat
-    tc:
-        Terrain complexity.
-        Guideline: 0.2 for WY, 0.8 for Appalachian
-    res:
-        Resolution
-    h:
-        Height of interest. Defaults to 80
-    min_updraft_val:
-        Minimum value used to clip the final adjusted model. Placeholder.
-    returnOriginal:
-        Whether or not also return original model
+#     Parameters:
+#     ===========
+#     wspeedAtRefHeight:
+#         Wind speed at a reference height, often 80 m AGL
+#     wdirn:
+#         Wind direction at a reference height
+#     elevation:
+#         Your z_mat
+#     tc:
+#         Terrain complexity.
+#         Guideline: 0.2 for WY, 0.8 for Appalachian
+#     res:
+#         Resolution
+#     h:
+#         Height of interest. Defaults to 80
+#     min_updraft_val:
+#         Minimum value used to clip the final adjusted model. Placeholder.
+#     returnOriginal:
+#         Whether or not also return original model
        
-    Returns:
-    ========
-    w0adj:
-        numpy array containing dimensional w0 adjusted value
-    '''
+#     Returns:
+#     ========
+#     w0adj:
+#         numpy array containing dimensional w0 adjusted value
+#     '''
    
-    # Constants for height adjustment
-    a=0.00004;  b=0.0028;   c=0.8
-    d=0.35;     e=0.095;    f= -0.09
+#     # Constants for height adjustment
+#     a=0.00004;  b=0.0028;   c=0.8
+#     d=0.35;     e=0.095;    f= -0.09
 
-    # Compute dummy grid with proper resolution
-    xx, yy = np.meshgrid(np.arange(0,res*np.shape(elevation)[0], res),
-                         np.arange(0,res*np.shape(elevation)[1], res), indexing='ij')
-    # Compute shelterness angle (180 for flipped behavior)
-    wdir_sx =  (np.mean(wdirn)+90)%360  # wdir for sx due to weird convention
-    sx400 = calcSx(xx, yy, elevation, np.mean(wdir_sx)+180, 400)
+#     # Compute dummy grid with proper resolution
+#     xx, yy = np.meshgrid(np.arange(0,res*np.shape(elevation)[0], res),
+#                          np.arange(0,res*np.shape(elevation)[1], res), indexing='ij')
+#     # Compute shelterness angle (180 for flipped behavior)
+#     wdir_sx =  (np.mean(wdirn)+90)%360  # wdir for sx due to weird convention
+#     sx400 = calcSx(xx, yy, elevation, np.mean(wdir_sx)+180, 400)
 
-    # Get terrain quantities
-    sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
-    zblur = ndimage.gaussian_filter(elevation, sigma=sigma_in_m/res)
-    slopeblur = calcSlopeDegrees(zblur, res)
-    aspectblur = calcAspectDegrees(zblur, res)
-    slope = calcSlopeDegrees(elevation, res)
-    aspect = calcAspectDegrees(elevation, res)
+#     # Get terrain quantities
+#     sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
+#     zblur = ndimage.gaussian_filter(elevation, sigma=sigma_in_m/res)
+#     slopeblur = calcSlopeDegrees(zblur, res)
+#     aspectblur = calcAspectDegrees(zblur, res)
+#     slope = calcSlopeDegrees(elevation, res)
+#     aspect = calcAspectDegrees(elevation, res)
 
-    # Calculate adjusting factors
-    factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slopeblur)) + e) + f
-    factor_sx = 1 + np.tan(np.deg2rad(sx400))
-    factor_tc = 1 + tc
-    # Combine all factors
-    F = factor_tc * factor_sx / factor_height
+#     # Calculate adjusting factors
+#     factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slopeblur)) + e) + f
+#     factor_sx = 1 + np.tan(np.deg2rad(sx400))
+#     factor_tc = 1 + tc
+#     # Combine all factors
+#     F = factor_tc * factor_sx / factor_height
 
-    # Compute dimensional w0 based on original model and a reference wind speed at a reference height
-    w0 =  wspeedAtRefHeight * np.sin(np.deg2rad(slope)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspect))
-    w0blur = wspeedAtRefHeight * np.sin(np.deg2rad(slopeblur)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspectblur))
+#     # Compute dimensional w0 based on original model and a reference wind speed at a reference height
+#     w0 =  wspeedAtRefHeight * np.sin(np.deg2rad(slope)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspect))
+#     w0blur = wspeedAtRefHeight * np.sin(np.deg2rad(slopeblur)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspectblur))
     
-    # Adjust w0
-    w0adj =  F * w0blur
+#     # Adjust w0
+#     w0adj =  F * w0blur
 
-    if returnOriginal:
-        return w0adj, w0
-    else:
-        return w0adj
+#     if returnOriginal:
+#         return w0adj, w0
+#     else:
+#         return w0adj
 

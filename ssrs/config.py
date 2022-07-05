@@ -75,7 +75,7 @@ class Config:
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
     track_count: str = 1000  # number of simulated eagle tracks
-    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2)
+    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # [xmin, xmax, ymin, ymax] in km wrt to box selected by southwest_lonlat and regions_width_km
     track_start_type: str = 'structured'  # structured, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves

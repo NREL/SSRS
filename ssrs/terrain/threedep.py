@@ -45,10 +45,11 @@ class ThreeDEP(WMS):
         layer: str,
         bnds: Tuple[float, float, float, float],
         fpath: str,
-        res=1 / 3600. / 3.  # 1/3 arc second = 1/3600/3 degrees
+        res=1 / 3600. / 3.  # 1/3 arc second = 10 m = 1/3600/3 degrees
     ):
         if layer in self.valid_layers:
             if layer == 'DEM':
+                # The default queryable elevation layer is simply called 'None'
                 layer = 'None'
         else:
             raise ValueError(f'ThreeDEP:{layer} not a valid layer!\nOptions:' +

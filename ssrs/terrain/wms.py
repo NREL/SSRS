@@ -7,6 +7,7 @@ import numpy as np
 from owslib.wms import WebMapService
 from rasterio.merge import merge
 import rasterio as rs
+import requests # proper handling of exceptions
 
 
 class WMS:
@@ -29,6 +30,7 @@ class WMS:
     """
     fmt = 'image/tiff'
     version: str = '1.3.0'
+    timeout = 30 # in seconds
 
     def __init__(
         self,
@@ -41,11 +43,33 @@ class WMS:
         self.max_gridsize = max_gridsize
         self.bnds = bnds
         self.crs_str = crs_str
+        attempts = 0 # attempts counter for AttributeError exception
 
-        try:
-            self.wms = WebMapService(url, version=self.version)
-        except Exception as _:
-            raise Exception('WMS: Connection issues, try again!\n') from None
+        while True: # Let's loop until the url responds, up to limit timeout
+            timeout=self.timeout
+            try:
+                self.wms = WebMapService(url, version=self.version, timeout=timeout)
+            except AttributeError as atterr:
+                # Sometimes this error shows up. Unclear why. Trying again..
+                attempts = attempts+1
+                if attempts>5:  
+                    raise Exception('WMS: Attribute error after 5 attempts. Try running again.') from atterr
+            except ConnectionError as connerr:
+                raise Exception('WMS: Internet access is required.') from connerr
+            #except:
+            except requests.exceptions.ReadTimeout:
+                timeout = timeout + 10
+                if timeout == 90:
+                    raise Exception('WMS: Connection issues, try again!\n')
+                print(f'WMS: URL not responding. Increasing timeout from {timeout-10} to {timeout} s.')
+            else:
+                break
+
+        print(f'    Using WebMapServices (WMS) to download 3DEP information')
+        print(f'    WMS version: {self.wms.version}')
+        print(f'    WMS request URL: {self.wms.url}')
+        print(f'    WMS timeout: {timeout} s')
+
         self.layers = list(self.wms.contents)
         #self.operations = [op.name for op in self.wms.operations]
         formats = self.wms.getOperationByName("GetMap").formatOptions
@@ -94,33 +118,50 @@ class WMS:
         res: float,
         fpath: str
     ) -> None:
-        """ Download layer data for all rectangular tiles """
+        """
+        Download layer data for all rectangular tiles
+        
+        Here we attempt to connect to the WMS service 3 times and download
+        the original raw files, saved as data/wms_raw_<tileNumber>.<format>
+        
+        """
         out_dir = os.path.dirname(os.path.abspath(fpath))
         if not os.path.isdir(out_dir):
             os.makedirs(out_dir)
         print(f'WMS: Downloading data for {len(bnds_list)} tiles..')
+
         for k, bnds in enumerate(bnds_list):
+            print(f'WMS: Downloading data for tile {k+1} of {len(bnds_list)}..')
             width = int(round((bnds[2] - bnds[0]) / res))
             height = int(round((bnds[3] - bnds[1]) / res))
-            kk = 0
+            kk = 0 # counter for connection attempts
             while True:
                 try:
-                    imap = self.wms.getmap(
-                        layers=[layer],
-                        srs=self.crs_str,
-                        bbox=bnds,
-                        format=self.fmt,
-                        size=(width, height)
-                    )
-                    with open(self.get_wms_file_path(out_dir, k), 'wb') as out_file:
-                        out_file.write(imap.read())
-                except Exception as _:
+                    # Get a ResponseWrapper object from a getmap request
+                    imap = self.wms.getmap( layers=[layer], srs=self.crs_str,
+                                             bbox=bnds,     format=self.fmt,
+                                             size=(width, height), timeout=self.timeout)
+                     
+                    fname = self.get_wms_file_path(out_dir, k)
+                    with open(fname, 'wb') as out_file:      
+                        fsize = out_file.write(imap.read())
+                        # Sometimes the file is not written to disk properly
+                        if fsize < 8000: # 8 kB
+                            continue
+                            #raise SystemError('    File not saved properly. Trying again.')
+
+
+                except requests.exceptions.ReadTimeout:
+                    # Let's try to connect to WMS servers 3 times
                     if kk < 3:
                         kk += 1
+                        print(f'WMS: Timeout on attempt number {kk} of {3} for tile {k+1}.')
+                        print(f'     Increasing timeout from {self.timeout} s to {self.timeout+10} s.')
+                        self.timeout = self.timeout + 10
                         continue
                     else:
                         raise Exception(
-                            f'WMS: Connection issues! Try again') from None
+                            f'WMS: Connection issues on tile {k+1}! Try again') from None
                 else:
                     break
             # except Exception as _:
@@ -178,6 +219,7 @@ class WMS:
             raise ValueError(f'WMS: Invalid resolution {res} for bnds'
                              + f'{self.bnds} in crs {self.crs_str}\n')
 
+        print(f'Downloading layer {layer} at approx. {res*3600*3*10} m resolution')
         bnds_list = self.segment_region_into_tiles(res)
         self.__download_tile_data(bnds_list, layer, res, fpath)
         self.__merge_tile_data(bnds_list, fpath)

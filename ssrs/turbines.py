@@ -3,6 +3,7 @@
 
 import os
 from typing import Tuple, Optional
+from urllib.error import HTTPError
 import pandas as pd
 from .raster import transform_coordinates
 
@@ -41,11 +42,16 @@ class TurbinesUSWTB:
     ):
 
         # load the USWTB turbine dataset in pandas dataframe
-        print('TurbinesUSWTB: Importing turbine data from USWTB..')
+        print('TurbinesUSWTDB: Importing turbine data from USWTDB..')
         try:
             dfraw = pd.read_json(self.url)
+            print('TurbinesUSWTDB: Successfully imported turbine data from USWTDB..')
+        except HTTPError as httperr:
+            print(f'Connection issues with USWTB database (error code {httperr.code}; ' \
+                   'see codes at https://eerscmap.usgs.gov/uswtdb/api-doc/).')
+            self.dframe = None
         except Exception as _:
-            print('Connection issues with USWTB database!')
+            print('Unknown connection issues with USWTDB database. Please submit a bug report.')
             self.dframe = None
         else:
             # compute the turbine locations in projected crs, if needed
@@ -64,6 +70,7 @@ class TurbinesUSWTB:
                 self.__xcol = 'xlong'
                 self.__ycol = 'ylat'
 
+
             # find the turbines within the requested bounds
             xbool = dfraw[self.__xcol].between(bounds[0], bounds[2], 'both')
             ybool = dfraw[self.__ycol].between(bounds[1], bounds[3], 'both')
@@ -71,7 +78,7 @@ class TurbinesUSWTB:
             self.dframe = dfraw.loc[xbool & ybool & hhbool, :]
             if out_fpath is not None:
                 try:
-                    self.dframe.to_csv(fpath)
+                    self.dframe.to_csv(out_fpath)
                 except:
                     pass
             if print_verbose:

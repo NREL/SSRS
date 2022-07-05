@@ -531,6 +531,30 @@ class Simulator(Config):
         fname = f'{self._get_id_string(case_id, real_id)}_potential'
         return os.path.join(dirname, fname)
 
+    def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
+        """ Plot directional potential """
+        if self.movement_model == 'fluid-flow':
+            print('Plotting directional potential..')
+            for case_id in self.case_ids:
+                updrafts = self.load_updrafts(case_id, apply_threshold=True)
+                for real_id, _ in enumerate(updrafts):
+                    fname = self._get_potential_fname(case_id, real_id,
+                                                      self.mode_data_dir)
+                    potential = np.load(f'{fname}.npy')
+                    fig, axs = plt.subplots(figsize=self.fig_size)
+                    lvls = np.linspace(0., np.amax(potential), 11)
+                    curm = axs.contourf(potential, lvls, cmap='cividis',
+                                        origin='lower',
+                                        extent=self.extent)
+                    cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
+                    cbar.set_label('Directional potential')
+                    if plot_turbs:
+                        self.plot_turbine_locations(axs)
+                    axs.set_xlim([self.extent[0], self.extent[1]])
+                    axs.set_ylim([self.extent[2], self.extent[3]])
+                    fname = self._get_potential_fname(case_id, real_id,
+                                                      self.mode_fig_dir)
+                    self.save_fig(fig, f'{fname}.png', show)
 
 ########### Simulate and plot tracks ###########
 

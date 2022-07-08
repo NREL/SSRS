@@ -102,12 +102,14 @@ class MovModel:
         returns the energy at all nodes (inner + bndry)"""
 
         nrow, ncol = conductivity.shape
-        vals = []
-        for r, c, fac in zip(row_inds, col_inds, facs):
-            conductivity_a = conductivity[r % nrow, r // nrow]
-            conductivity_b = conductivity[c % nrow, c // nrow]
-            vals.append(harmonic_mean(conductivity_a,
-                        conductivity_b, 1e-08) / fac)
+        conductivity_a = conductivity.ravel(order='F')[row_inds]
+        conductivity_b = conductivity.ravel(order='F')[col_inds]
+        vals = np.empty_like(conductivity_a)
+        vals[:] = 1e-08
+        non0 = np.where((conductivity_a != 0) & (conductivity_b != 0))
+        vals[non0] = get_harmonic_mean(conductivity_a[non0], conductivity_b[non0])
+        vals /= facs
+
         g_coo = ss.coo_matrix((np.array(vals),
                                (np.array(row_inds),
                               np.array(col_inds))), shape=(nrow * ncol, nrow * ncol))
@@ -123,7 +125,9 @@ class MovModel:
         g_inner_bndry_csc = g_inner_csc[:, bnodes]
         b_vec = g_inner_bndry_csc.dot(benergy)
         a_matrix = ss.eye(np.size(inodes)).tocsc() - g_inner_inner_csc
+
         ienergy = ss.linalg.spsolve(a_matrix, b_vec)
+
         global_energy = np.empty(nrow * ncol)
         global_energy[inodes] = ienergy
         global_energy[bnodes] = benergy

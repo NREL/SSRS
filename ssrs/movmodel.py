@@ -127,10 +127,7 @@ class MovModel:
         global_energy = np.empty(nrow * ncol)
         global_energy[inodes] = ienergy
         global_energy[bnodes] = benergy
-        pot_energy = np.empty((nrow, ncol))
-        for i in range(nrow * ncol):
-            pot_energy[i % nrow, i // nrow] = global_energy[i]
-        return pot_energy.astype(np.float32)
+        return global_energy.reshape((nrow, ncol), order='F').astype(np.float32)
 
 
 # define static constants for eagle track generation

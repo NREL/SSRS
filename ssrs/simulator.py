@@ -590,7 +590,6 @@ class Simulator(Config):
                     tracks = self._parallel_run(generate_simulated_tracks,
                         starting_locs,
                         self.track_direction,
-                        updraft.shape,
                         self.track_dirn_restrict,
                         self.track_stochastic_nu,
                         updraft,
@@ -603,7 +602,6 @@ class Simulator(Config):
                     tracks = self._parallel_run(generate_simulated_tracks,
                         starting_locs,
                         self.track_direction,
-                        updraft.shape,
                         self.track_dirn_restrict,
                         self.track_stochastic_nu
                     )
@@ -682,7 +680,6 @@ class Simulator(Config):
                     tracks = self._parallel_run(generate_simulated_tracks,
                         starting_locs,
                         self.track_direction,
-                        orographicupdraft.shape,
                         self.track_dirn_restrict,
                         self.track_stochastic_nu,
                         orographicupdraft,
@@ -696,7 +693,6 @@ class Simulator(Config):
                     tracks = self._parallel_run(generate_simulated_tracks,
                         starting_locs,
                         self.track_direction,
-                        orographicupdraft.shape,
                         self.track_dirn_restrict,
                         self.track_stochastic_nu
                     )

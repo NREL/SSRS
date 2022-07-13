@@ -271,7 +271,6 @@ def get_harmonic_mean(in_first, in_second):
 def generate_simulated_tracks(
         start_location: Tuple[int, int],
         move_dirn: float,
-        grid_shape: Tuple[int, int],
         memory_parameter: int = 1,
         scaling_parameter: float = 1.,
         updraft_field: Optional[np.ndarray] = None,
@@ -279,7 +278,7 @@ def generate_simulated_tracks(
 ):
     """ Generate an eagle track """
 
-    num_rows, num_cols = grid_shape
+    num_rows, num_cols = updraft_field.shape
     burnin_length = int(min(num_rows, num_cols) / 10)
     max_moves = num_rows / 2 * num_cols / 2
     direction = [0, 0]

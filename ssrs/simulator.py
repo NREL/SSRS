@@ -9,7 +9,8 @@ from typing import List, Tuple, Optional
 from datetime import datetime
 from dataclasses import asdict
 import requests
-import pathos.multiprocessing as mp
+import multiprocessing as mp
+from itertools import repeat
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -586,28 +587,26 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
                     start_time = time.time()
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            updraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu,
-                            updraft,
-                            potential
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        updraft.shape,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu,
+                        updraft,
+                        potential,
+                    )
                 elif self.movement_model == 'drw':
                     start_time = time.time()
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            updraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        updraft.shape,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu
+                    )
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
@@ -680,29 +679,27 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
 
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            orographicupdraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu,
-                            orographicupdraft,
-                            potential
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        orographicupdraft.shape,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu,
+                        orographicupdraft,
+                        potential
+                    )
                
                 elif self.movement_model == 'drw':
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
                       
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            orographicupdraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        orographicupdraft.shape,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu
+                    )
             
                 elif self.sim_movement == 'heuristics':
                     
@@ -711,19 +708,18 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                         end="", flush=True)
                     
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda inp: generate_heuristic_eagle_track(
-                            self.movement_ruleset,
-                            orographicupdraft,
-                            thermalupdraft,
-                            elevation,                                          #db added
-                            inp[:2], #start_loc
-                            inp[2], #PAM
-                            self.resolution,
-                            self.uniform_windspeed_h,  #TODO needs to be generalized to wind from WTK
-                            self.uniform_winddirn_h,   #TODO needs to be generalized to wind from WTK
-                            **hssrs_kwargs
-                        ), starting_locs_PAM)
+                    tracks = self._parallel_run(generate_heuristic_eagle_track,
+                        starting_locs_PAM, #start_loc
+                        inp[2], #PAM
+                        self.movement_ruleset,
+                        orographicupdraft,
+                        thermalupdraft,
+                        elevation,                                          #db added
+                        self.resolution,
+                        self.uniform_windspeed_h,  #TODO needs to be generalized to wind from WTK
+                        self.uniform_winddirn_h,   #TODO needs to be generalized to wind from WTK
+                        **hssrs_kwargs
+                    )
             
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
             
@@ -731,7 +727,19 @@ class Simulator(Config):
                     case_id, real_id, self.mode_data_dir)
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)                
-                  
+
+    def _parallel_run(self, func, start_locs, *args):
+        num_cores = min(self.track_count, self.max_cores)
+# use with import pathos.multiprocessing as mp
+#        #print('Using map with num_cores=',num_cores)
+#        with mp.Pool(num_cores) as pool:
+#            output = pool.map(lambda start_loc: func(start_loc,*args), start_locs)
+# use with import multiprocessing as mp
+        #print('Using starmap with num_cores=',num_cores)
+        arglist = [repeat(arg) for arg in args]
+        with mp.Pool(num_cores) as pool:
+            output = pool.starmap(func, zip(start_locs,*arglist))
+        return output
                                 
     def _get_tracks_fname(self, case_id: str, real_id: int, dirname: str):
         """ Returns file path for saving simulated tracks """

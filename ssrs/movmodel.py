@@ -269,8 +269,8 @@ def get_harmonic_mean(in_first, in_second):
 
 
 def generate_simulated_tracks(
-        move_dirn: float,
         start_location: Tuple[int, int],
+        move_dirn: float,
         grid_shape: Tuple[int, int],
         memory_parameter: int = 1,
         scaling_parameter: float = 1.,
@@ -325,12 +325,12 @@ def generate_simulated_tracks(
     return np.array(trajectory, dtype=np.int16)
 
 def generate_heuristic_eagle_track(
+        start_loc: List[int],
+        PAM: float, # principal axis of migration
         ruleset: str,
         wo: np.ndarray, # orographic updraft
         wt: np.ndarray, # thermal updraft
         elev: np.ndarray, # elevation from DEM - db added
-        start_loc: List[int],
-        PAM: float, # principal axis of migration
         res: float, # grid resolution
         windspeed: float, # uniform windspeed - needs to be generalized for wtk 
         winddir: float, #uniform winddir - needs to be generalized for wtk 

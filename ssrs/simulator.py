@@ -578,8 +578,9 @@ class Simulator(Config):
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             for real_id, updraft in enumerate(updrafts):
-                if self.sim_seed > 0:
-                    np.random.seed(self.sim_seed + real_id)
+# TODO: this should not be needed
+#                if self.sim_seed > 0:
+#                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
                 if self.movement_model == 'fluid-flow':
                     potential = self.get_directional_potential(
@@ -665,8 +666,9 @@ class Simulator(Config):
                                 
             #for real_id, updraft in enumerate(updrafts):  #this did not work for heuristics
             for real_id in range(self.thermals_realization_count):
-                if self.sim_seed > 0:
-                    np.random.seed(self.sim_seed + real_id)
+#                if self.sim_seed > 0:
+#                    # TODO: this should not be needed
+#                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
                 
                 start_time = time.time()
@@ -724,6 +726,17 @@ class Simulator(Config):
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)                
 
+    def init_worker(self):
+        if self.sim_seed >= 0:
+            worker = mp.current_process()
+            workerid = worker._identity[0]
+            # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
+            # to be 1..num_cores
+            print('initializing',worker,'with seed',self.sim_seed+workerid)
+            np.random.seed(self.sim_seed+workerid)
+        else:
+            np.random.seed()
+
     def _parallel_run(self, func, start_locs, *args):
         num_cores = min(self.track_count, self.max_cores)
 # use with import pathos.multiprocessing as mp
@@ -733,7 +746,7 @@ class Simulator(Config):
 # use with import multiprocessing as mp
         #print('Using starmap with num_cores=',num_cores)
         arglist = [repeat(arg) for arg in args]
-        with mp.Pool(num_cores) as pool:
+        with mp.Pool(num_cores, initializer=self.init_worker) as pool:
             output = pool.starmap(func, zip(start_locs,*arglist))
         return output
                                 

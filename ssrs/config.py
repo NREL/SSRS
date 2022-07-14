@@ -17,7 +17,6 @@ class Config:
     sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
     sim_movement: str = 'fluid-analogy' # fluid-analogy, heuristics
-    sim_seed: int = -1 # random number seed
 
     print_verbose: bool = False  # if want to print verbose
 

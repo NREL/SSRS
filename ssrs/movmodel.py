@@ -386,7 +386,8 @@ def generate_heuristic_eagle_track(
                'specify random_walk_step_range as (min_random_steps, max_random_steps)'
 
     #allow for some individual variation in PAM between eagles
-    np.random.seed()
+# TODO: this should not be needed
+#    np.random.seed()
     PAM = PAM + np.random.uniform(-10., 10.) 
     
     # move through domain

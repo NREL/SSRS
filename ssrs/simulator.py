@@ -728,14 +728,15 @@ class Simulator(Config):
 
     def init_worker(self):
         if self.sim_seed >= 0:
+            myseed = self.sim_seed
             worker = mp.current_process()
-            workerid = worker._identity[0]
-            # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
-            # to be 1..num_cores
-            print('initializing',worker,'with seed',self.sim_seed+workerid)
-            np.random.seed(self.sim_seed+workerid)
-        else:
-            np.random.seed()
+            if self.max_cores > 1:
+                workerid = worker._identity[0]
+                # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
+                # to be 1..num_cores
+                myseed += workerid
+            print('initializing',worker,'with seed',myseed)
+            np.random.seed(myseed)
 
     def _parallel_run(self, func, start_locs, *args):
         num_cores = min(self.track_count, self.max_cores)

@@ -78,6 +78,9 @@ class Config:
     track_start_type: str = 'structured'  # structured, random
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves
+    track_converge_tol: float = 0. # presence map convergence tolerance, 0 ==> simulate `track_count` tracks
+    track_converge_check_interval: int = 100 # check for convergence every # steps
+    track_converge_check_plot: bool = False # if True, plot presence map every `track_tol_check_interval`
 
     # plotting related
     fig_height: float = 6.

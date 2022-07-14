@@ -585,17 +585,49 @@ class Simulator(Config):
                 if self.movement_model == 'fluid-flow':
                     potential = self.get_directional_potential(
                         updraft, case_id, real_id)
-                    print(f'{id_str}: Simulating {self.track_count} tracks..',
-                          end="", flush=True)
                     start_time = time.time()
-                    tracks = self._parallel_run(generate_simulated_tracks,
-                        starting_locs,
-                        self.track_direction,
-                        self.track_dirn_restrict,
-                        self.track_stochastic_nu,
-                        updraft,
-                        potential,
-                    )
+                    if self.track_converge_tol == 0:
+                        print(f'{id_str}: Simulating {self.track_count} tracks..',
+                              end="", flush=True)
+                        tracks = self._parallel_run(generate_simulated_tracks,
+                            starting_locs,
+                            self.track_direction,
+                            self.track_dirn_restrict,
+                            self.track_stochastic_nu,
+                            updraft,
+                            potential,
+                        )
+                    else:
+                        print(f'{id_str}: Simulating up to {self.track_count} tracks'
+                              f' (tol={self.track_converge_tol:g})...\n',
+                              end="", flush=True)
+                        tracks = []
+                        last_presence_map = None
+                        for istart in range(0,
+                                            self.track_count,
+                                            self.track_converge_check_interval):
+                            start_loc_range = slice(istart, istart+self.track_converge_check_interval)
+                            # append to list of all tracks simulated thus far
+                            tracks += self._parallel_run(generate_simulated_tracks,
+                                starting_locs[start_loc_range],
+                                self.track_direction,
+                                self.track_dirn_restrict,
+                                self.track_stochastic_nu,
+                                updraft,
+                                potential,
+                            )
+                            Ntracks = len(tracks)
+                            # calc new presence map
+                            prprob = self.calc_presence_map(tracks, radius=1000.)
+                            if self.track_converge_check_plot:
+                                fig, ax = self._plot_presence(prprob, 0.1, False)
+                                fname = self._get_presence_fname(case_id, real_id,
+                                                                 self.mode_fig_dir)
+                                ax.set_title(f'{Ntracks:d} tracks')
+                                self.save_fig(fig, f'{fname}_ntracks{Ntracks:05d}.png')
+                            # compare change in presence maps
+                            print(f'  after simulating {Ntracks} tracks, presence map K-L:',)
+                            last_presence_map = prprob
                 elif self.movement_model == 'drw':
                     start_time = time.time()
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
@@ -1214,6 +1246,19 @@ class Simulator(Config):
             fig, _ = self._plot_presence_HSSRS(summary_prob, minval, plot_turbs)
             fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
             self.save_fig(fig, fpath, show)
+
+        return fig,ax
+
+    def calc_presence_map(
+        self,
+        tracks: np.ndarray,
+        radius: float = 1000.
+    ) -> np.ndarray:
+        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+        prprob = compute_smooth_presence_counts(
+            tracks, self.gridsize, int(round(krad)))
+        prprob /= np.amax(prprob)
+        return prprob
             
     def plot_presence_map(
         self,
@@ -1227,19 +1272,23 @@ class Simulator(Config):
         print('Plotting presence density map..')
         # Use analysis-resolution information
         elevation = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
-        summary_prob = np.zeros_like(elevation)
-        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+#        summary_prob = np.zeros_like(elevation)
+        summary_prob = None
+#        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             case_prob = np.zeros_like(updrafts[0])
+            if summary_prob is None:
+                summary_prob = np.zeros_like(updrafts[0])
             for real_id, _ in enumerate(updrafts):
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
                 with open(f'{fname}.pkl', 'rb') as fobj:
                     tracks = pickle.load(fobj)
-                prprob = compute_smooth_presence_counts(
-                    tracks, self.gridsize, int(round(krad)))
-                prprob /= np.amax(prprob)
+#                prprob = compute_smooth_presence_counts(
+#                    tracks, self.gridsize, int(round(krad)))
+#                prprob /= np.amax(prprob)
+                prprob = self.calc_presence_map(tracks, radius)
                 case_prob += prprob
                 if plot_all:
                     fig, _ = self._plot_presence(prprob, minval, plot_turbs)

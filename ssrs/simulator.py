@@ -38,7 +38,8 @@ from .movmodel import (MovModel, get_starting_indices,
 
 from .utils import (makedir_if_not_exists, get_elapsed_time,
                     get_extent_from_bounds, empty_this_directory,
-                    create_gis_axis, get_sunrise_sunset_time)
+                    create_gis_axis, get_sunrise_sunset_time,
+                    calc_MSE)
 
 
 class Simulator(Config):
@@ -598,6 +599,7 @@ class Simulator(Config):
                             potential,
                         )
                     else:
+                        assert self.track_converge_tol > 0
                         print(f'{id_str}: Simulating up to {self.track_count} tracks'
                               f' (tol={self.track_converge_tol:g})...\n',
                               end="", flush=True)
@@ -626,8 +628,12 @@ class Simulator(Config):
                                 ax.set_title(f'{Ntracks:d} tracks')
                                 self.save_fig(fig, f'{fname}_ntracks{Ntracks:05d}.png')
                             # compare change in presence maps
-                            print(f'  after simulating {Ntracks} tracks, presence map K-L:',)
+                            if istart > 0:
+                                assert last_presence_map is not None
+                                mse = calc_MSE(prprob, last_presence_map)
+                                print(f'  MSE after simulating {Ntracks} tracks: {mse:g}')
                             last_presence_map = prprob
+
                 elif self.movement_model == 'drw':
                     start_time = time.time()
                     print(f'{id_str}: Simulating {self.track_count} tracks..',

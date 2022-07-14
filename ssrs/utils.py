@@ -1,5 +1,6 @@
 """ Module for commonly used functions """
 
+import numpy as np
 from typing import Tuple
 import errno
 import os
@@ -165,3 +166,10 @@ def pretty_str(label, arr):
         s = s + '\n' + pad + line
 
     return s
+
+
+def calc_MSE(P: np.ndarray, P0: np.ndarray) -> float:
+    """Calculate the mean squared error"""
+    assert P.shape == P0.shape
+    N = len(P.ravel())
+    return np.sum((P-P0)**2) / N

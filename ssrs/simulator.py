@@ -598,8 +598,11 @@ class Simulator(Config):
                             updraft,
                             potential,
                         )
+
                     else:
                         assert self.track_converge_tol > 0
+                        if self.track_start_type != 'random':
+                            print('WARNING: In track convergence mode, track_start_type should be random')
                         print(f'{id_str}: Simulating up to {self.track_count} tracks'
                               f' (tol={self.track_converge_tol:g})...\n',
                               end="", flush=True)
@@ -632,6 +635,8 @@ class Simulator(Config):
                                 assert last_presence_map is not None
                                 mse = calc_MSE(prprob, last_presence_map)
                                 print(f'  MSE after simulating {Ntracks} tracks: {mse:g}')
+                                if mse < self.track_converge_tol:
+                                    break
                             last_presence_map = prprob
 
                 elif self.movement_model == 'drw':

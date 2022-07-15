@@ -205,7 +205,7 @@ def get_track_restrictions(dr: int, dc: int):
     if dr == 0 and dc == 0:
         a_mat[:, :] = 1
     a_mat[1, 1] = 0
-    return a_mat.flatten()
+    return a_mat.ravel()
 
 
 def move_away_from_boundary(row, col, num_rows, num_cols):
@@ -232,17 +232,17 @@ def generate_move_probabilities(
 ):
     """ create move probabilities from a 1d array of values"""
     out_probs = np.asarray(in_probs.copy())
-    if np.isnan(out_probs).any():
+    if any(np.isnan(out_probs)):
         print('NANs in move probabilities!')
         out_probs = get_directional_probs(move_dirn * np.pi / 180.)
     out_probs = out_probs.clip(min=0.)
     out_probs[4] = 0.
-    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    out_probs = out_probs * dir_bool.astype(float)
     if np.count_nonzero(out_probs) == 0:
         out_probs = get_directional_probs(move_dirn * np.pi / 180.)
         #out_probs = np.random.rand(len(out_probs))
     out_probs[4] = 0.
-    out_probs = [ix * float(iy) for ix, iy in zip(out_probs, dir_bool)]
+    out_probs = out_probs * dir_bool.astype(float)
     if np.count_nonzero(out_probs) == 0:
         out_probs = get_directional_probs(move_dirn * np.pi / 180.)
     out_probs /= np.sum(out_probs)
@@ -261,7 +261,7 @@ def get_directional_probs(theta: float) -> np.ndarray:
     dir_mat[2, :] = [np.cos(3 * np.pi / 4 + theta), np.cos(np.pi + theta),
                      np.cos(5 * np.pi / 4 + theta)]
     dir_mat[dir_mat < 0.01] = 0.
-    return np.flipud(dir_mat.clip(min=0.)).flatten()
+    return np.flipud(dir_mat.clip(min=0.)).ravel()
 
 
 def get_harmonic_mean(in_first, in_second):
@@ -280,13 +280,11 @@ def generate_simulated_tracks(
 
     num_rows, num_cols = updraft_field.shape
     burnin_length = int(min(num_rows, num_cols) / 10)
-    max_moves = num_rows / 2 * num_cols / 2
-    direction = [0, 0]
-    directions = []
-    directions.append(direction)
+    max_moves = num_rows//2 * num_cols//2
+    directions = [[0, 0]]
     position = start_location.copy()
-    trajectory = []
-    trajectory.append(position)
+    trajectory = [position]
+    init_track_restriction = get_track_restrictions(0, 0)
     k = 0
     while k < max_moves:
         row, col = position
@@ -309,15 +307,15 @@ def generate_simulated_tracks(
             potential_diff = np.multiply(potential_diff,
                                          neighbour_delta_norms_inv)
             move_probs = np.multiply(move_probs, potential_diff)
-        move_probs = move_probs.flatten()
-        dir_bool = get_track_restrictions(0, 0)
+        move_probs = move_probs.ravel()
+        dir_bool = init_track_restriction.copy()
         for idirn in directions[-memory_parameter:]:
             dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
         move_probs = generate_move_probabilities(move_probs, move_dirn,
                                                  scaling_parameter, dir_bool)
         chosen_index = np.random.choice(range(len(move_probs)), p=move_probs)
         dirn = neighbour_deltas[chosen_index]
-        position = [x + y for x, y in zip([row, col], dirn)]
+        position = [row + dirn[0], col + dirn[1]]
         trajectory.append(position)
         directions.append(dirn)
         k += 1

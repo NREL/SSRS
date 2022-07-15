@@ -302,7 +302,7 @@ def generate_simulated_tracks(
         move_probs = np.ones_like(neighbour_delta_norms_inv)
         if updraft_field is not None:
             local_updraft = updraft_field[row - 1:row + 2, col - 1:col + 2]
-            clip_inplace(local_updraft, minval=1e-06)
+            local_updraft = local_updraft.clip(min=1e-06)
             mean_change = get_harmonic_mean(local_updraft[1, 1], local_updraft)
             move_probs = np.multiply(move_probs, mean_change)
         else:

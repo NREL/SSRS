@@ -11,7 +11,7 @@ from scipy.interpolate import RectBivariateSpline
 
 from .heuristics import rulesets
 from .actions import random_walk
-from .utils import random_choice_movement
+from .utils import random_choice_movement, clip_inplace
 
 class MovModel:
     """ Class for fluid-flow based model """
@@ -192,19 +192,23 @@ def get_starting_indices(
 def get_track_restrictions(dr: int, dc: int):
     """ Returns updated movement probabilities based on previous moves"""
     a_mat = np.zeros((3, 3), dtype=int)
-    dr_mat = np.zeros((3, 3), dtype=int)
-    dc_mat = np.zeros((3, 3), dtype=int)
-    if abs(dr + dc % 2) == 1:
-        if dr == 0:
-            a_mat[:, dc + 1] = 1
-        else:
-            a_mat[dr + 1, :] = 1
-    else:
-        dr_mat[(dr + 1, 1), :] = 1
-        dc_mat[:, (1, dc + 1)] = 1
-        a_mat = np.logical_and(dr_mat, dc_mat).astype(int)
     if dr == 0 and dc == 0:
+        # equal probability in all dirs
         a_mat[:, :] = 1
+    elif dr == 0:
+        # no row-wise movement
+        a_mat[:, dc + 1] = 1
+    elif dc == 0:
+        # no column-wise movement
+        a_mat[dr + 1, :] = 1
+    else:
+        # intercardinal direction
+        dr = max(dr,0)
+        dc = max(dc,0)
+        dr_end = dr + 2
+        dc_end = dc + 2
+        a_mat[dr:dr_end,dc:dc_end] = 1
+    # stayng put is not an option
     a_mat[1, 1] = 0
     return a_mat.ravel()
 
@@ -236,7 +240,7 @@ def generate_move_probabilities(
     if any(np.isnan(out_probs)):
         print('NANs in move probabilities!')
         out_probs = get_directional_probs(move_dirn * np.pi / 180.)
-    out_probs = out_probs.clip(min=0.)
+    clip_inplace(out_probs, minval=0)
     out_probs[4] = 0.
     out_probs = out_probs * dir_bool.astype(float)
     if np.count_nonzero(out_probs) == 0:
@@ -262,7 +266,8 @@ def get_directional_probs(theta: float) -> np.ndarray:
     dir_mat[2, :] = [np.cos(3 * np.pi / 4 + theta), np.cos(np.pi + theta),
                      np.cos(5 * np.pi / 4 + theta)]
     dir_mat[dir_mat < 0.01] = 0.
-    return np.flipud(dir_mat.clip(min=0.)).ravel()
+    clip_inplace(dir_mat, minval=0)
+    return np.flipud(dir_mat).ravel()
 
 
 def get_harmonic_mean(in_first, in_second):
@@ -297,7 +302,7 @@ def generate_simulated_tracks(
         move_probs = np.ones_like(neighbour_delta_norms_inv)
         if updraft_field is not None:
             local_updraft = updraft_field[row - 1:row + 2, col - 1:col + 2]
-            local_updraft = local_updraft.clip(min=1e-06)
+            clip_inplace(local_updraft, minval=1e-06)
             mean_change = get_harmonic_mean(local_updraft[1, 1], local_updraft)
             move_probs = np.multiply(move_probs, mean_change)
         else:

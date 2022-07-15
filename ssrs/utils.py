@@ -184,6 +184,10 @@ def random_choice_movement(move_probs):
     return i
 
 
+def clip_inplace(arr,minval=0):
+    arr[np.where(arr < minval)] = 0
+
+
 def calc_MSE(P: np.ndarray, P0: np.ndarray) -> float:
     """Calculate the mean squared error"""
     assert P.shape == P0.shape

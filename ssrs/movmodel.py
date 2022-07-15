@@ -11,6 +11,7 @@ from scipy.interpolate import RectBivariateSpline
 
 from .heuristics import rulesets
 from .actions import random_walk
+from .utils import random_choice_movement
 
 class MovModel:
     """ Class for fluid-flow based model """
@@ -313,7 +314,7 @@ def generate_simulated_tracks(
             dir_bool = np.logical_and(get_track_restrictions(*idirn), dir_bool)
         move_probs = generate_move_probabilities(move_probs, move_dirn,
                                                  scaling_parameter, dir_bool)
-        chosen_index = np.random.choice(range(len(move_probs)), p=move_probs)
+        chosen_index = random_choice_movement(move_probs)
         dirn = neighbour_deltas[chosen_index]
         position = [row + dirn[0], col + dirn[1]]
         trajectory.append(position)

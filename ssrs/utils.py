@@ -168,6 +168,22 @@ def pretty_str(label, arr):
     return s
 
 
+def random_choice_movement(move_probs):
+    """Optimized version of np.random.choice(range(9), p=move_probs)
+
+    Approx 10x speedup observed when requesting single choices
+
+    https://stackoverflow.com/questions/18622781/why-is-numpy-random-choice-so-slow
+    """
+    x = np.random.rand()
+    cumsum = 0
+    for i,p in enumerate(move_probs):
+        cumsum += p
+        if x < cumsum:
+            break
+    return i
+
+
 def calc_MSE(P: np.ndarray, P0: np.ndarray) -> float:
     """Calculate the mean squared error"""
     assert P.shape == P0.shape

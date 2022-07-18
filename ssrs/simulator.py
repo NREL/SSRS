@@ -32,7 +32,7 @@ from .raster import (get_raster_in_projected_crs,
 from .movmodel import (generate_heuristic_eagle_track,compute_smooth_presence_counts_HSSRS)
 from .heuristics import rulesets
 #from .randomthermals import est_random_thermals
-from .movmodel import (MovModel, get_starting_indices,
+from .movmodel import (MovModel,
                        compute_smooth_presence_counts,
                        generate_simulated_tracks)
 
@@ -194,6 +194,47 @@ class Simulator(Config):
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
         print('SSRS Simulator initiation done.')
+
+    def _get_starting_indices(self) -> List[int]:
+        """ get starting indices of eagle tracks """
+        # validate inputs
+        sbounds = self.track_start_region # [xmin, xmax, ymin, ymax]
+        rwidth = self.region_width_km # region width [km]
+        if ((sbounds[1] < sbounds[0]) or \
+            (sbounds[3] < sbounds[2]) or \
+            (sbounds[0] < 0.) or \
+            (sbounds[2] < 0.) or \
+            (sbounds[1] > rwidth[0]) or \
+            (sbounds[3] > rwidth[1])):
+            raise ValueError('track_start_region is invalid!')
+
+        res_km = self.resolution / 1000.
+        xind_max = np.ceil(rwidth[0] / res_km)
+        yind_max = np.ceil(rwidth[1] / res_km)
+        xind_low = min(max(np.floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
+        xind_upp = max(min(np.ceil(sbounds[1] / res_km), xind_max - 1), 2)
+        yind_low = min(max(np.floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
+        yind_upp = max(min(np.ceil(sbounds[3] / res_km), yind_max - 1), 2)
+        print(xind_max, yind_max, xind_low, xind_upp, yind_low, yind_upp)
+        xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
+        base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
+        base_count = base_inds.shape[1]
+        if self.track_start_type == 'structured':
+            idx = np.round(np.linspace(0, base_count - 1, self.track_count % base_count))
+            if self.track_count > base_count:
+                start_inds = np.tile(base_inds, (1, self.track_count // base_count))
+                start_inds = np.hstack(
+                    (start_inds, start_inds[:, idx.astype(int)]))
+            else:
+                start_inds = base_inds[:, idx.astype(int)]
+        elif self.track_start_type == 'random':
+            idx = np.random.randint(0, base_count, self.track_count)
+            start_inds = base_inds[:, idx]
+        else:
+            raise ValueError((f'Model:Invalid sim_start_type of {self.track_start_type}\n'
+                              'Options: structured, random'))
+        start_inds = start_inds.astype(int)
+        return start_inds[0, :], start_inds[1, :]
 
 
 ########## terrain related functions ############
@@ -567,13 +608,7 @@ class Simulator(Config):
         print(f'Movement direction = {self.track_direction} deg (cw)')
         # print(f'Memory parameter = {self.track_dirn_restrict}')
         # print('Getting starting locations for simulating eagle tracks..')
-        starting_rows, starting_cols = get_starting_indices(
-            self.track_count,
-            self.track_start_region,
-            self.track_start_type,
-            self.region_width_km,
-            self.resolution
-        )
+        starting_rows, starting_cols = self._get_starting_indices()
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
         num_cores = min(self.track_count, self.max_cores)
         for case_id in self.case_ids:
@@ -681,13 +716,7 @@ class Simulator(Config):
                 for i,action in enumerate(rulesets[self.movement_ruleset]):
                     print(f'{i+1}.',action)
         # print('Getting starting locations for simulating eagle tracks..')
-        starting_rows, starting_cols = get_starting_indices(
-            self.track_count,
-            self.track_start_region,
-            self.track_start_type,
-            self.region_width_km,
-            self.resolution
-        )
+        starting_rows, starting_cols = self._get_starting_indices()
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
         if PAM_stdev == 0:
             dir_offsets = np.zeros(len(starting_locs))

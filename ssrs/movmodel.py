@@ -1,6 +1,6 @@
 """ Module for implementing fluid-flow based movement model """
 
-from math import (floor, ceil, sqrt)
+from math import sqrt
 from typing import List, Tuple, Optional
 import numpy as np
 import matplotlib.pyplot as plt #temp for plotting wt_test
@@ -146,47 +146,6 @@ for r in range(neighbour_delta_norms_inv.shape[0]):
         distance = np.linalg.norm(delta)
         neighbour_delta_norms_inv[r, c] = 1.0 / \
             distance if distance > 0 else 0
-
-
-def get_starting_indices(
-    ntracks: int,
-    sbounds: List[float],
-    stype: str,
-    twidth: Tuple[float, float],
-    tres: float
-) -> List[int]:
-    """ get starting indices of eagle tracks """
-
-    if (sbounds[1] < sbounds[0] or sbounds[3] < sbounds[2] or
-        sbounds[0] < 0. or sbounds[2] < 0. or sbounds[1] > twidth[0] or
-            sbounds[3] > twidth[1]):
-        raise ValueError('track_start_region incompatible with terrain_width!')
-    res_km = tres / 1000.
-    xind_max = ceil(twidth[0] / res_km)
-    yind_max = ceil(twidth[1] / res_km)
-    xind_low = min(max(floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
-    xind_upp = max(min(ceil(sbounds[1] / res_km), xind_max - 1), 2)
-    yind_low = min(max(floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
-    yind_upp = max(min(ceil(sbounds[3] / res_km), yind_max - 1), 2)
-    xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
-    base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
-    base_count = base_inds.shape[1]
-    if stype == 'structured':
-        idx = np.round(np.linspace(0, base_count - 1, ntracks % base_count))
-        if ntracks > base_count:
-            start_inds = np.tile(base_inds, (1, ntracks // base_count))
-            start_inds = np.hstack(
-                (start_inds, start_inds[:, idx.astype(int)]))
-        else:
-            start_inds = base_inds[:, idx.astype(int)]
-    elif stype == 'random':
-        idx = np.random.randint(0, base_count, ntracks)
-        start_inds = base_inds[:, idx]
-    else:
-        raise ValueError((f'Model:Invalid sim_start_type of {stype}\n'
-                          'Options: structured, random'))
-    start_inds = start_inds.astype(int)
-    return start_inds[0, :], start_inds[1, :]
 
 
 def get_track_restrictions(dr: int, dc: int):

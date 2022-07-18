@@ -198,19 +198,31 @@ class Simulator(Config):
     def _get_starting_indices(self) -> List[int]:
         """ get starting indices of eagle tracks """
         # validate inputs
-        sbounds = self.track_start_region # [xmin, xmax, ymin, ymax]
-        rwidth = self.region_width_km # region width [km]
-        if ((sbounds[1] < sbounds[0]) or \
-            (sbounds[3] < sbounds[2]) or \
-            (sbounds[0] < 0.) or \
-            (sbounds[2] < 0.) or \
-            (sbounds[1] > rwidth[0]) or \
-            (sbounds[3] > rwidth[1])):
-            raise ValueError('track_start_region is invalid!')
+        extent = self.region_width_km # extent of full simulation domain [km]
+        if self.track_start_region_width > 0:
+            # specify starting region based on width, origin, and rotation
+            # parameters; track_start_region will be overwritten for plotting
+            # purposes
+            sbounds = (self.track_start_region_origin[0] - self.track_start_region_width/2,
+                       self.track_start_region_origin[0] + self.track_start_region_width/2,
+                       self.track_start_region_origin[1] - self.track_start_region_depth/2,
+                       self.track_start_region_origin[1] + self.track_start_region_depth/2)
+            self.track_start_region = sbounds
+            print('Note: track_start_region_width specified; '
+                  f'track_start_region overwritten with {str(self.track_start_region)}')
+        else:
+            sbounds = self.track_start_region # [xmin, xmax, ymin, ymax]
+            if ((sbounds[1] < sbounds[0]) or \
+                (sbounds[3] < sbounds[2]) or \
+                (sbounds[0] < 0.) or \
+                (sbounds[2] < 0.) or \
+                (sbounds[1] > extent[0]) or \
+                (sbounds[3] > extent[1])):
+                raise ValueError('track_start_region is invalid!')
 
         res_km = self.resolution / 1000.
-        xind_max = np.ceil(rwidth[0] / res_km)
-        yind_max = np.ceil(rwidth[1] / res_km)
+        xind_max = np.ceil(extent[0] / res_km)
+        yind_max = np.ceil(extent[1] / res_km)
         xind_low = min(max(np.floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
         xind_upp = max(min(np.ceil(sbounds[1] / res_km), xind_max - 1), 2)
         yind_low = min(max(np.floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)

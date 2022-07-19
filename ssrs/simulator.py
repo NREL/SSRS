@@ -881,17 +881,21 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
@@ -926,17 +930,21 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
@@ -978,17 +986,21 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
@@ -1022,17 +1034,21 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 
@@ -1600,14 +1616,18 @@ class Simulator(Config):
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            left = self.extent[0] + self.track_start_region[0] * 1000.
-            bottom = self.extent[2] + self.track_start_region[2] * 1000.
-            width = self.track_start_region[1] - self.track_start_region[0]
-            hght = self.track_start_region[3] - self.track_start_region[2]
-            rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                      hght * 1000., alpha=0.2,
-                                      edgecolor='none', facecolor='b')
-            axs.add_patch(rect)
+            if self.track_start_region_rotation == 0:
+                left = self.extent[0] + self.track_start_region[0] * 1000.
+                bottom = self.extent[2] + self.track_start_region[2] * 1000.
+                width = self.track_start_region[1] - self.track_start_region[0]
+                hght = self.track_start_region[3] - self.track_start_region[2]
+                rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                          hght * 1000., alpha=0.2,
+                                          edgecolor='none', facecolor='b')
+                axs.add_patch(rect)
+            else:
+                # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
             
             xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
             ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])

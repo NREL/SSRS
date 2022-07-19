@@ -331,6 +331,7 @@ class HRRR:
         vs = vs[~np.isnan(vs)]
 
         # Use bilinear interpolation to find U and V values
+        # TODO: Write things to do to optimize this.
         u_interp = float(interp2d(xs, ys, us)(center_x, center_y))
         v_interp = float(interp2d(xs, ys, vs)(center_x, center_y))
 

@@ -9,7 +9,8 @@ from typing import List, Tuple, Optional
 from datetime import datetime
 from dataclasses import asdict
 import requests
-import multiprocessing as mp
+#import multiprocessing as mp
+import pathos.multiprocessing as mp
 from itertools import repeat
 import numpy as np
 import matplotlib.pyplot as plt
@@ -826,29 +827,30 @@ class Simulator(Config):
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)                
 
-    def init_worker(self):
-        if self.sim_seed >= 0:
-            myseed = self.sim_seed
-            worker = mp.current_process()
-            if self.max_cores > 1:
-                workerid = worker._identity[0]
-                # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
-                # to be 1..num_cores
-                myseed += workerid
-            print('initializing',worker,'with seed',myseed)
-            np.random.seed(myseed)
+# use with import multiprocessing as mp
+#    def init_worker(self):
+#        if self.sim_seed >= 0:
+#            myseed = self.sim_seed
+#            worker = mp.current_process()
+#            if self.max_cores > 1:
+#                workerid = worker._identity[0]
+#                # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
+#                # to be 1..num_cores
+#                myseed += workerid
+#            print('initializing',worker,'with seed',myseed)
+#            np.random.seed(myseed)
 
     def _parallel_run(self, func, start_locs, *args):
         num_cores = min(self.track_count, self.max_cores)
 # use with import pathos.multiprocessing as mp
-#        #print('Using map with num_cores=',num_cores)
-#        with mp.Pool(num_cores) as pool:
-#            output = pool.map(lambda start_loc: func(start_loc,*args), start_locs)
+        #print('Using map with num_cores=',num_cores)
+        with mp.Pool(num_cores) as pool:
+            output = pool.map(lambda start_loc: func(start_loc,*args), start_locs)
 # use with import multiprocessing as mp
-        #print('Using starmap with num_cores=',num_cores)
-        arglist = [repeat(arg) for arg in args]
-        with mp.Pool(num_cores, initializer=self.init_worker) as pool:
-            output = pool.starmap(func, zip(start_locs,*arglist))
+#        #print('Using starmap with num_cores=',num_cores)
+#        arglist = [repeat(arg) for arg in args]
+#        with mp.Pool(num_cores, initializer=self.init_worker) as pool:
+#            output = pool.starmap(func, zip(start_locs,*arglist))
         return output
                                 
     def _get_tracks_fname(self, case_id: str, real_id: int, dirname: str):

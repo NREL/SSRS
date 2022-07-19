@@ -221,16 +221,32 @@ class Simulator(Config):
                 raise ValueError('track_start_region is invalid!')
 
         res_km = self.resolution / 1000.
-        xind_max = np.ceil(extent[0] / res_km)
-        yind_max = np.ceil(extent[1] / res_km)
-        xind_low = min(max(np.floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
-        xind_upp = max(min(np.ceil(sbounds[1] / res_km), xind_max - 1), 2)
-        yind_low = min(max(np.floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
-        yind_upp = max(min(np.ceil(sbounds[3] / res_km), yind_max - 1), 2)
-        print(xind_max, yind_max, xind_low, xind_upp, yind_low, yind_upp)
-        xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
-        base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
+        if self.track_start_region_rotation == 0:
+            # original index selection code
+            xind_max = np.ceil(extent[0] / res_km)
+            yind_max = np.ceil(extent[1] / res_km)
+            xind_low = min(max(np.floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
+            xind_upp = max(min(np.ceil(sbounds[1] / res_km), xind_max - 1), 2)
+            yind_low = min(max(np.floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
+            yind_upp = max(min(np.ceil(sbounds[3] / res_km), yind_max - 1), 2)
+            print(xind_max, yind_max, xind_low, xind_upp, yind_low, yind_upp)
+            xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
+            base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
+        else:
+            print(f'Rotating start region by {self.track_start_region_rotation:g} deg')
+            ang = np.radians(self.track_start_region_rotation)
+            x1 = np.arange(0, extent[0]+res_km, res_km) - self.track_start_region_origin[0]
+            y1 = np.arange(0, extent[1]+res_km, res_km) - self.track_start_region_origin[1]
+            xx,yy = np.meshgrid(x1,y1)
+            xx_r = xx*np.cos(ang) - yy*np.sin(ang)
+            yy_r = xx*np.sin(ang) + yy*np.cos(ang)
+            base_inds = np.where((xx_r > -self.track_start_region_width/2) & \
+                                 (xx_r <  self.track_start_region_width/2) & \
+                                 (yy_r > -self.track_start_region_depth/2) & \
+                                 (yy_r <  self.track_start_region_depth/2))
+            base_inds = np.vstack(base_inds)
         base_count = base_inds.shape[1]
+
         if self.track_start_type == 'structured':
             idx = np.round(np.linspace(0, base_count - 1, self.track_count % base_count))
             if self.track_count > base_count:

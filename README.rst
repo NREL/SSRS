@@ -9,7 +9,7 @@ movements through an orographic updraft field estimated using the
 spatially varying wind conditions and ground features (altitude, slope, aspect).
 SSRS can be applied to any rectangular region within the US without the
 need for any eagle-centric or atmosphere-related data collection efforts, using
-only the publically available data sources. SSRS implements and extends the
+only the publicly available data sources. SSRS implements and extends the
 capability of the fluid-flow model from 'Brandes, D., & Ombalski, D. (2004). 
 Modelling raptor migration pathways using a fluid-flow analogy. The Journal
 of Raptor Research, 38(3), 195-207.' More details can be found in the publication:
@@ -102,7 +102,9 @@ north can be implemented using the following code:
     sim = Simulator(config_wy_uniform)
     sim.simulate_tracks()
     sim.plot_terrain_elevation(show=True)
-    sim.plot_simulation_output(show=True)
+    sim.plot_updrafts(show=True)
+    sim.plot_simulated_tracks(show=True)
+    sim.plot_presence_map(show=True)
 
 
 This will produce the following figures:
@@ -154,7 +156,20 @@ Here is a description of the parameters available to the users to vary:
     run_name: str = 'default'  # name of this run, determines directory names
     out_dir: str = os.path.join(os.path.abspath(os.path.curdir), 'output')
     max_cores: int = 8  # maximum number of cores to use
+    sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
+<<<<<<< HEAD
+    sim_seed: int = 42  # random number seed (optional)
+
+Note: Specifying `sim_seed` will fix the pseudorandom number sequence for *all
+processors*, which allows the same set of random tracks to be regenerated for a
+given seed. One caveat is that if the `track_start_region` is set up to
+simulate tracks originating from a single location, specifying `sim_seed` with
+`max_cores` > 1 will result in non-unique tracks (because each processor will
+have the same initial condition, with tracks making the same "random" choices). 
+=======
+    print_verbose: bool = False # if want to print verbose
+>>>>>>> f7b2656e5d0a957086a57ce1aae6e0d131bd03eb
 
 
 Parameters for setting up the region:
@@ -192,7 +207,7 @@ Parameters for setting up the seasonal mode:
     seasonal_count: int = 8  # number of seasonal updraft computations
 
 
-Parameters for importing data from WindToolKit dataset: 
+Parameters for importing data from NREL's WTK dataset: 
 
 .. code-block:: python
 
@@ -224,9 +239,7 @@ Parameters for plotting:
     turbine_mrkr_styles = ('1k', '2k', '3k', '4k',
                            '+k', 'xk', '*k', '.k', 'ok')
     turbine_mrkr_size: float = 3. # marker size for plotting turbines
-    turbine_box_around_wfarm: bool = False # to plot box around a plant
-    presence_smoothing_radius: bool = 10  # smoothing radius in meters for presence maps
-
+   
 
 Developers
 -----------

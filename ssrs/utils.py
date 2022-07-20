@@ -86,13 +86,9 @@ def get_extent_from_bounds(
     return extent
 
 
-def makedir_if_not_exists(filename: str) -> None:
+def makedir_if_not_exists(dirname: str) -> None:
     """ Create the directory if it does not exists"""
-    try:
-        os.makedirs(filename)
-    except OSError as e_name:
-        if e_name.errno != errno.EEXIST:
-            raise
+    os.makedirs(dirname, exist_ok=True)
 
 
 def get_elapsed_time(start) -> str:

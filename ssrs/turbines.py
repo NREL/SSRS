@@ -40,7 +40,21 @@ class TurbinesUSWTB:
         out_fpath: str = 'turbines.csv',
         print_verbose: bool = False
     ):
+        try:
+            self.dframe = pd.read_csv(out_fpath)
+            print('TurbinesUSWTDB: Loaded saved turbine data from USWTDB')
+        except (ValueError, FileNotFoundError, pd.errors.ParserError):
+            self._download_db(bounds, crs_string, min_hubheight, out_fpath)
+        if print_verbose:
+            self.print_details()
 
+    def _download_db(
+        self,
+        bounds: Tuple[float, float, float, float],
+        crs_string: str = 'EPSG:4326',
+        min_hubheight: float = 50., # in meters
+        out_fpath: str = 'turbines.csv',
+    ):
         # load the USWTB turbine dataset in pandas dataframe
         print('TurbinesUSWTDB: Importing turbine data from USWTDB..')
         try:
@@ -70,19 +84,13 @@ class TurbinesUSWTB:
                 self.__xcol = 'xlong'
                 self.__ycol = 'ylat'
 
-
             # find the turbines within the requested bounds
             xbool = dfraw[self.__xcol].between(bounds[0], bounds[2], 'both')
             ybool = dfraw[self.__ycol].between(bounds[1], bounds[3], 'both')
             hhbool = dfraw['t_hh'].between(min_hubheight, 10000., 'left')
             self.dframe = dfraw.loc[xbool & ybool & hhbool, :]
             if out_fpath is not None:
-                try:
-                    self.dframe.to_csv(out_fpath)
-                except:
-                    pass
-            if print_verbose:
-                self.print_details()
+                self.dframe.to_csv(out_fpath)
 
     def get_locations(self):
         """ Returns the locations of turbines """

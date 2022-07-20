@@ -103,8 +103,8 @@ class MovModel:
         returns the energy at all nodes (inner + bndry)"""
 
         nrow, ncol = conductivity.shape
-        conductivity_a = conductivity.ravel(order='F')[row_inds]
-        conductivity_b = conductivity.ravel(order='F')[col_inds]
+        conductivity_a = conductivity.ravel(order='F')[row_inds].astype(float)
+        conductivity_b = conductivity.ravel(order='F')[col_inds].astype(float)
         vals = np.empty_like(conductivity_a)
         vals[:] = 1e-08
         non0 = np.where((conductivity_a != 0) & (conductivity_b != 0))
@@ -112,8 +112,8 @@ class MovModel:
         vals /= facs
 
         g_coo = ss.coo_matrix((np.array(vals),
-                               (np.array(row_inds),
-                              np.array(col_inds))), shape=(nrow * ncol, nrow * ncol))
+                              (np.array(row_inds), np.array(col_inds))),
+                              shape=(nrow * ncol, nrow * ncol))
         g_csr = g_coo.tocsr()
         g_csr.data = g_csr.data / np.repeat(np.add.reduceat(g_csr.data,
                                                             g_csr.indptr[:-1]),

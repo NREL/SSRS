@@ -951,8 +951,6 @@ class Simulator(Config):
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_fig_dir)
-                if axs is None:
-                    self.save_fig(fig, f'{fname}.png', show)
         return fig, axs
 
 
@@ -1007,9 +1005,6 @@ class Simulator(Config):
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_fig_dir)
-                if axs is None:
-                    #self.save_fig(fig, f'{fname}.png', show)
-                    pass
         return fig, axs
 
 
@@ -1709,9 +1704,6 @@ class Simulator(Config):
         cbar.set_label('Altitude (km)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
-        if axs is None:
-            self.save_fig(fig, os.path.join(
-                self.fig_dir, 'elevation.png'), show)
         return fig, axs
 
 

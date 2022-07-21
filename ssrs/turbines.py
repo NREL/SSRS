@@ -40,6 +40,12 @@ class TurbinesUSWTB:
         out_fpath: str = 'turbines.csv',
         print_verbose: bool = False
     ):
+        if crs_string.lower() == 'epsg:4326':
+            self.__xcol = 'xlong'
+            self.__ycol = 'ylat'
+        else:
+            self.__xcol = 'x'
+            self.__ycol = 'y'
         try:
             self.dframe = pd.read_csv(out_fpath)
             print('TurbinesUSWTDB: Loaded saved turbine data from USWTDB')
@@ -70,8 +76,6 @@ class TurbinesUSWTB:
         else:
             # compute the turbine locations in projected crs, if needed
             if crs_string.lower() != 'epsg:4326':
-                self.__xcol = 'x'
-                self.__ycol = 'y'
                 xlocs, ylocs = transform_coordinates(
                     self.lonlat_crs,
                     crs_string,
@@ -80,9 +84,6 @@ class TurbinesUSWTB:
                 )
                 dfraw[self.__xcol] = xlocs
                 dfraw[self.__ycol] = ylocs
-            else:
-                self.__xcol = 'xlong'
-                self.__ycol = 'ylat'
 
             # find the turbines within the requested bounds
             xbool = dfraw[self.__xcol].between(bounds[0], bounds[2], 'both')

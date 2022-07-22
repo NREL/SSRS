@@ -1217,13 +1217,17 @@ class Simulator(Config):
 
 ########### Compute and plot presence maps ###########
 
-    def _plot_presence(self, in_prob, in_val, plot_turbs, wfarm_level=False):
+    def _plot_presence(self, in_prob, in_val, plot_turbs, wfarm_level=False, normalized=True):
         """Plots a presence density """
         fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
+        if normalized:
+            vmax = 1.0
+        else:
+            vmax = np.max(in_prob)
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=1.0))
+                       norm=LogNorm(vmin=in_val, vmax=vmax))
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:
@@ -1235,14 +1239,18 @@ class Simulator(Config):
         return fig, axs
 
     def _plot_presence_altamont(self, in_prob, in_val, fig=None, axs=None,
-                       plot_turbs=False, wfarm_level=False):
+                       plot_turbs=False, wfarm_level=False, normalized=True):
         """Plots a presence density """
         if axs is None:
             fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
+        if normalized:
+            vmax = 1.0
+        else:
+            vmax = np.max(in_prob)
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=1.0))
+                       norm=LogNorm(vmin=in_val, vmax=vmax))
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:
@@ -1394,6 +1402,7 @@ class Simulator(Config):
         self,
         plot_turbs=False,
         radius: float = 1000.,
+        norm=True,
         show=False,
         minval=0.1,
         plot_all: bool = False
@@ -1414,20 +1423,23 @@ class Simulator(Config):
                     tracks = pickle.load(fobj)
                 prprob = compute_smooth_presence_counts(
                     tracks, self.gridsize, int(round(krad)))
-                prprob /= np.amax(prprob)
+                if norm:
+                    prprob /= np.amax(prprob)
                 case_prob += prprob
                 if plot_all:
-                    fig, _ = self._plot_presence(prprob, minval, plot_turbs)
+                    fig, _ = self._plot_presence(prprob, minval, plot_turbs, normalized=norm)
                     fname = self._get_presence_fname(case_id, real_id,
                                                      self.mode_fig_dir)
                     self.save_fig(fig, f'{fname}.png', show)
-            case_prob /= np.amax(case_prob)
+            if norm:
+                case_prob /= np.amax(case_prob)
             summary_prob += case_prob
             # fig, _ = self._plot_presence(case_prob, minval, plot_turbs)
             # fname = f'{self._get_id_string(case_id)}_presence.png'
             # fpath = os.path.join(self.mode_fig_dir, fname)
             # self.save_fig(fig, fpath, show)
-        summary_prob /= np.amax(summary_prob)
+        if norm:
+            summary_prob /= np.amax(summary_prob)
         fname = os.path.join(self.mode_data_dir, 'summary_presence')
         np.save(f'{fname}.npy', summary_prob.astype(np.float32))
         fig, axs = self._plot_presence(summary_prob, minval, plot_turbs)

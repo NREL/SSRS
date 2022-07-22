@@ -1222,12 +1222,15 @@ class Simulator(Config):
         fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
         if normalized:
+            vmin = in_val
             vmax = 1.0
         else:
-            vmax = np.max(in_prob)
+            maxval = np.max(in_prob)
+            vmin = in_val * maxval
+            vmax = maxval
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=vmax))
+                       norm=LogNorm(vmin=vmin, vmax=vmax))
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:
@@ -1245,12 +1248,15 @@ class Simulator(Config):
             fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
         if normalized:
+            vmin = in_val
             vmax = 1.0
         else:
-            vmax = np.max(in_prob)
+            maxval = np.max(in_prob)
+            vmin = in_val * maxval
+            vmax = maxval
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=vmax))
+                       norm=LogNorm(vmin=vmin, vmax=vmax))
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:

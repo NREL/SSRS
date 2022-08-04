@@ -40,19 +40,19 @@ class Config:
     uniform_windspeed: float = 10.  # uniform wind speed in m/s
 
     # parameters for snapshot mode
-    snapshot_datetime: Tuple[int, int, int, int] = (2010, 6, 17, 13)
+    snapshot_datetime: Tuple[int, int, int, int] = (2010, 6, 17, 13) # UTC
 
     # parameters for seasonal mode
     seasonal_start: Tuple[int, int] = (3, 20)  # start of season (month, day)
     seasonal_end: Tuple[int, int] = (5, 15)  # end of season (month, day)
-    seasonal_timeofday: str = 'daytime'  # morning, afternoon, evening, daytime
+    seasonal_timeofday: str = 'daytime'  # 'morning', 'afternoon', 'evening', or 'daytime'
     seasonal_count: int = 8  # number of seasonal updraft computations
 
     # downloading data from WTK
     wtk_source: str = 'AWS'  # 'EAGLE', 'AWS', 'EAGLE_LED'
     wtk_orographic_height: int = 100  # WTK wind conditions at this height
     wtk_thermal_height: int = 100  # WTK pressure, temperature, at this height
-    wtk_interp_type: str = 'linear'  # 'nearest' 'linear' 'cubic'
+    wtk_interp_type: str = 'linear'  # 'nearest', 'linear', or 'cubic'
 
     # parameters defining the updraft calculation
     thermals_realization_count: bool = 0  # number of realizations of thermals
@@ -62,8 +62,8 @@ class Config:
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
     track_count: str = 1000  # number of simulated eagle tracks
-    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2)
-    track_start_type: str = 'structured'  # structured, random
+    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # (xmin, xmax, ymin, ymax)
+    track_start_type: str = 'structured'  # 'structured' or 'random'
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves
 

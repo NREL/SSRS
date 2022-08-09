@@ -9,7 +9,9 @@ from typing import List, Tuple, Optional
 from datetime import datetime
 from dataclasses import asdict
 import requests
+#import multiprocessing as mp
 import pathos.multiprocessing as mp
+from itertools import repeat
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -31,13 +33,14 @@ from .raster import (get_raster_in_projected_crs,
 from .movmodel import (generate_heuristic_eagle_track,compute_smooth_presence_counts_HSSRS)
 from .heuristics import rulesets
 #from .randomthermals import est_random_thermals
-from .movmodel import (MovModel, get_starting_indices,
+from .movmodel import (MovModel,
                        compute_smooth_presence_counts,
                        generate_simulated_tracks)
 
 from .utils import (makedir_if_not_exists, get_elapsed_time,
                     get_extent_from_bounds, empty_this_directory,
-                    create_gis_axis, get_sunrise_sunset_time)
+                    create_gis_axis, get_sunrise_sunset_time,
+                    calc_MSE)
 
 
 class Simulator(Config):
@@ -192,6 +195,75 @@ class Simulator(Config):
         self.km_bar = min([1, 5, 10], key=lambda x: abs(
             x - self.region_width_km[0] // 4))
         print('SSRS Simulator initiation done.')
+
+    def _get_starting_indices(self) -> List[int]:
+        """ get starting indices of eagle tracks """
+        # validate inputs
+        extent = self.region_width_km # extent of full simulation domain [km]
+        if self.track_start_region_width > 0:
+            # specify starting region based on width, origin, and rotation
+            # parameters; track_start_region will be overwritten for plotting
+            # purposes
+            sbounds = (self.track_start_region_origin[0] - self.track_start_region_width/2,
+                       self.track_start_region_origin[0] + self.track_start_region_width/2,
+                       self.track_start_region_origin[1] - self.track_start_region_depth/2,
+                       self.track_start_region_origin[1] + self.track_start_region_depth/2)
+            self.track_start_region = sbounds
+            print('Note: track_start_region_width specified; '
+                  f'track_start_region overwritten with {str(self.track_start_region)}')
+        else:
+            sbounds = self.track_start_region # [xmin, xmax, ymin, ymax]
+            if ((sbounds[1] < sbounds[0]) or \
+                (sbounds[3] < sbounds[2]) or \
+                (sbounds[0] < 0.) or \
+                (sbounds[2] < 0.) or \
+                (sbounds[1] > extent[0]) or \
+                (sbounds[3] > extent[1])):
+                raise ValueError('track_start_region is invalid!')
+
+        res_km = self.resolution / 1000.
+        if self.track_start_region_rotation == 0:
+            # original index selection code
+            xind_max = np.ceil(extent[0] / res_km)
+            yind_max = np.ceil(extent[1] / res_km)
+            xind_low = min(max(np.floor(sbounds[0] / res_km) - 1, 1), xind_max - 2)
+            xind_upp = max(min(np.ceil(sbounds[1] / res_km), xind_max - 1), 2)
+            yind_low = min(max(np.floor(sbounds[2] / res_km) - 1, 1), yind_max - 2)
+            yind_upp = max(min(np.ceil(sbounds[3] / res_km), yind_max - 1), 2)
+            print(xind_max, yind_max, xind_low, xind_upp, yind_low, yind_upp)
+            xmesh, ymesh = np.mgrid[xind_low:xind_upp, yind_low:yind_upp]
+            base_inds = np.vstack((np.ravel(ymesh), np.ravel(xmesh)))
+        else:
+            print(f'Rotating start region by {self.track_start_region_rotation:g} deg')
+            ang = np.radians(self.track_start_region_rotation)
+            x1 = np.arange(0, extent[0]+res_km, res_km) - self.track_start_region_origin[0]
+            y1 = np.arange(0, extent[1]+res_km, res_km) - self.track_start_region_origin[1]
+            xx,yy = np.meshgrid(x1,y1)
+            xx_r = xx*np.cos(ang) - yy*np.sin(ang)
+            yy_r = xx*np.sin(ang) + yy*np.cos(ang)
+            base_inds = np.where((xx_r > -self.track_start_region_width/2) & \
+                                 (xx_r <  self.track_start_region_width/2) & \
+                                 (yy_r > -self.track_start_region_depth/2) & \
+                                 (yy_r <  self.track_start_region_depth/2))
+            base_inds = np.vstack(base_inds)
+        base_count = base_inds.shape[1]
+
+        if self.track_start_type == 'structured':
+            idx = np.round(np.linspace(0, base_count - 1, self.track_count % base_count))
+            if self.track_count > base_count:
+                start_inds = np.tile(base_inds, (1, self.track_count // base_count))
+                start_inds = np.hstack(
+                    (start_inds, start_inds[:, idx.astype(int)]))
+            else:
+                start_inds = base_inds[:, idx.astype(int)]
+        elif self.track_start_type == 'random':
+            idx = np.random.randint(0, base_count, self.track_count)
+            start_inds = base_inds[:, idx]
+        else:
+            raise ValueError((f'Model:Invalid sim_start_type of {self.track_start_type}\n'
+                              'Options: structured, random'))
+        start_inds = start_inds.astype(int)
+        return start_inds[0, :], start_inds[1, :]
 
 
 ########## terrain related functions ############
@@ -565,49 +637,82 @@ class Simulator(Config):
         print(f'Movement direction = {self.track_direction} deg (cw)')
         # print(f'Memory parameter = {self.track_dirn_restrict}')
         # print('Getting starting locations for simulating eagle tracks..')
-        starting_rows, starting_cols = get_starting_indices(
-            self.track_count,
-            self.track_start_region,
-            self.track_start_type,
-            self.region_width_km,
-            self.resolution
-        )
+        starting_rows, starting_cols = self._get_starting_indices()
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
         num_cores = min(self.track_count, self.max_cores)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             for real_id, updraft in enumerate(updrafts):
-                if self.sim_seed > 0:
-                    np.random.seed(self.sim_seed + real_id)
+# TODO: this should not be needed
+#                if self.sim_seed > 0:
+#                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
                 if self.movement_model == 'fluid-flow':
                     potential = self.get_directional_potential(
                         updraft, case_id, real_id)
-                    print(f'{id_str}: Simulating {self.track_count} tracks..',
-                          end="", flush=True)
                     start_time = time.time()
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
+                    if self.track_converge_tol == 0:
+                        print(f'{id_str}: Simulating {self.track_count} tracks..',
+                              end="", flush=True)
+                        tracks = self._parallel_run(generate_simulated_tracks,
+                            starting_locs,
                             self.track_direction,
-                            start_loc,
-                            updraft.shape,
                             self.track_dirn_restrict,
                             self.track_stochastic_nu,
                             updraft,
-                            potential
-                        ), starting_locs)
+                            potential,
+                        )
+
+                    else:
+                        assert self.track_converge_tol > 0
+                        if self.track_start_type != 'random':
+                            print('WARNING: In track convergence mode, track_start_type should be random')
+                        print(f'{id_str}: Simulating up to {self.track_count} tracks'
+                              f' (tol={self.track_converge_tol:g})...\n',
+                              end="", flush=True)
+                        tracks = []
+                        last_presence_map = None
+                        for istart in range(0,
+                                            self.track_count,
+                                            self.track_converge_check_interval):
+                            start_loc_range = slice(istart, istart+self.track_converge_check_interval)
+                            # append to list of all tracks simulated thus far
+                            tracks += self._parallel_run(generate_simulated_tracks,
+                                starting_locs[start_loc_range],
+                                self.track_direction,
+                                self.track_dirn_restrict,
+                                self.track_stochastic_nu,
+                                updraft,
+                                potential,
+                            )
+                            Ntracks = len(tracks)
+                            # calc new presence map
+                            prprob = self.calc_presence_map(tracks, radius=1000.)
+                            if self.track_converge_check_plot:
+                                fig, ax = self._plot_presence(prprob, 0.1, False)
+                                fname = self._get_presence_fname(case_id, real_id,
+                                                                 self.mode_fig_dir)
+                                ax.set_title(f'{Ntracks:d} tracks')
+                                self.save_fig(fig, f'{fname}_ntracks{Ntracks:05d}.png')
+                            # compare change in presence maps
+                            if istart > 0:
+                                assert last_presence_map is not None
+                                mse = calc_MSE(prprob, last_presence_map)
+                                print(f'  MSE after simulating {Ntracks} tracks: {mse:g}')
+                                if mse < self.track_converge_tol:
+                                    break
+                            last_presence_map = prprob
+
                 elif self.movement_model == 'drw':
                     start_time = time.time()
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            updraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu
+                    )
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
@@ -640,13 +745,7 @@ class Simulator(Config):
                 for i,action in enumerate(rulesets[self.movement_ruleset]):
                     print(f'{i+1}.',action)
         # print('Getting starting locations for simulating eagle tracks..')
-        starting_rows, starting_cols = get_starting_indices(
-            self.track_count,
-            self.track_start_region,
-            self.track_start_type,
-            self.region_width_km,
-            self.resolution
-        )
+        starting_rows, starting_cols = self._get_starting_indices()
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
         if PAM_stdev == 0:
             dir_offsets = np.zeros(len(starting_locs))
@@ -668,8 +767,9 @@ class Simulator(Config):
                                 
             #for real_id, updraft in enumerate(updrafts):  #this did not work for heuristics
             for real_id in range(self.thermals_realization_count):
-                if self.sim_seed > 0:
-                    np.random.seed(self.sim_seed + real_id)
+#                if self.sim_seed > 0:
+#                    # TODO: this should not be needed
+#                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
                 
                 start_time = time.time()
@@ -680,29 +780,25 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
 
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            orographicupdraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu,
-                            orographicupdraft,
-                            potential
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu,
+                        orographicupdraft,
+                        potential
+                    )
                
                 elif self.movement_model == 'drw':
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
                       
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda start_loc: generate_simulated_tracks(
-                            self.track_direction,
-                            start_loc,
-                            orographicupdraft.shape,
-                            self.track_dirn_restrict,
-                            self.track_stochastic_nu
-                        ), starting_locs)
+                    tracks = self._parallel_run(generate_simulated_tracks,
+                        starting_locs,
+                        self.track_direction,
+                        self.track_dirn_restrict,
+                        self.track_stochastic_nu
+                    )
             
                 elif self.sim_movement == 'heuristics':
                     
@@ -711,19 +807,18 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                         end="", flush=True)
                     
-                    with mp.Pool(num_cores) as pool:
-                        tracks = pool.map(lambda inp: generate_heuristic_eagle_track(
-                            self.movement_ruleset,
-                            orographicupdraft,
-                            thermalupdraft,
-                            elevation,                                          #db added
-                            inp[:2], #start_loc
-                            inp[2], #PAM
-                            self.resolution,
-                            self.uniform_windspeed_h,  #TODO needs to be generalized to wind from WTK
-                            self.uniform_winddirn_h,   #TODO needs to be generalized to wind from WTK
-                            **hssrs_kwargs
-                        ), starting_locs_PAM)
+                    tracks = self._parallel_run(generate_heuristic_eagle_track,
+                        starting_locs_PAM, #start_loc
+                        inp[2], #PAM
+                        self.movement_ruleset,
+                        orographicupdraft,
+                        thermalupdraft,
+                        elevation,                                          #db added
+                        self.resolution,
+                        self.uniform_windspeed_h,  #TODO needs to be generalized to wind from WTK
+                        self.uniform_winddirn_h,   #TODO needs to be generalized to wind from WTK
+                        **hssrs_kwargs
+                    )
             
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
             
@@ -731,7 +826,32 @@ class Simulator(Config):
                     case_id, real_id, self.mode_data_dir)
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)                
-                  
+
+# use with import multiprocessing as mp
+#    def init_worker(self):
+#        if self.sim_seed >= 0:
+#            myseed = self.sim_seed
+#            worker = mp.current_process()
+#            if self.max_cores > 1:
+#                workerid = worker._identity[0]
+#                # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
+#                # to be 1..num_cores
+#                myseed += workerid
+#            print('initializing',worker,'with seed',myseed)
+#            np.random.seed(myseed)
+
+    def _parallel_run(self, func, start_locs, *args):
+        num_cores = min(self.track_count, self.max_cores)
+# use with import pathos.multiprocessing as mp
+        #print('Using map with num_cores=',num_cores)
+        with mp.Pool(num_cores) as pool:
+            output = pool.map(lambda start_loc: func(start_loc,*args), start_locs)
+# use with import multiprocessing as mp
+#        #print('Using starmap with num_cores=',num_cores)
+#        arglist = [repeat(arg) for arg in args]
+#        with mp.Pool(num_cores, initializer=self.init_worker) as pool:
+#            output = pool.starmap(func, zip(start_locs,*arglist))
+        return output
                                 
     def _get_tracks_fname(self, case_id: str, real_id: int, dirname: str):
         """ Returns file path for saving simulated tracks """
@@ -763,17 +883,21 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
@@ -808,23 +932,25 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_fig_dir)
-                if axs is None:
-                    self.save_fig(fig, f'{fname}.png', show)
         return fig, axs
 
 
@@ -860,24 +986,25 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_fig_dir)
-                if axs is None:
-                    #self.save_fig(fig, f'{fname}.png', show)
-                    pass
         return fig, axs
 
 
@@ -904,17 +1031,21 @@ class Simulator(Config):
                 _, _ = create_gis_axis(fig, axs, None, self.km_bar)
                 if plot_turbs:
                     self.plot_turbine_locations(axs)
-                left = self.extent[0] + self.track_start_region[0] * 1000.
-                bottom = self.extent[2] + \
-                    self.track_start_region[2] * 1000.
-                width = self.track_start_region[1] - \
-                    self.track_start_region[0]
-                hght = self.track_start_region[3] - \
-                    self.track_start_region[2]
-                rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                          hght * 1000., alpha=0.2,
-                                          edgecolor='none', facecolor='b')
-                axs.add_patch(rect)
+                if self.track_start_region_rotation == 0:
+                    left = self.extent[0] + self.track_start_region[0] * 1000.
+                    bottom = self.extent[2] + \
+                        self.track_start_region[2] * 1000.
+                    width = self.track_start_region[1] - \
+                        self.track_start_region[0]
+                    hght = self.track_start_region[3] - \
+                        self.track_start_region[2]
+                    rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                              hght * 1000., alpha=0.2,
+                                              edgecolor='none', facecolor='b')
+                    axs.add_patch(rect)
+                else:
+                    # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                    print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
                 axs.set_xlim([self.extent[0], self.extent[1]])
                 axs.set_ylim([self.extent[2], self.extent[3]])
                 
@@ -1086,13 +1217,20 @@ class Simulator(Config):
 
 ########### Compute and plot presence maps ###########
 
-    def _plot_presence(self, in_prob, in_val, plot_turbs, wfarm_level=False):
+    def _plot_presence(self, in_prob, in_val, plot_turbs, wfarm_level=False, normalized=True):
         """Plots a presence density """
         fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
+        if normalized:
+            vmin = in_val
+            vmax = 1.0
+        else:
+            maxval = np.max(in_prob)
+            vmin = in_val * maxval
+            vmax = maxval
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=1.0))
+                       norm=LogNorm(vmin=vmin, vmax=vmax))
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:
@@ -1104,14 +1242,21 @@ class Simulator(Config):
         return fig, axs
 
     def _plot_presence_altamont(self, in_prob, in_val, fig=None, axs=None,
-                       plot_turbs=False, wfarm_level=False):
+                       plot_turbs=False, wfarm_level=False, normalized=True):
         """Plots a presence density """
         if axs is None:
             fig, axs = plt.subplots(figsize=self.fig_size)
         in_prob[in_prob <= in_val] = 0.
+        if normalized:
+            vmin = in_val
+            vmax = 1.0
+        else:
+            maxval = np.max(in_prob)
+            vmin = in_val * maxval
+            vmax = maxval
         _ = axs.imshow(in_prob, extent=self.extent, origin='lower',
                        cmap='Reds', alpha=0.75,
-                       norm=LogNorm(vmin=in_val, vmax=1.0))
+                       norm=LogNorm(vmin=vmin, vmax=vmax))
         if wfarm_level:
             _, _ = create_gis_axis(fig, axs, None, 1.)
         else:
@@ -1196,6 +1341,19 @@ class Simulator(Config):
             fig, _ = self._plot_presence_HSSRS(summary_prob, minval, plot_turbs)
             fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
             self.save_fig(fig, fpath, show)
+
+        return fig,ax
+
+    def calc_presence_map(
+        self,
+        tracks: np.ndarray,
+        radius: float = 1000.
+    ) -> np.ndarray:
+        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+        prprob = compute_smooth_presence_counts(
+            tracks, self.gridsize, int(round(krad)))
+        prprob /= np.amax(prprob)
+        return prprob
             
     def plot_presence_map(
         self,
@@ -1209,19 +1367,23 @@ class Simulator(Config):
         print('Plotting presence density map..')
         # Use analysis-resolution information
         elevation = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
-        summary_prob = np.zeros_like(elevation)
-        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
+#        summary_prob = np.zeros_like(elevation)
+        summary_prob = None
+#        krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold=True)
             case_prob = np.zeros_like(updrafts[0])
+            if summary_prob is None:
+                summary_prob = np.zeros_like(updrafts[0])
             for real_id, _ in enumerate(updrafts):
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
                 with open(f'{fname}.pkl', 'rb') as fobj:
                     tracks = pickle.load(fobj)
-                prprob = compute_smooth_presence_counts(
-                    tracks, self.gridsize, int(round(krad)))
-                prprob /= np.amax(prprob)
+#                prprob = compute_smooth_presence_counts(
+#                    tracks, self.gridsize, int(round(krad)))
+#                prprob /= np.amax(prprob)
+                prprob = self.calc_presence_map(tracks, radius)
                 case_prob += prprob
                 if plot_all:
                     fig, _ = self._plot_presence(prprob, minval, plot_turbs)
@@ -1246,6 +1408,7 @@ class Simulator(Config):
         self,
         plot_turbs=False,
         radius: float = 1000.,
+        norm=True,
         show=False,
         minval=0.1,
         plot_all: bool = False
@@ -1266,20 +1429,23 @@ class Simulator(Config):
                     tracks = pickle.load(fobj)
                 prprob = compute_smooth_presence_counts(
                     tracks, self.gridsize, int(round(krad)))
-                prprob /= np.amax(prprob)
+                if norm:
+                    prprob /= np.amax(prprob)
                 case_prob += prprob
                 if plot_all:
-                    fig, _ = self._plot_presence(prprob, minval, plot_turbs)
+                    fig, _ = self._plot_presence(prprob, minval, plot_turbs, normalized=norm)
                     fname = self._get_presence_fname(case_id, real_id,
                                                      self.mode_fig_dir)
                     self.save_fig(fig, f'{fname}.png', show)
-            case_prob /= np.amax(case_prob)
+            if norm:
+                case_prob /= np.amax(case_prob)
             summary_prob += case_prob
             # fig, _ = self._plot_presence(case_prob, minval, plot_turbs)
             # fname = f'{self._get_id_string(case_id)}_presence.png'
             # fpath = os.path.join(self.mode_fig_dir, fname)
             # self.save_fig(fig, fpath, show)
-        summary_prob /= np.amax(summary_prob)
+        if norm:
+            summary_prob /= np.amax(summary_prob)
         fname = os.path.join(self.mode_data_dir, 'summary_presence')
         np.save(f'{fname}.npy', summary_prob.astype(np.float32))
         fig, axs = self._plot_presence(summary_prob, minval, plot_turbs)
@@ -1465,14 +1631,18 @@ class Simulator(Config):
             _, _ = create_gis_axis(fig, axs, None, self.km_bar)
             if plot_turbs:
                 self.plot_turbine_locations(axs)
-            left = self.extent[0] + self.track_start_region[0] * 1000.
-            bottom = self.extent[2] + self.track_start_region[2] * 1000.
-            width = self.track_start_region[1] - self.track_start_region[0]
-            hght = self.track_start_region[3] - self.track_start_region[2]
-            rect = mpatches.Rectangle((left, bottom), width * 1000.,
-                                      hght * 1000., alpha=0.2,
-                                      edgecolor='none', facecolor='b')
-            axs.add_patch(rect)
+            if self.track_start_region_rotation == 0:
+                left = self.extent[0] + self.track_start_region[0] * 1000.
+                bottom = self.extent[2] + self.track_start_region[2] * 1000.
+                width = self.track_start_region[1] - self.track_start_region[0]
+                hght = self.track_start_region[3] - self.track_start_region[2]
+                rect = mpatches.Rectangle((left, bottom), width * 1000.,
+                                          hght * 1000., alpha=0.2,
+                                          edgecolor='none', facecolor='b')
+                axs.add_patch(rect)
+            else:
+                # TODO: transform rectangle (e.g., https://stackoverflow.com/questions/43000288/unable-to-rotate-a-matplotlib-patch-object-about-a-specific-point-using-rotate-d)
+                print(f'Starting region is rotated by {self.track_start_region_rotation:g} deg')
             
             xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
             ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
@@ -1552,9 +1722,6 @@ class Simulator(Config):
         cbar.set_label('Altitude (km)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
-        if axs is None:
-            self.save_fig(fig, os.path.join(
-                self.fig_dir, 'elevation.png'), show)
         return fig, axs
 
 

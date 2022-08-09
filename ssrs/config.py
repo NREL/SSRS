@@ -17,7 +17,6 @@ class Config:
     sim_seed: int = -1  # random number seed
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
     sim_movement: str = 'fluid-analogy' # fluid-analogy, heuristics
-    sim_seed: int = -1 # random number seed
 
     print_verbose: bool = False  # if want to print verbose
 
@@ -75,10 +74,17 @@ class Config:
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
     track_count: str = 1000  # number of simulated eagle tracks
-    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # [xmin, xmax, ymin, ymax] in km wrt to box selected by southwest_lonlat and regions_width_km
     track_start_type: str = 'structured'  # structured, random
+    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # [xmin, xmax, ymin, ymax] in km wrt to box selected by southwest_lonlat and regions_width_km
+    track_start_region_width: float = 0. # long side of rectangular region [km] -- if specified, `track_start_region` is ignored, and `track_start_region_origin` and `track_start_region_rotation` are used instead
+    track_start_region_depth: float = 1. # short side of rectangular region [km]
+    track_start_region_origin: Tuple[float, float] = (0, 0) # center of the start region; `track_start_region_width` must be > 0
+    track_start_region_rotation: float = 0.  # degrees (clockwise from N) to rotate start region about `track_start_region_origin`; `track_start_region_width` must be > 0
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves
+    track_converge_tol: float = 0. # presence map convergence tolerance, 0 ==> simulate `track_count` tracks
+    track_converge_check_interval: int = 100 # check for convergence every # steps
+    track_converge_check_plot: bool = False # if True, plot presence map every `track_tol_check_interval`
 
     # plotting related
     fig_height: float = 6.

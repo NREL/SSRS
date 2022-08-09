@@ -216,17 +216,19 @@ def generate_move_probabilities(
 
 
 def get_directional_probs(theta: float) -> np.ndarray:
-    """ Returns a dirction array based on angle"""
+    """ Returns a direction array based on angle [rad]"""
     dir_mat = np.zeros((3, 3))
-    dir_mat[0, :] = [np.cos(np.pi / 4 + theta), np.cos(theta),
-                     np.cos(7 * np.pi / 4 + theta)]
-    dir_mat[1, :] = [np.cos(np.pi / 2 + theta), 0,
-                     np.cos(3 * np.pi / 2 + theta)]
-    dir_mat[2, :] = [np.cos(3 * np.pi / 4 + theta), np.cos(np.pi + theta),
-                     np.cos(5 * np.pi / 4 + theta)]
-    dir_mat[dir_mat < 0.01] = 0.
-    clip_inplace(dir_mat, minval=0)
-    return np.flipud(dir_mat).ravel()
+    dir_mat[0, :] = [np.cos(theta + 3/4*np.pi),
+                     np.cos(theta +     np.pi),
+                     np.cos(theta + 5/4*np.pi)]
+    dir_mat[1, :] = [np.cos(theta + 1/2*np.pi),
+                     0,
+                     np.cos(theta + 3/2*np.pi)]
+    dir_mat[2, :] = [np.cos(theta + 1/4*np.pi),
+                     np.cos(theta),
+                     np.cos(theta + 7/4*np.pi)]
+    clip_inplace(dir_mat, minval=0.01)
+    return dir_mat.ravel()
 
 
 def get_harmonic_mean(in_first, in_second):

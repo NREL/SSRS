@@ -174,8 +174,8 @@ class HRRR:
     def wind_velocity_direction_at_altitude(
         self,
         center_lonlat: Tuple[float, float],
-        ground_level_m: float,
-        height_above_ground_m: float,
+        ground_level_m=0.0,
+        height_above_ground_m=80.0,
         extent_km_lat=6.0,
         extent_km_lon=6.0,
         fringe_deg_lat=0.03,
@@ -188,6 +188,8 @@ class HRRR:
         described by the parameters to this method call.
 
         There are some quirks of how the altitude requested works.
+        Either ground_level_m or height_above_ground_m should be
+        specified.
 
         When the method first starts, it calculates the pressure of
         the isobar closest to (but not lower than) the ground level.
@@ -200,12 +202,13 @@ class HRRR:
         2. Middle: 80 m above ground
         3. Lowest: 10 m above ground
 
-        If 0 < height_above_ground_m < 45, the 10 m above ground wind values
-        are used. If 45 <= height_above_ground_m < 100, the 80 m above ground
-        wind values are used. If height_above_ground_m > 100, then the closest
-        pressure above ground is used. Also, if height_above_ground_m < 0,
-        the closest pressure above ground is used. The final condition prevents
-        errors when bad data with a negative height above ground is encountered.
+        If 0 < height_above_ground_m < 45, the 10 m above ground wind
+        values are used. If 45 <= height_above_ground_m < 100, the 80 m
+        above ground wind values are used. If height_above_ground_m >
+        100, then the closest pressure above ground is used. Also, if
+        height_above_ground_m < 0, the closest pressure above ground is
+        used. The final condition prevents errors when bad data with a
+        negative height above ground is encountered.
 
         Parameters
         ----------
@@ -219,7 +222,7 @@ class HRRR:
         height_above_ground_m: float
             The height above the ground in meters at the point of interest.
 
-            extent_km_lat: float
+        extent_km_lat: float
             The extent of the mask in the latitude direction in units of
             kilometers.
 
@@ -228,7 +231,7 @@ class HRRR:
             kilometers.
 
         fringe_deg_lat: float
-            The number of degrees in the latitude directionadded to the 
+            The number of degrees in the latitude direction added to the 
             edges of the extent in units of degrees.
 
         fringe_deg_lon: float
@@ -416,7 +419,7 @@ class HRRR:
             kilometers.
 
         fringe_deg_lat: float
-            The number of degrees in the latitude directionadded to the 
+            The number of degrees in the latitude direction added to the 
             edges of the extent in units of degrees.
 
         fringe_deg_lon: float
@@ -486,7 +489,7 @@ class HRRR:
             kilometers.
 
         fringe_deg_lat: float
-            The number of degrees in the latitude directionadded to the 
+            The number of degrees in the latitude direction added to the 
             edges of the extent in units of degrees.
 
         fringe_deg_lon: float

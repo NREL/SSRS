@@ -280,7 +280,7 @@ class HRRR:
         center_lon, center_lat = center_lonlat
         center_x, center_y = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs='ESRI:102008',
+            out_crs='ESRI:102008', # Albers Equal Area Conic
             in_x=center_lon,
             in_y=center_lat
         )
@@ -319,7 +319,7 @@ class HRRR:
         # Transform the lats/lons to x, y
         xs, ys = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs='ESRI:102008',
+            out_crs='ESRI:102008', # Albers Equal Area Conic
             in_x=lons,
             in_y=lats
         )
@@ -642,17 +642,26 @@ class HRRR:
 
         from scipy.interpolate import griddata
 
-        xSW, ySW = raster.transform_coordinates('EPSG:4326','ESRI:102008', southwest_lonlat[0], southwest_lonlat[1])
+        xSW, ySW = raster.transform_coordinates(
+            in_crs='EPSG:4326',
+            out_crs='ESRI:102008', # Albers Equal Area Conic
+            in_x=southwest_lonlat[0],
+            in_y=southwest_lonlat[1]
+        )
         
         # reference (0,0)
         xref = xSW[0]
         yref = ySW[0]
 
         # Get the transformed lat/long using the whole flattened array. Remember to change long degrees E to W
-        xform_long, xform_lat = raster.transform_coordinates('EPSG:4326','ESRI:102008', 180-data.longitude.values.flatten(),
-                                                                                            data.latitude.values.flatten())
+        xform_long, xform_lat = raster.transform_coordinates(
+            in_crs='EPSG:4326',
+            out_crs='ESRI:102008', # Albers Equal Area Conic
+            in_x=180-data.longitude.values.flatten(),
+            in_y=data.latitude.values.flatten()
+        )
         # Now reshape them into the same form. These are in meshgrid format
-        xform_long_sq = np.reshape(xform_long, np.shape(data .longitude.values))
+        xform_long_sq = np.reshape(xform_long, np.shape(data.longitude.values))
         xform_lat_sq  = np.reshape(xform_lat,  np.shape(data.latitude.values))
         # Adjust reference point
         xform_long_sq = xform_long_sq - xref

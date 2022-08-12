@@ -34,6 +34,11 @@ class HRRR:
         The available lead times depend on the selected model. See the Herbie
         class documentation for more information.
 
+        This interface downloads HRRR "sfc" data products. More information can
+        be found at
+        https://home.chpc.utah.edu/~u0553130/Brian_Blaylock/HRRR_archive/hrrr_sfc_table_f00-f01.html,
+        which was retrieved on 2022-08-12 and saved as "HRRR GRIB2 Tables.mht".
+
         Parameters
         ----------
         date: str
@@ -279,18 +284,19 @@ class HRRR:
         # Determine the altitude to query the HRRR file using rules
         # explained in the docstring.
 
+        varname = '(U|V)GRD'
         if height_above_ground_m > 0.0 and height_above_ground_m < 45.0:
-            grib_field = f'(U|V)GRD:10 m above ground:anl'
+            grib_field = f'{varname}:10 m above ground:anl'
             u_data_var = 'u10'
             v_data_var = 'v10'
         elif height_above_ground_m >= 45.0 and height_above_ground_m < 100.0:
-            grib_field = f'(U|V)GRD:80 m above ground:anl'
+            grib_field = f'{varname}:80 m above ground:anl'
             u_data_var = 'u'
             v_data_var = 'v'
         else:
             nearest_pressures = self.nearest_pressures(ground_level_m)
             closest_pressure_above = nearest_pressures['closest_pressure_above']
-            grib_field = f'(U|V)GRD:{closest_pressure_above} mb'
+            grib_field = f'{varname}:{closest_pressure_above} mb'
             u_data_var = 'u'
             v_data_var = 'v'
 

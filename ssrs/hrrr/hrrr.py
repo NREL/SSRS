@@ -18,15 +18,38 @@ class HRRR:
     by Herbie and accessed with xarray.
     """
 
-    def __init__(self, date: str = None, valid_date: str= None, fxx: int = 0):
+    projected_CRS = 'ESRI:102008'  # Albers Equal Area Conic
+
+    def __init__(self,
+                 date: str = None,
+                 valid_date: str = None,
+                 fxx: int = 0,
+                 projected_CRS='ESRI:102008'):
         """
+        Either `valid_date` or `date` should be specified. These are related
+        through the forecast lead time (default=0 hrs), `fxx`:
+
+            valid_date = date + fxx
+
+        The available lead times depend on the selected model. See the Herbie
+        class documentation for more information.
+
         Parameters
         ----------
-        timestamp: str
-            The timestamp of interest, in the format of YYYY-MM-DD HH:mm in UTC
+        date: str
+            The timestamp (in UTC) at which the model was initialized, in the
+            format of YYYY-mm-dd HH:MM.
 
-        fxx: int
-            The forecast hour of the model. Defaults to zero.
+        valid_date: str
+            The timestamp (in UTC) of a valid datetime within the forecast, in
+            the format of YYYY-mm-dd HH:MM.
+
+        fxx: int, optional
+            The forecast lead time (in hours). Defaults to 0.
+
+        projected_CRS: str, optional
+            Projected coordinate reference system. Defaults to Albers Equal
+            Area Conic, valid for North America.
         """
         if date is None and valid_date is not None:
             print('Using valid_date')
@@ -36,6 +59,8 @@ class HRRR:
             self.hrrr = Herbie(date=date, model='hrrr', product='sfc', fxx=fxx)
         else:
             raise ValueError("Use `date` or `valid_date`")
+
+        self.projected_CRS = projected_CRS
 
         # self.datasets is a cache for xarrays obtained from GRIB files
         #  keys are the regular expressions that obtained the dataset,
@@ -280,7 +305,7 @@ class HRRR:
         center_lon, center_lat = center_lonlat
         center_x, center_y = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs='ESRI:102008', # Albers Equal Area Conic
+            out_crs=self.projected_CRS,
             in_x=center_lon,
             in_y=center_lat
         )
@@ -319,7 +344,7 @@ class HRRR:
         # Transform the lats/lons to x, y
         xs, ys = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs='ESRI:102008', # Albers Equal Area Conic
+            out_crs=self.projected_CRS,
             in_x=lons,
             in_y=lats
         )
@@ -644,7 +669,7 @@ class HRRR:
 
         xSW, ySW = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs='ESRI:102008', # Albers Equal Area Conic
+            out_crs=self.projected_CRS,
             in_x=southwest_lonlat[0],
             in_y=southwest_lonlat[1]
         )
@@ -656,8 +681,9 @@ class HRRR:
         # Get the transformed lat/long using the whole flattened array. Remember to change long degrees E to W
         xform_long, xform_lat = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs='ESRI:102008', # Albers Equal Area Conic
+            out_crs=self.projected_CRS,
             in_x=180-data.longitude.values.flatten(),
+            #in_x=data.longitude.values.flatten(),
             in_y=data.latitude.values.flatten()
         )
         # Now reshape them into the same form. These are in meshgrid format

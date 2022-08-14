@@ -159,7 +159,11 @@ class HRRR:
         return p0 * (1 - .0065*h/(temp+.0065*h+273.15)) ** 5.257
 
     def get_xarray_for_regex(self, regex, remove_grib=False):
-        """
+        """Calls Herbie to search the GRIB2 data for the requested
+        field (described by regular expression) and construct an xarray
+        Dataset. The resulting dataset is stored in dictionary of
+        datasets and returned _by reference_.
+
         Parameters
         ----------
         regex: str
@@ -174,8 +178,9 @@ class HRRR:
         -------
         xarray.Dataset or List[xarray.Dataset]
             Returns one xarray dataset if the coordinates are the same
-            for all variables requested. Returns a list of xarray.Datasets
-            if the requested variables have different coordinates.
+            for all variables requested. Returns a list of xarray
+            Datasets if the requested variables have different
+            coordinates.
         """
 
         if regex in self.datasets:
@@ -213,20 +218,21 @@ class HRRR:
         remove_grib: bool = False
     ):
         """
-        This method retrieves UV values for wind and computes the
-        speed and direction of the wind. The point of interest is
-        described by the parameters to this method call.
+        This method retrieves UV values for wind and computes the speed
+        and direction of the wind. The point of interest is described by
+        the parameters to this method call, which dictates the field
+        requested through the `get_xarray_for_regex` function.
 
         There are some quirks of how the altitude requested works.
         Either ground_level_m or height_above_ground_m should be
         specified.
 
-        When the method first starts, it calculates the pressure of
-        the isobar closest to (but not lower than) the ground level.
-        That is consdered to be the wind speed at the highest height
-        above ground. In the HRRR GRIB files, there are also UV data
-        at 10m and 80m above ground level. This gives three altitudes
-        of wind data that this method uses to find UV values:
+        When the method first starts, it calculates the pressure of the
+        isobar closest to (but not lower than) the ground level. That is
+        consdered to be the wind speed at the highest height above
+        ground. In the HRRR GRIB files, there are also UV data at 10m
+        and 80m above ground level. This gives three altitudes of wind
+        data that this method uses to find UV values:
 
         1. Highest: Closest pressure above ground
         2. Middle: 80 m above ground
@@ -246,27 +252,28 @@ class HRRR:
             Center of the area to query. Longitude is in degrees west.
         
         ground_level_m: float
-            The height of the ground above sea level in meters at the point
-            of interest.
+            The height of the ground above sea level in meters at the
+            point of interest.
 
         height_above_ground_m: float
-            The height above the ground in meters at the point of interest.
+            The height above the ground in meters at the point of
+            interest.
 
         extent_km_lat: float
             The extent of the mask in the latitude direction in units of
             kilometers.
 
         extent_km_lon: float
-            The extent of the mask in the longitude direction in units of
-            kilometers.
+            The extent of the mask in the longitude direction in units
+            of kilometers.
 
         fringe_deg_lat: float
-            The number of degrees in the latitude direction added to the 
+            The number of degrees in the latitude direction added to the
             edges of the extent in units of degrees.
 
         fringe_deg_lon: float
-            The number of degrees in the longitude direction to add to edges
-            of the extent in degrees.
+            The number of degrees in the longitude direction to add to
+            edges of the extent in degrees.
 
         remove_grib: bool
             If True, the GRIB is deleted from the cache after it is
@@ -275,10 +282,10 @@ class HRRR:
         Returns
         -------
         Dict[str, float]
-            Key, value pairs with the results of the wind speed and direction,
-            lats/lons over which the averages of U and V were taken, the
-            number of points the values were averaged over, and the grib
-            field/message used to find the u and v values.
+            Key, value pairs with the results of the wind speed and
+            direction, lats/lons over which the averages of U and V were
+            taken, the number of points the values were averaged over,
+            and the grib field/message used to find the u and v values.
         """
 
         # Determine the altitude to query the HRRR file using rules
@@ -300,8 +307,8 @@ class HRRR:
             u_data_var = 'u'
             v_data_var = 'v'
 
-        # Read the cached or download a new GRIB file. Catch warnings that Herbie
-        # gernates when finding the GRIB data.
+        # Read the cached or download a new GRIB file. Catch warnings that
+        # Herbie generates when finding the GRIB data.
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')

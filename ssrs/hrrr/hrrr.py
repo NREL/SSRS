@@ -375,11 +375,10 @@ class HRRR:
         u_interp = float(interp2d(xs, ys, us)(center_x, center_y))
         v_interp = float(interp2d(xs, ys, vs)(center_x, center_y))
 
-        # Calculate wind speed and direction
-        deg_per_radian = 57.296
-        adjustment_to_wind_measurement = 360
+        # Calculate wind speed and direction, given easterly and northerly
+        # velocity components, u and v, respectively
         speed = sqrt(u_interp**2 + v_interp**2)
-        direction_deg = adjustment_to_wind_measurement - atan2(u_interp, v_interp) * deg_per_radian  # Convert radians to degrees 
+        direction_deg = 180. + np.degrees(np.arctan2(u_interp, v_interp)) 
 
         return {
             'speed': speed,

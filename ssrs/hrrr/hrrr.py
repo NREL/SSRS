@@ -10,6 +10,7 @@ import xarray as xr
 from scipy.interpolate import interp2d
 
 from ssrs import raster
+from ssrs.utils import construct_lonlat_mask
 
 
 class HRRR:
@@ -383,6 +384,8 @@ class HRRR:
         return {
             'speed': speed,
             'direction_deg': direction_deg,
+            'u_interp': u_interp,
+            'v_interp': v_interp,
             'center_lat': center_lat,
             'center_lon': center_lon,
             'center_x': center_x,
@@ -468,21 +471,13 @@ class HRRR:
         xarray.core.dataarray.DataArray
             The mask to be used with the coordinates of the xarray dataset.
         """
+        center_lon, center_lat = center_lonlat
 
         # Convert extent in meters to degrees
         # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
-        radius_of_earth_km = 6371
+        radius_of_earth_km = 6371.
         extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
         extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
-
-        # Extract lon and lat
-        center_lon, center_lat = center_lonlat
-
-        # # longitude in degrees East (unusual; for GRIB)
-        # min_lat = center_lat - fringe_deg_lat
-        # min_lon = 180 - center_lon - fringe_deg_lon
-        # max_lat = min_lat + extent_deg_lat + fringe_deg_lat
-        # max_lon = min_lon + extent_deg_lon + fringe_deg_lon
 
         # longitude in degrees East (unusual; for GRIB)
         min_lat = center_lat - (extent_deg_lat / 2.0) - (fringe_deg_lat / 2.0)
@@ -490,14 +485,12 @@ class HRRR:
         min_lon = 180 - center_lon - (extent_deg_lon / 2.0) - (fringe_deg_lon / 2.0)
         max_lon = 180 - center_lon + (extent_deg_lon / 2.0) + (fringe_deg_lon / 2.0)
 
-        # Construct the mask
-        latc = data.coords['latitude']
-        lonc = data.coords['longitude']
-        latc_mask = (latc >= min_lat) & (latc <= max_lat)
-        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
-        mask = latc_mask & lonc_mask
-
-        return mask
+        return construct_lonlat_mask(
+            data.coords['longitude'],
+            data.coords['latitude'],
+            min_lon, max_lon,
+            min_lat, max_lat
+        )
     
     @staticmethod
     def mask_at_coordinates(
@@ -538,15 +531,13 @@ class HRRR:
         xarray.core.dataarray.DataArray
             The mask to be used with the coordinates of the xarray dataset.
         """
+        southwest_lon, southwest_lat = southwest_lonlat
 
         # Convert extent in meters to degrees
         # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
-        radius_of_earth_km = 6371
+        radius_of_earth_km = 6371.
         extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
         extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
-
-        # Extract lon and lat
-        southwest_lon, southwest_lat = southwest_lonlat
 
         # longitude in degrees East (unusual; for GRIB)
         min_lat = southwest_lat - fringe_deg_lat
@@ -554,14 +545,12 @@ class HRRR:
         max_lat = min_lat + extent_deg_lat + fringe_deg_lat
         max_lon = min_lon + extent_deg_lon + fringe_deg_lon
 
-        # Construct the mask
-        latc = data.coords['latitude']
-        lonc = data.coords['longitude']
-        latc_mask = (latc >= min_lat) & (latc <= max_lat)
-        lonc_mask = (lonc >= min_lon) & (lonc <= max_lon)
-        mask = latc_mask & lonc_mask
-
-        return mask
+        return construct_lonlat_mask(
+            data.coords['longitude'],
+            data.coords['latitude'],
+            min_lon, max_lon,
+            min_lat, max_lat
+        )
 
     def get_convective_velocity(self, southwest_lonlat=None, extent=None, res=50):
         """

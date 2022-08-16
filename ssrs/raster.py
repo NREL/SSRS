@@ -127,15 +127,7 @@ def transform_coordinates(
     assert out_crs.is_valid
 
     # Perform the transformation
-    while True:
-        try:
-            out_x, out_y = transform(in_crs, out_crs, in_x, in_y)
-        except:
-            continue
-        else:
-            break
-    # except Exception as _:
-    #     raise ValueError(f'Invalid coordinates {in_x}, {in_y}!') from None
+    out_x, out_y = transform(in_crs, out_crs, in_x, in_y)
 
     # reshape output to match the input numpy array
     if 'out_shape' in locals():

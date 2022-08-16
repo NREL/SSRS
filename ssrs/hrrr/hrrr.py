@@ -337,10 +337,7 @@ class HRRR:
             in_y=center_lat
         )
 
-        # Create the selection mask. Note: longitude in the mask is
-        # converted to degrees east when the mask is created because the
-        # underlying GRB file is stored with degrees east.
-
+        # Create the selection mask.
         mask = self.centered_mask_at_coordinates(
             uv_grd,
             center_lonlat=center_lonlat,

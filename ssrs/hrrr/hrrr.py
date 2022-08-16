@@ -184,20 +184,27 @@ class HRRR:
             Datasets if the requested variables have different
             coordinates.
         """
-
-        if regex in self.datasets:
-            return self.datasets[regex]
-        else:
-            # There is an issue with how Herbie handles regular
+        if regex not in self.datasets:
+            # Retrieve GRIB2 data with Herbie
+            # Note: There is an issue with how Herbie handles regular
             # expressions with Pandas, and this context manager handles
             # those exceptions.
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                self.datasets[regex] = self.hrrr.xarray(
+                ds = self.hrrr.xarray(
                     regex,
                     remove_grib=remove_grib
                 )
-            return self.datasets[regex]
+
+            # Convert longitude from degrees east with range (0,360) to
+            # degrees east/west for +/- values with range (-180,180)
+            lon = ds.coords['longitude'].values
+            lon[np.where(lon > 180)] -= 360.
+            ds.coords['longitude'] = (ds.coords['longitude'].dims, lon)
+
+            self.datasets[regex] = ds
+
+        return self.datasets[regex]
 
     def read_idx(self):
         """
@@ -255,7 +262,7 @@ class HRRR:
         Parameters
         ----------
         center_lonlat: Tuple[float, float]
-            Center of the area to query. Longitude is in degrees west.
+            Center of the area to query. Longitude is in degrees east.
         
         ground_level_m: float
             The height of the ground above sea level in meters at the
@@ -350,13 +357,6 @@ class HRRR:
         lons = np.array(lons_data_array).flatten()
         lats = lats[~np.isnan(lats)]
         lons = lons[~np.isnan(lons)]
-
-        # Remember that the longitude arrays are in degrees east.
-        # But the conversion to x and y with raster.transform_coordinates
-        # requires degrees west. Convert the longitude back to degrees
-        # west here. The number should be negative.
-
-        lons = (lons - 180.0) * -1.0
 
         # Find x, y of the center location given
         center_lon, center_lat = center_lonlat
@@ -494,11 +494,10 @@ class HRRR:
         extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
         extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
 
-        # longitude in degrees East (unusual; for GRIB)
         min_lat = center_lat - (extent_deg_lat / 2.0) - (fringe_deg_lat / 2.0)
         max_lat = center_lat + (extent_deg_lat / 2.0) + (fringe_deg_lat / 2.0)
-        min_lon = 180 - center_lon - (extent_deg_lon / 2.0) - (fringe_deg_lon / 2.0)
-        max_lon = 180 - center_lon + (extent_deg_lon / 2.0) + (fringe_deg_lon / 2.0)
+        min_lon = center_lon - (extent_deg_lon / 2.0) - (fringe_deg_lon / 2.0)
+        max_lon = center_lon + (extent_deg_lon / 2.0) + (fringe_deg_lon / 2.0)
 
         return construct_lonlat_mask(
             data.coords['longitude'],
@@ -558,11 +557,10 @@ class HRRR:
         extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
         extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
 
-        # longitude in degrees East (unusual; for GRIB)
         min_lat = southwest_lat - fringe_deg_lat
-        min_lon = 180 - southwest_lon - fringe_deg_lon
-        max_lat = min_lat + extent_deg_lat + fringe_deg_lat
-        max_lon = min_lon + extent_deg_lon + fringe_deg_lon
+        min_lon = southwest_lon - fringe_deg_lon
+        max_lat = southwest_lat + extent_deg_lat + fringe_deg_lat
+        max_lon = southwest_lon + extent_deg_lon + fringe_deg_lon
 
         return construct_lonlat_mask(
             data.coords['longitude'],
@@ -572,7 +570,7 @@ class HRRR:
         )
 
     def get_convective_velocity(self,
-        southwest_lonlat=None,
+        southwest_lonlat=(-106.21, 42.78),
         extent=None,
         res=50
     ):
@@ -583,9 +581,7 @@ class HRRR:
         ----------
         southwest_lonlat: Tuple[float, float]
             The southwest corner of the latitude and longitude to
-            retrieve.  This parameter defaults to None. If this default
-            is used, this value is set to (-106.21, 42.78) within the
-            method.
+            retrieve.
         extent: Tuple[float, float, float, float]
             Domain extents xmin, ymin, xmax, ymax. If none is provided,
             the function returns an xarray on lat/lon on an irregular
@@ -734,8 +730,7 @@ class HRRR:
         xform_long, xform_lat = raster.transform_coordinates(
             in_crs='EPSG:4326',
             out_crs=self.projected_CRS,
-            in_x=180-data.longitude.values.flatten(),
-            #in_x=data.longitude.values.flatten(),
+            in_x=data.longitude.values.flatten(),
             in_y=data.latitude.values.flatten()
         )
         # Now reshape them into the same form. These are in meshgrid format

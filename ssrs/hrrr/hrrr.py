@@ -19,13 +19,13 @@ class HRRR:
     downloaded by Herbie and accessed with xarray.
     """
 
-    projected_CRS = 'ESRI:102008'  # Albers Equal Area Conic
+    Albers_CRS = 'ESRI:102008'  # Albers Equal Area Conic
 
     def __init__(self,
                  date: str = None,
                  valid_date: str = None,
                  fxx: int = 0,
-                 projected_CRS='ESRI:102008'):
+                 projected_CRS=Albers_CRS):
         """
         Either `valid_date` or `date` should be specified. These are
         related through the forecast lead time (default=0 hrs), `fxx`:
@@ -54,15 +54,14 @@ class HRRR:
             The forecast lead time (in hours). Defaults to 0.
 
         projected_CRS: str, optional
-            Projected coordinate reference system. Defaults to Albers
-            Equal Area Conic, valid for North America.
+            Projected coordinate reference system used for additional
+            calculations. Defaults to Albers Equal Area Conic, valid
+            for North America.
         """
         if date is None and valid_date is not None:
-            print('Using valid_date')
             self.hrrr = Herbie(valid_date=valid_date, model='hrrr',
                                product='sfc', fxx=fxx)
         elif date is not None and valid_date is None:
-            print('Using date')
             self.hrrr = Herbie(date=date, model='hrrr', product='sfc', fxx=fxx)
         else:
             raise ValueError("Use `date` or `valid_date`")

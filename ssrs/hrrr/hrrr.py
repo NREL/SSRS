@@ -15,8 +15,8 @@ from ssrs.utils import construct_lonlat_mask
 
 class HRRR:
     """
-    This class provides a basic interface to HRRR GRIB2 files as downloaded
-    by Herbie and accessed with xarray.
+    This class provides a basic interface to HRRR GRIB2 files as
+    downloaded by Herbie and accessed with xarray.
     """
 
     projected_CRS = 'ESRI:102008'  # Albers Equal Area Conic
@@ -27,39 +27,40 @@ class HRRR:
                  fxx: int = 0,
                  projected_CRS='ESRI:102008'):
         """
-        Either `valid_date` or `date` should be specified. These are related
-        through the forecast lead time (default=0 hrs), `fxx`:
+        Either `valid_date` or `date` should be specified. These are
+        related through the forecast lead time (default=0 hrs), `fxx`:
 
             valid_date = date + fxx
 
-        The available lead times depend on the selected model. See the Herbie
-        class documentation for more information.
+        The available lead times depend on the selected model. See the
+        Herbie class documentation for more information.
 
-        This interface downloads HRRR "sfc" data products. More information can
-        be found at
+        This interface downloads HRRR "sfc" data products. More
+        information can be found at
         https://home.chpc.utah.edu/~u0553130/Brian_Blaylock/HRRR_archive/hrrr_sfc_table_f00-f01.html,
         which was retrieved on 2022-08-12 and saved as "HRRR GRIB2 Tables.mht".
 
         Parameters
         ----------
         date: str
-            The timestamp (in UTC) at which the model was initialized, in the
-            format of YYYY-mm-dd HH:MM.
+            The timestamp (in UTC) at which the model was initialized,
+            in the format of YYYY-mm-dd HH:MM.
 
         valid_date: str
-            The timestamp (in UTC) of a valid datetime within the forecast, in
-            the format of YYYY-mm-dd HH:MM.
+            The timestamp (in UTC) of a valid datetime within the
+            forecast, in the format of YYYY-mm-dd HH:MM.
 
         fxx: int, optional
             The forecast lead time (in hours). Defaults to 0.
 
         projected_CRS: str, optional
-            Projected coordinate reference system. Defaults to Albers Equal
-            Area Conic, valid for North America.
+            Projected coordinate reference system. Defaults to Albers
+            Equal Area Conic, valid for North America.
         """
         if date is None and valid_date is not None:
             print('Using valid_date')
-            self.hrrr = Herbie(valid_date=valid_date, model='hrrr', product='sfc', fxx=fxx)
+            self.hrrr = Herbie(valid_date=valid_date, model='hrrr',
+                               product='sfc', fxx=fxx)
         elif date is not None and valid_date is None:
             print('Using date')
             self.hrrr = Herbie(date=date, model='hrrr', product='sfc', fxx=fxx)
@@ -69,7 +70,7 @@ class HRRR:
         self.projected_CRS = projected_CRS
 
         # self.datasets is a cache for xarrays obtained from GRIB files
-        #  keys are the regular expressions that obtained the dataset,
+        # keys are the regular expressions that obtained the dataset,
         # values are the xarray datasets parsed from the GRIB files.
 
         self.datasets: Dict[str, xr.Dataset] = {}
@@ -78,9 +79,9 @@ class HRRR:
     def nearest_pressures(h):
         """
         Find the nearest pressure below a given height. For example,
-        Rawlins, WY is at 2083 m above sea level. That puts the
-        closest allowed height below at 1314 m above sea level, so
-        that is what this method returns.
+        Rawlins, WY is at 2083 m above sea level. That puts the closest
+        allowed height below at 1314 m above sea level, so that is what
+        this method returns.
 
         Parameters
         ----------
@@ -93,9 +94,9 @@ class HRRR:
             Key/value pairs that correspond to the heights and pressures
             found.
         """
-        # Keys are heights above sea level in meters. Values are pressures
-        # in mb. Using an OrderedDict to preserve the order of the keys for
-        # subsequent lookups in numpy arrays.
+        # Keys are heights above sea level in meters. Values are
+        # pressures in mb. Using an OrderedDict to preserve the order of
+        # the keys for subsequent lookups in numpy arrays.
         #
         # Heights that are keys in the self.height_to_mb dictionary
 
@@ -187,11 +188,15 @@ class HRRR:
         if regex in self.datasets:
             return self.datasets[regex]
         else:
-            # There is an issue with how Herbie handles regular expressions
-            # with Pandas, and this context manager handles those exceptions.
+            # There is an issue with how Herbie handles regular
+            # expressions with Pandas, and this context manager handles
+            # those exceptions.
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                self.datasets[regex] = self.hrrr.xarray(regex, remove_grib=remove_grib)
+                self.datasets[regex] = self.hrrr.xarray(
+                    regex,
+                    remove_grib=remove_grib
+                )
             return self.datasets[regex]
 
     def read_idx(self):
@@ -308,12 +313,13 @@ class HRRR:
             u_data_var = 'u'
             v_data_var = 'v'
 
-        # Read the cached or download a new GRIB file. Catch warnings that
-        # Herbie generates when finding the GRIB data.
+        # Read the cached or download a new GRIB file. Catch warnings
+        # that Herbie generates when finding the GRIB data.
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            uv_grd = self.get_xarray_for_regex(grib_field, remove_grib=remove_grib)
+            uv_grd = self.get_xarray_for_regex(grib_field,
+                                               remove_grib=remove_grib)
 
         # Find x, y of the center location given
         center_lon, center_lat = center_lonlat
@@ -325,8 +331,8 @@ class HRRR:
         )
 
         # Create the selection mask. Note: longitude in the mask is
-        # converted to degrees east when the mask is created because
-        # the underlying GRB file is stored with degrees east.
+        # converted to degrees east when the mask is created because the
+        # underlying GRB file is stored with degrees east.
 
         mask = self.centered_mask_at_coordinates(
             uv_grd,
@@ -376,10 +382,11 @@ class HRRR:
         u_interp = float(interp2d(xs, ys, us)(center_x, center_y))
         v_interp = float(interp2d(xs, ys, vs)(center_x, center_y))
 
-        # Calculate wind speed and direction, given easterly and northerly
-        # velocity components, u and v, respectively
+        # Calculate wind speed and direction, given easterly and
+        # northerly velocity components, u and v, respectively
         speed = sqrt(u_interp**2 + v_interp**2)
-        direction_deg = 180. + np.degrees(np.arctan2(u_interp, v_interp)) 
+        direction_deg = 180. \
+                      + np.degrees(np.arctan2(u_interp, v_interp)) 
 
         return {
             'speed': speed,
@@ -402,17 +409,22 @@ class HRRR:
 
     def convective_velocity_xarray(self):
         """
-        Retrieves the HRRR variables that allow convective velocity to be 
-        calcuated.
+        Retrieves the HRRR variables that allow convective velocity to
+        be calcuated.
 
-        Performs additional conversions and also outputs the final wstar value.
+        Performs additional conversions and also outputs the final wstar
+        value.
 
         Returns
         -------
         xarray.Dataset
-            A unified dataset with the all the variables in one hypercube.
+            A unified dataset with the all the variables in one
+            hypercube.
         """
-        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|LHTFL|GFLUX):', remove_grib=False)
+        data = self.get_xarray_for_regex(
+            ':(HPBL|POT|SHTFL|LHTFL|GFLUX):',
+            remove_grib=False
+        )
         data = xr.combine_by_coords(data)
 
         g = 9.81    # m/s^2
@@ -455,26 +467,29 @@ class HRRR:
             kilometers.
 
         extent_km_lon: float
-            The extent of the mask in the longitude direction in units of
-            kilometers.
+            The extent of the mask in the longitude direction in units
+            of kilometers.
 
         fringe_deg_lat: float
             The number of degrees in the latitude direction added to the 
             edges of the extent in units of degrees.
 
         fringe_deg_lon: float
-            The number of degrees in the longitude direction to add to edges
-            of the extent in degrees.
+            The number of degrees in the longitude direction to add to
+            edges of the extent in degrees.
 
         Returns
         -------
         xarray.core.dataarray.DataArray
-            The mask to be used with the coordinates of the xarray dataset.
+            The mask to be used with the coordinates of the xarray
+            dataset.
         """
         center_lon, center_lat = center_lonlat
 
         # Convert extent in meters to degrees
-        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
+        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters"
+        # sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html.
+        # 7 April 2022.
         radius_of_earth_km = 6371.
         extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
         extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
@@ -508,33 +523,37 @@ class HRRR:
             The dataset being masked.
 
         southwest_lonlat: Tuple[float, float]
-            The southwest corner of the latitude and longitude to retrieve.
+            The southwest corner of the latitude and longitude to
+            retrieve.
 
         extent_km_lat: float
             The extent of the mask in the latitude direction in units of
             kilometers.
 
         extent_km_lon: float
-            The extent of the mask in the longitude direction in units of
-            kilometers.
+            The extent of the mask in the longitude direction in units
+            of kilometers.
 
         fringe_deg_lat: float
             The number of degrees in the latitude direction added to the 
             edges of the extent in units of degrees.
 
         fringe_deg_lon: float
-            The number of degrees in the longitude direction to add to edges
-            of the extent in degrees.
+            The number of degrees in the longitude direction to add to
+            edges of the extent in degrees.
 
         Returns
         -------
         xarray.core.dataarray.DataArray
-            The mask to be used with the coordinates of the xarray dataset.
+            The mask to be used with the coordinates of the xarray
+            dataset.
         """
         southwest_lon, southwest_lat = southwest_lonlat
 
         # Convert extent in meters to degrees
-        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters" sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html. 7 April 2022.
+        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters"
+        # sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html.
+        # 7 April 2022.
         radius_of_earth_km = 6371.
         extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
         extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
@@ -552,39 +571,50 @@ class HRRR:
             min_lat, max_lat
         )
 
-    def get_convective_velocity(self, southwest_lonlat=None, extent=None, res=50):
+    def get_convective_velocity(self,
+        southwest_lonlat=None,
+        extent=None,
+        res=50
+    ):
         """
         Returns the convective velocity.
 
         Parameters
         ----------
         southwest_lonlat: Tuple[float, float]
-            The southwest corner of the latitude and longitude to retrieve.
-            This parameter defaults to None. If this default is used, this
-            value is set to (-106.21, 42.78) within the method.
+            The southwest corner of the latitude and longitude to
+            retrieve.  This parameter defaults to None. If this default
+            is used, this value is set to (-106.21, 42.78) within the
+            method.
         extent: Tuple[float, float, float, float]
-            Domain extents xmin, ymin, xmax, ymax. If none is provided, the function
-            returns an xarray on lat/lon on an irregular grid. If extent and res
-            are provided, a grid is created and values interpolatd on that grid 
-            is returned, alongside the meshgrid values.
+            Domain extents xmin, ymin, xmax, ymax. If none is provided,
+            the function returns an xarray on lat/lon on an irregular
+            grid. If extent and res are provided, a grid is created and
+            values interpolatd on that grid is returned, alongside the
+            meshgrid values.
         res: float
-            Resolution of the grid the HRRR data will be interpolatd onto.
+            Resolution of the grid the HRRR data will be interpolated
+            onto.
 
         Returns
         -------
         If extent is given:
-        wstar: xarray.Dataset
-            A dataset containing the calculated wstar value with coordinates
-            lat/lon 
+            wstar: xarray.Dataset
+                A dataset containing the calculated wstar value with
+                coordinates lat/lon 
+
         Else:
-        wstar: np.array
-            An array of wstar interpolated onto a regular grid xx, yy
-        xx, yy: np.array
-            Grid in meshgrid format
+            wstar: np.array
+                An array of wstar interpolated onto a regular grid xx,yy
+            xx, yy: np.array
+                Grid in meshgrid format
         """
 
         # Get the variables for calculating convective velocity
-        data = self.get_xarray_for_regex(':(HPBL|POT|SHTFL|LHTFL|GFLUX):', remove_grib=False)
+        data = self.get_xarray_for_regex(
+            ':(HPBL|POT|SHTFL|LHTFL|GFLUX):',
+            remove_grib=False
+        )
         data = xr.combine_by_coords(data)
 
         g = 9.81    # m/s^2
@@ -607,12 +637,18 @@ class HRRR:
         if southwest_lonlat is None:
             southwest_lonlat = (-106.21, 42.78)   # TOTW
 
-        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+        mask = self.mask_at_coordinates(
+            data,
+            southwest_lonlat=southwest_lonlat
+        )
 
         wstar = data['wstar'].where(mask, drop=True)
 
         if extent is not None:
-            return  self.convertToRegularGrid(wstar, southwest_lonlat, extent, res)
+            return self.convert_to_regular_grid(wstar,
+                                                southwest_lonlat,
+                                                extent,
+                                                res)
 
         return wstar
     
@@ -626,16 +662,19 @@ class HRRR:
         Parameters
         ----------
         southwest_lonlat: Tuple[float, float]
-            The southwest corner of the latitude and longitude to retrieve.
-            This parameter defaults to None. If this default is used, this
-            value is set to (-106.21, 42.78) within the method.
+            The southwest corner of the latitude and longitude to
+            retrieve.  This parameter defaults to None. If this default
+            is used, this value is set to (-106.21, 42.78) within the
+            method.
         extent: Tuple[float, float, float, float]
-            Domain extents xmin, ymin, xmax, ymax. If none is provided, the function
-            returns an xarray on lat/lon on an irregular grid. If extent and res
-            are provided, a grid is created and values interpolatd on that grid 
-            is returned, alongside the meshgrid values.
+            Domain extents xmin, ymin, xmax, ymax. If none is provided,
+            the function returns an xarray on lat/lon on an irregular
+            grid. If extent and res are provided, a grid is created and
+            values interpolatd on that grid is returned, alongside the
+            meshgrid values.
         res: float
-            Resolution of the grid the HRRR data will be interpolatd onto.
+            Resolution of the grid that the HRRR data will be
+            interpolated onto.
 
         Returns
         -------
@@ -648,15 +687,26 @@ class HRRR:
         if southwest_lonlat is None:
             southwest_lonlat = (-106.21, 42.78)   # TOTW
 
-        # Get the variables for calculating albedo, shortwave upward/downward radiation
-        Su, xx, yy = self.getSingleVariableOnGrid(':USWRF:surface', southwest_lonlat, extent, res)   # short wave upward
-        Sd, xx, yy = self.getSingleVariableOnGrid(':DSWRF:surface', southwest_lonlat, extent, res)   # short wave downward
+        # Get the variables for calculating albedo, shortwave radiation
+        Su, xx, yy = self.get_single_var_on_grid(
+            ':USWRF:surface',  # shortwave upward
+            southwest_lonlat,
+            extent,
+            res
+        )
+        Sd, xx, yy = self.get_single_var_on_grid(
+            ':DSWRF:surface',  # shortwave downward
+            southwest_lonlat,
+            extent,
+            res
+        )
 
         if np.mean(Su) == 0:
             alpha_surface_albedo = np.ones_like(Su) # night
-            # TODO: this is a placeholder. We should just compute the albedo at noon of the same day.
-            # Setting it to 1 works because upward radiation will only be zero at night, which it is
-            # not a time of interest right now.
+            # TODO: this is a placeholder. We should just compute the
+            # albedo at noon of the same day. Setting it to 1 works
+            # because upward radiation will only be zero at night, which
+            # it is not a time of interest right now.
         else:
             alpha_surface_albedo = Su/Sd
 
@@ -664,7 +714,7 @@ class HRRR:
 
     
     @staticmethod
-    def convertToRegularGrid(data, southwest_lonlat, extent, res=50):
+    def convert_to_regular_grid(data, southwest_lonlat, extent, res=50):
 
         from scipy.interpolate import griddata
 
@@ -679,7 +729,8 @@ class HRRR:
         xref = xSW[0]
         yref = ySW[0]
 
-        # Get the transformed lat/long using the whole flattened array. Remember to change long degrees E to W
+        # Get the transformed lat/long using the whole flattened array.
+        # Remember to change long degrees E to W
         xform_long, xform_lat = raster.transform_coordinates(
             in_crs='EPSG:4326',
             out_crs=self.projected_CRS,
@@ -700,19 +751,20 @@ class HRRR:
         xx, yy = np.meshgrid(x, y, indexing='ij')
 
         # interpolate
-        points = np.column_stack( (xform_long_sq.flatten(), xform_lat_sq.flatten()) )
+        points = np.column_stack(
+            (xform_long_sq.flatten(), xform_lat_sq.flatten())
+        )
         values = np.array(data).flatten()
         data_interp = griddata(points, values, (xx, yy), method='linear')
 
         return data_interp, xx, yy
 
 
-    def getSingleVariableOnGrid(self, regex, southwest_lonlat, extent, res):
-        '''
-        Designed to get a single variable, as defined by a regex expression, onto a regular
-        grid.
-
-        '''
+    def get_single_var_on_grid(self, regex, southwest_lonlat, extent, res):
+        """
+        Designed to get a single variable, as defined by a regex
+        expression, onto a regular grid.
+        """
 
         # Get the data
         data = self.get_xarray_for_regex(regex, remove_grib=False)
@@ -721,17 +773,19 @@ class HRRR:
         varname = list(data.data_vars)[0]
 
         # Mask it based on latlon limits
-        mask = self.mask_at_coordinates(data, southwest_lonlat=southwest_lonlat)
+        mask = self.mask_at_coordinates(
+            data,
+            southwest_lonlat=southwest_lonlat
+        )
         data_masked = data[varname].where(mask, drop=True)
 
         # Convert to an orthogonal grid
-        data_interp, xx, yy =  self.convertToRegularGrid(data_masked, southwest_lonlat, extent, res)
+        data_interp, xx, yy =  self.convert_to_regular_grid(
+            data_masked,
+            southwest_lonlat,
+            extent,
+            res
+        )
 
         return data_interp, xx, yy
-
-
-
-
-
-
 

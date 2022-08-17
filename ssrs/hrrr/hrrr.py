@@ -8,7 +8,7 @@ from herbie.archive import Herbie
 import numpy as np
 import xarray as xr
 from scipy.interpolate import interp2d
-from rasterio.crs import CRS
+from rasterio.crs import CRS, CRSError
 
 from ssrs import raster
 from ssrs.utils import construct_lonlat_mask
@@ -174,21 +174,26 @@ class HRRR:
             attrs = gribfile_projection.attrs
         except AttributeError:
             attrs = gribfile_projection
-        proj_name = attrs['grid_mapping_name']
-        mapping = dict(
-            proj=HRRR.proj_aliases[proj_name],
-            lon_0=attrs['longitude_of_central_meridian'],
-            lat_0=attrs['latitude_of_projection_origin'],
-            lat_1=attrs['standard_parallel'][0],
-            lat_2=attrs['standard_parallel'][1],
-            x_0=attrs['false_easting'],
-            y_0=attrs['false_northing'],
-        )
-        for key,val in kwargs.items():
-            if key in mapping.keys():
-                print('Overwriting',key,'with',val,'in CRS')
-            mapping[key] = val
-        return CRS.from_dict(mapping)
+        try:
+            crs = CRS.from_wkt(attrs['crs_wkt'])
+        except (KeyError, CRSError):
+            # could not directly use the WKT string for some reason...
+            proj_name = attrs['grid_mapping_name']
+            mapping = dict(
+                proj=HRRR.proj_aliases[proj_name],
+                lon_0=attrs['longitude_of_central_meridian'],
+                lat_0=attrs['latitude_of_projection_origin'],
+                lat_1=attrs['standard_parallel'][0],
+                lat_2=attrs['standard_parallel'][1],
+                x_0=attrs['false_easting'],
+                y_0=attrs['false_northing'],
+            )
+            for key,val in kwargs.items():
+                if key in mapping.keys():
+                    print('Overwriting',key,'with',val,'in CRS')
+                mapping[key] = val
+            crs = CRS.from_dict(mapping)
+        return crs
 
     def get_xarray_for_regex(self, regex, remove_grib=False):
         """Calls Herbie to search the GRIB2 data for the requested

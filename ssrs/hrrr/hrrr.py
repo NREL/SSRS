@@ -871,7 +871,9 @@ class HRRR:
         # Mask it based on latlon limits
         mask = self.mask_at_coordinates(
             data,
-            southwest_lonlat=southwest_lonlat
+            southwest_lonlat=southwest_lonlat,
+            extent_km_lat=extent,
+            extent_km_lon=extent
         )
         data_masked = data[varname].where(mask, drop=True)
 

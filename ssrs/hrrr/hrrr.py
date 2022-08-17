@@ -423,9 +423,9 @@ class HRRR:
         us = us[~np.isnan(us)]
         vs = vs[~np.isnan(vs)]
 
-        # Use bilinear interpolation to find U and V values
-        u_interp = float(interp2d(xs, ys, us)(center_x, center_y))
-        v_interp = float(interp2d(xs, ys, vs)(center_x, center_y))
+        # Use linear B-spline interpolation to find U and V values
+        u_interp = float(interp2d(xs, ys, us, kind='linear')(center_x, center_y))
+        v_interp = float(interp2d(xs, ys, vs, kind='linear')(center_x, center_y))
 
         # Calculate wind speed and direction, given easterly and
         # northerly velocity components, u and v, respectively

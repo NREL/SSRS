@@ -958,7 +958,10 @@ class HRRR:
                 self.projected_CRS
             )
 
-            data_interp[varname] = (data[varname].dims, fi)
+            data_interp[varname] = (('x','y'), fi)
+
+        # Set dimension coordinate
+        data_interp = data_interp.assign_coords(x=xx[:,0], y=yy[0,:])
 
         return data_interp, xx, yy
 

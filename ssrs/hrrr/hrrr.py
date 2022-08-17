@@ -814,8 +814,8 @@ class HRRR:
         southwest_lonlat,
         bounds,
         res=50,
-        out_crs=Albers_CRS):
-
+        out_crs=Albers_CRS
+    ):
         from scipy.interpolate import griddata
 
         xSW, ySW = raster.transform_coordinates(
@@ -864,6 +864,20 @@ class HRRR:
         """
         Designed to get a single variable, as defined by a regex
         expression, onto a regular grid.
+        """
+        return self.get_var_on_grid(regex, southwest_lonlat, bounds, res_m, [0])
+
+
+    def get_var_on_grid(self,
+        regex,
+        southwest_lonlat,
+        bounds,
+        res_m,
+        selected=None
+    ):
+        """
+        Designed to get variable(s), as defined by a regex expression,
+        onto a regular grid.
 
         Parameters
         ----------
@@ -885,13 +899,16 @@ class HRRR:
             Spacing (in meters) of the regular grid onto which values
             are interpolated.
 
+        selected: list or None
+            Interpolate only selected variables, primarly for backwards
+            compatibility.
+
         """
 
         # Get the data
         data = self.get_xarray_for_regex(regex, remove_grib=False)
 
         # Create a new dataset, copy selected coords and attrs
-        # Note: Currently assumes 2D slice data with y,x dimensions
         data_interp = xr.Dataset()
         new_coords = {}
         for coord,val in data.coords.items():
@@ -901,28 +918,47 @@ class HRRR:
         data_interp = data_interp.assign_coords(new_coords)
         data_interp = data_interp.assign_attrs(data.attrs)
 
-        # Get the name of the variable related to the `regex`
-        varname = list(data.data_vars)[0]
-
-        # Mask it based on latlon limits
+        # Create data mask
         mask = self.mask_at_coordinates(
             data,
             southwest_lonlat=southwest_lonlat,
             extent_km_lat=bounds[2] - min(0, bounds[0]),
             extent_km_lon=bounds[3] - min(0, bounds[1])
         )
-        data_masked = data[varname].where(mask, drop=True)
 
-        # Convert to an orthogonal grid
-        fi, xx, yy = self.interp_onto_regular_grid(
-            data_masked,
-            southwest_lonlat,
-            bounds,
-            res_m,
-            self.projected_CRS
-        )
+        # Get list of data variables to interpolate
+        # Note: Currently assumes 2D slice data with y,x dimensions
+        datavars = [
+            dvar for dvar in data.data_vars
+            if data[dvar].dims == ('y','x')
+        ]
 
-        data_interp[varname] = (data[varname].dims, fi)
+        # Truncate the list of interpolated data variables if requested
+        if selected is not None:
+            tmp = []
+            for ivar in selected:
+                try:
+                    tmp.append(datavars[ivar])
+                except IndexError:
+                    print('Requested var',ivar,'which does not exist')
+            datavars = tmp
+
+        # Interpolate all requested vars
+        for varname in datavars:
+
+            # Mask it based on latlon limits
+            data_masked = data[varname].where(mask, drop=True)
+
+            # Convert to an orthogonal grid
+            fi, xx, yy = self.interp_onto_regular_grid(
+                data_masked,
+                southwest_lonlat,
+                bounds,
+                res_m,
+                self.projected_CRS
+            )
+
+            data_interp[varname] = (data[varname].dims, fi)
 
         return data_interp, xx, yy
 

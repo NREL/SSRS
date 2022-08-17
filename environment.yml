@@ -20,4 +20,4 @@ dependencies:
       - elevation>=1.1
       - h5pyd>=0.8
       - astral>=2.2
-      - herbie-data
+      - herbie-data>=0.0.10

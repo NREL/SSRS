@@ -8,6 +8,7 @@ from herbie.archive import Herbie
 import numpy as np
 import xarray as xr
 from scipy.interpolate import interp2d
+from rasterio.crs import CRS
 
 from ssrs import raster
 from ssrs.utils import construct_lonlat_mask
@@ -20,6 +21,10 @@ class HRRR:
     """
 
     Albers_CRS = 'ESRI:102008'  # Albers Equal Area Conic
+
+    proj_aliases = {
+        'lambert_conformal_conic': 'lcc',
+    }
 
     def __init__(self,
                  date: str = None,
@@ -158,6 +163,32 @@ class HRRR:
             The pressure at that height.
         """
         return p0 * (1 - .0065*h/(temp+.0065*h+273.15)) ** 5.257
+
+    @staticmethod
+    def get_CRS_from_attrs(gribfile_projection, **kwargs):
+        """Retrieves necessary information from the attributes of the
+        'gribfile_projection' field of a GRIB2 xarray dataset to
+        construct a CRS string.
+        """
+        try:
+            attrs = gribfile_projection.attrs
+        except AttributeError:
+            attrs = gribfile_projection
+        proj_name = attrs['grid_mapping_name']
+        mapping = dict(
+            proj=HRRR.proj_aliases[proj_name],
+            lon_0=attrs['longitude_of_central_meridian'],
+            lat_0=attrs['latitude_of_projection_origin'],
+            lat_1=attrs['standard_parallel'][0],
+            lat_2=attrs['standard_parallel'][1],
+            x_0=attrs['false_easting'],
+            y_0=attrs['false_northing'],
+        )
+        for key,val in kwargs.items():
+            if key in mapping.keys():
+                print('Overwriting',key,'with',val,'in CRS')
+            mapping[key] = val
+        return CRS.from_dict(mapping)
 
     def get_xarray_for_regex(self, regex, remove_grib=False):
         """Calls Herbie to search the GRIB2 data for the requested

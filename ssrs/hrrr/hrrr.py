@@ -854,7 +854,7 @@ class HRRR:
         return data_interp, xx, yy
 
 
-    def get_single_var_on_grid(self, regex, southwest_lonlat, extent, res):
+    def get_single_var_on_grid(self, regex, southwest_lonlat, extent, res_m):
         """
         Designed to get a single variable, as defined by a regex
         expression, onto a regular grid.
@@ -880,7 +880,7 @@ class HRRR:
             data_masked,
             southwest_lonlat,
             extent,
-            res
+            res_m
         )
 
         return data_interp, xx, yy

@@ -263,6 +263,7 @@ class HRRR:
         extent_km_lon=6.0,
         fringe_deg_lat=0.03,
         fringe_deg_lon=0.03,
+        projection=None,
         remove_grib: bool = False
     ):
         """
@@ -323,6 +324,12 @@ class HRRR:
             The number of degrees in the longitude direction to add to
             edges of the extent in degrees.
 
+        projection: str or None
+            Projected coordinate reference system. If None, defaults to
+            the initialized value in this HRRR class. If "native", then
+            use the HRRR simulation projection as described in the GRIB
+            file. Otherwise, this should be a valid CRS string.
+
         remove_grib: bool
             If True, the GRIB is deleted from the cache after it is
             accessed. If False, the cached copy is preserved.
@@ -363,11 +370,17 @@ class HRRR:
             uv_grd = self.get_xarray_for_regex(grib_field,
                                                remove_grib=remove_grib)
 
+        # Determine output CRS
+        if projection is None:
+            out_crs = self.projected_CRS
+        elif projection == 'native':
+            out_crs = self.get_CRS_from_attrs(uv_grd['gribfile_projection'])
+
         # Find x, y of the center location given
         center_lon, center_lat = center_lonlat
         center_x, center_y = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs=self.projected_CRS,
+            out_crs=out_crs,
             in_x=center_lon,
             in_y=center_lat
         )
@@ -396,7 +409,7 @@ class HRRR:
         # Transform the lats/lons to x, y
         xs, ys = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs=self.projected_CRS,
+            out_crs=out_crs,
             in_x=lons,
             in_y=lats
         )

@@ -890,6 +890,17 @@ class HRRR:
         # Get the data
         data = self.get_xarray_for_regex(regex, remove_grib=False)
 
+        # Create a new dataset, copy selected coords and attrs
+        # Note: Currently assumes 2D slice data with y,x dimensions
+        data_interp = xr.Dataset()
+        new_coords = {}
+        for coord,val in data.coords.items():
+            dims = data.coords[coord].dims
+            if len(dims) == 0:
+                new_coords[coord] = val
+        data_interp = data_interp.assign_coords(new_coords)
+        data_interp = data_interp.assign_attrs(data.attrs)
+
         # Get the name of the variable related to the `regex`
         varname = list(data.data_vars)[0]
 
@@ -903,13 +914,15 @@ class HRRR:
         data_masked = data[varname].where(mask, drop=True)
 
         # Convert to an orthogonal grid
-        data_interp, xx, yy = self.interp_onto_regular_grid(
+        fi, xx, yy = self.interp_onto_regular_grid(
             data_masked,
             southwest_lonlat,
             bounds,
             res_m,
             self.projected_CRS
         )
+
+        data_interp[varname] = (data[varname].dims, fi)
 
         return data_interp, xx, yy
 

@@ -546,6 +546,16 @@ class HRRR:
         return data
 
     @staticmethod
+    def km_to_deg(extent_km, radius_of_earth_km=6371.):
+        """Convert extent in meters to degrees
+
+        From Deziel, Chris. "How to Convert Distances From Degrees to Meters"
+        sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html.
+        7 April 2022.
+        """
+        return extent_km * 360 / (2 * pi * radius_of_earth_km)
+
+    @staticmethod
     def centered_mask_at_coordinates(
         data,
         center_lonlat,
@@ -586,14 +596,8 @@ class HRRR:
             dataset.
         """
         center_lon, center_lat = center_lonlat
-
-        # Convert extent in meters to degrees
-        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters"
-        # sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html.
-        # 7 April 2022.
-        radius_of_earth_km = 6371.
-        extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
-        extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
+        extent_deg_lat = HRRR.km_to_deg(extent_km_lat)
+        extent_deg_lon = HRRR.km_to_deg(extent_km_lon)
 
         min_lat = center_lat - (extent_deg_lat / 2.0) - (fringe_deg_lat / 2.0)
         max_lat = center_lat + (extent_deg_lat / 2.0) + (fringe_deg_lat / 2.0)
@@ -649,14 +653,8 @@ class HRRR:
             dataset.
         """
         southwest_lon, southwest_lat = southwest_lonlat
-
-        # Convert extent in meters to degrees
-        # From Deziel, Chris. "How to Convert Distances From Degrees to Meters"
-        # sciencing.com, https://sciencing.com/convert-distances-degrees-meters-7858322.html.
-        # 7 April 2022.
-        radius_of_earth_km = 6371.
-        extent_deg_lat = extent_km_lat * 360 / (2 * pi * radius_of_earth_km)
-        extent_deg_lon = extent_km_lon * 360 / (2 * pi * radius_of_earth_km)
+        extent_deg_lat = HRRR.km_to_deg(extent_km_lat)
+        extent_deg_lon = HRRR.km_to_deg(extent_km_lon)
 
         min_lat = southwest_lat - fringe_deg_lat
         min_lon = southwest_lon - fringe_deg_lon

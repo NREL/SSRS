@@ -807,15 +807,20 @@ class HRRR:
 
         return alpha_surface_albedo, xx, yy
 
-    
+
     @staticmethod
-    def convert_to_regular_grid(data, southwest_lonlat, extent, res=50):
+    def interp_onto_regular_grid(
+        data,
+        southwest_lonlat,
+        bounds,
+        res=50,
+        out_crs=Albers_CRS):
 
         from scipy.interpolate import griddata
 
         xSW, ySW = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs=self.projected_CRS,
+            out_crs=out_crs,
             in_x=southwest_lonlat[0],
             in_y=southwest_lonlat[1]
         )
@@ -828,10 +833,11 @@ class HRRR:
         # Remember to change long degrees E to W
         xform_long, xform_lat = raster.transform_coordinates(
             in_crs='EPSG:4326',
-            out_crs=self.projected_CRS,
+            out_crs=out_crs,
             in_x=data.longitude.values.flatten(),
             in_y=data.latitude.values.flatten()
         )
+
         # Now reshape them into the same form. These are in meshgrid format
         xform_long_sq = np.reshape(xform_long, np.shape(data.longitude.values))
         xform_lat_sq  = np.reshape(xform_lat,  np.shape(data.latitude.values))
@@ -840,8 +846,8 @@ class HRRR:
         xform_lat_sq = xform_lat_sq - yref
 
         # create grid
-        x = np.arange(extent[0], extent[2], res)
-        y = np.arange(extent[1], extent[3], res)
+        x = np.arange(bounds[0], bounds[2], res)
+        y = np.arange(bounds[1], bounds[3], res)
         xx, yy = np.meshgrid(x, y, indexing='ij')
 
         # interpolate
@@ -854,33 +860,55 @@ class HRRR:
         return data_interp, xx, yy
 
 
-    def get_single_var_on_grid(self, regex, southwest_lonlat, extent, res_m):
+    def get_single_var_on_grid(self, regex, southwest_lonlat, bounds, res_m):
         """
         Designed to get a single variable, as defined by a regex
         expression, onto a regular grid.
+
+        Parameters
+        ----------
+        regex: str
+            The regular expression to match the desired messages in
+            GRIB2 file.
+
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to
+            retrieve.
+
+        bounds: Tuple[float, float, float, float]
+            With res_m, defines the regular grid to interpolate to the
+            data onto: [xmin, ymin, xmax, ymax]; these values are
+            relative to the projected x,y for the southwest corner of
+            the region.
+
+        res_m: float
+            Spacing (in meters) of the regular grid onto which values
+            are interpolated.
+
         """
 
         # Get the data
         data = self.get_xarray_for_regex(regex, remove_grib=False)
 
-        # Get the name of the varialbe related to the `regex`
+        # Get the name of the variable related to the `regex`
         varname = list(data.data_vars)[0]
 
         # Mask it based on latlon limits
         mask = self.mask_at_coordinates(
             data,
             southwest_lonlat=southwest_lonlat,
-            extent_km_lat=extent,
-            extent_km_lon=extent
+            extent_km_lat=bounds[2] - min(0, bounds[0]),
+            extent_km_lon=bounds[3] - min(0, bounds[1])
         )
         data_masked = data[varname].where(mask, drop=True)
 
         # Convert to an orthogonal grid
-        data_interp, xx, yy =  self.convert_to_regular_grid(
+        data_interp, xx, yy = self.interp_onto_regular_grid(
             data_masked,
             southwest_lonlat,
-            extent,
-            res_m
+            bounds,
+            res_m,
+            self.projected_CRS
         )
 
         return data_interp, xx, yy

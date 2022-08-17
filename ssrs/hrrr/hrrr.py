@@ -7,7 +7,7 @@ import warnings
 from herbie.archive import Herbie
 import numpy as np
 import xarray as xr
-from scipy.interpolate import interp2d
+from scipy.interpolate import griddata
 from rasterio.crs import CRS, CRSError
 
 from ssrs import raster
@@ -478,8 +478,10 @@ class HRRR:
             vs = vs[~np.isnan(vs)]
 
             # Use linear B-spline interpolation to find U and V values
-            u_interp = float(interp2d(xs, ys, us, kind='linear')(center_x, center_y))
-            v_interp = float(interp2d(xs, ys, vs, kind='linear')(center_x, center_y))
+            pts = np.stack([xs,ys], axis=-1)
+            xi = (center_x, center_y)
+            u_interp = float(np.squeeze(griddata(pts, us, xi, method='linear')))
+            v_interp = float(np.squeeze(griddata(pts, vs, xi, method='linear')))
 
         # Calculate wind speed and direction, given easterly and
         # northerly velocity components, u and v, respectively

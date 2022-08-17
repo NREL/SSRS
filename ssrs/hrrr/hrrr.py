@@ -395,37 +395,91 @@ class HRRR:
             fringe_deg_lon=fringe_deg_lon
         )
 
-        # Extract that lats and lons that were found in the mask
-        lats_data_array = uv_grd.coords['latitude'].where(mask)
-        lons_data_array = uv_grd.coords['longitude'].where(mask)
-        lats = np.array(lats_data_array).flatten()
-        lons = np.array(lons_data_array).flatten()
-        lats = lats[~np.isnan(lats)]
-        lons = lons[~np.isnan(lons)]
+        if projection == 'native':
 
-        # Find x, y of the center location given
-        center_lon, center_lat = center_lonlat
+            # We can create a regular grid with this transformation.
+            # Don't use ds.where(mask), which will subset a region
+            # that is not square in Cartesian space and introduce NaNs
+            # everywhere else.
 
-        # Transform the lats/lons to x, y
-        xs, ys = raster.transform_coordinates(
-            in_crs='EPSG:4326',
-            out_crs=out_crs,
-            in_x=lons,
-            in_y=lats
-        )
+            # Create a subset based on limiting coordinates in the mask
+            slicedict = {
+                dim: slice(np.min(indices), np.max(indices))
+                for dim,indices in zip(mask.dims, np.where(mask))
+            }
+            data_subset = uv_grd.isel(**slicedict)
+            us = data_subset['u'].values
+            vs = data_subset['v'].values
 
-        # Calculate the number of points that were found
-        n = float(mask.sum())
+            # Calculate the number of points that were found
+            dims = list(data_subset.sizes.values())
+            n = np.prod(dims)
 
-        # Mask the u and v values
-        us = uv_grd[u_data_var].where(mask, drop=True).values.flatten()
-        vs = uv_grd[v_data_var].where(mask, drop=True).values.flatten()
-        us = us[~np.isnan(us)]
-        vs = vs[~np.isnan(vs)]
+            # Transform the lats/lons to x, y
+            lats = data_subset.coords['latitude'].values.ravel()
+            lons = data_subset.coords['longitude'].values.ravel()
+            xs, ys = raster.transform_coordinates(
+                in_crs='EPSG:4326',
+                out_crs=out_crs,
+                in_x=lons,
+                in_y=lats
+            )
 
-        # Use linear B-spline interpolation to find U and V values
-        u_interp = float(interp2d(xs, ys, us, kind='linear')(center_x, center_y))
-        v_interp = float(interp2d(xs, ys, vs, kind='linear')(center_x, center_y))
+            # Get the Cartesian coordinates
+            xs = xs.reshape(dims)
+            ys = ys.reshape(dims)
+            y1d = ys[:,0]
+            x1d = xs[0,:]
+
+            # Sanity check: Are we in Cartesian (not curvilinear) space?
+            dx = np.diff(x1d)
+            dy = np.diff(y1d)
+            assert np.allclose(dx, dx[0])
+            assert np.allclose(dy, dy[0])
+            assert np.allclose(x1d, xs[-1,:])
+            assert np.allclose(y1d, ys[:,-1])
+
+            # Set the dimension coordinate
+            xs = x1d
+            ys = y1d
+            data_subset = data_subset.assign_coords(y=ys, x=xs)
+
+            # Use bilinear interpolation to find U and V values
+            u_interp = data_subset['u'].interp(x=center_x, y=center_y)
+            v_interp = data_subset['v'].interp(x=center_x, y=center_y)
+            u_interp = float(np.squeeze(u_interp.values))
+            v_interp = float(np.squeeze(v_interp.values))
+
+        else:
+
+            # Extract that lats and lons that were found in the mask
+            lats_data_array = uv_grd.coords['latitude'].where(mask)
+            lons_data_array = uv_grd.coords['longitude'].where(mask)
+
+            # Transform the lats/lons to x, y
+            lats = np.array(lats_data_array).ravel()
+            lons = np.array(lons_data_array).ravel()
+            lats = lats[~np.isnan(lats)]
+            lons = lons[~np.isnan(lons)]
+            xs, ys = raster.transform_coordinates(
+                in_crs='EPSG:4326',
+                out_crs=out_crs,
+                in_x=lons,
+                in_y=lats
+            )
+
+            # Calculate the number of points that were found
+            n = float(mask.sum())
+
+            # Mask the u and v values
+            us = uv_grd[u_data_var].where(mask, drop=True).values.flatten()
+            vs = uv_grd[v_data_var].where(mask, drop=True).values.flatten()
+            us = us[~np.isnan(us)]
+            vs = vs[~np.isnan(vs)]
+
+            # Use linear B-spline interpolation to find U and V values
+            u_interp = float(interp2d(xs, ys, us, kind='linear')(center_x, center_y))
+            v_interp = float(interp2d(xs, ys, vs, kind='linear')(center_x, center_y))
 
         # Calculate wind speed and direction, given easterly and
         # northerly velocity components, u and v, respectively

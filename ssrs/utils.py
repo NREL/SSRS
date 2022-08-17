@@ -1,5 +1,6 @@
 """ Module for commonly used functions """
 
+import numpy as np
 from typing import Tuple
 import errno
 import os
@@ -85,13 +86,9 @@ def get_extent_from_bounds(
     return extent
 
 
-def makedir_if_not_exists(filename: str) -> None:
+def makedir_if_not_exists(dirname: str) -> None:
     """ Create the directory if it does not exists"""
-    try:
-        os.makedirs(filename)
-    except OSError as e_name:
-        if e_name.errno != errno.EEXIST:
-            raise
+    os.makedirs(dirname, exist_ok=True)
 
 
 def construct_lonlat_mask(
@@ -180,3 +177,30 @@ def pretty_str(label, arr):
         s = s + '\n' + pad + line
 
     return s
+
+
+def random_choice_movement(move_probs):
+    """Optimized version of np.random.choice(range(9), p=move_probs)
+
+    Approx 10x speedup observed when requesting single choices
+
+    https://stackoverflow.com/questions/18622781/why-is-numpy-random-choice-so-slow
+    """
+    x = np.random.rand()
+    cumsum = 0
+    for i,p in enumerate(move_probs):
+        cumsum += p
+        if x < cumsum:
+            break
+    return i
+
+
+def clip_inplace(arr,minval=0):
+    arr[np.where(arr < minval)] = 0
+
+
+def calc_MSE(P: np.ndarray, P0: np.ndarray) -> float:
+    """Calculate the mean squared error"""
+    assert P.shape == P0.shape
+    N = len(P.ravel())
+    return np.sum((P-P0)**2) / N

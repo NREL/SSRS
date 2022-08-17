@@ -137,12 +137,13 @@ def transform_coordinates(
         try:
             out_x, out_y = transform(in_crs, out_crs, in_x, in_y)
         except CPLE_AppDefinedError as e:
+            # Occasionally we see "Network error when accessing a remote resource"
+            # Unclear why, but this is a rasterio issue.        
             pass
         else:
             success = True
             break
     assert success, 'Unable to transform coordinates\n'+e
-
 
     # reshape output to match the input numpy array
     if 'out_shape' in locals():

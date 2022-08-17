@@ -904,7 +904,6 @@ class HRRR:
             compatibility.
 
         """
-
         # Get the data
         data = self.get_xarray_for_regex(regex, remove_grib=False)
 
@@ -964,4 +963,91 @@ class HRRR:
         data_interp = data_interp.assign_coords(x=xx[:,0], y=yy[0,:])
 
         return data_interp, xx, yy
+
+
+    def get_var_on_native_grid(self, regex, southwest_lonlat, extent_km):
+        """
+        Designed to get variable(s), as defined by a regex expression,
+        onto a regular grid, using the native GRIB2 projection. This
+        should automatically result in Cartesian coordinates.
+
+        Parameters
+        ----------
+        regex: str
+            The regular expression to match the desired messages in
+            GRIB2 file.
+
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to
+            retrieve.
+
+        extent_km: float or Tuple[float, float]
+            The longitudinal and latitudinal extent (in km), equal if
+            only a single value is given.
+
+        """
+        # Get the data
+        data = self.get_xarray_for_regex(regex, remove_grib=False)
+
+        out_crs = self.get_CRS_from_attrs(data['gribfile_projection'])
+
+        # Create mask to estimate where the subset bounds are
+        if hasattr(extent_km, '__iter__'):
+            extent_km_lon = extent_km[0]
+            extent_km_lat = extent_km[1]
+        else:
+            extent_km_lon = extent_km
+            extent_km_lat = extent_km
+        mask = self.mask_at_coordinates(
+            data,
+            southwest_lonlat=southwest_lonlat,
+            extent_km_lon=extent_km_lon,
+            extent_km_lat=extent_km_lat
+        )
+
+        # Create a subset based on limiting coordinates in the mask
+        slicedict = {
+            dim: slice(np.min(indices), np.max(indices))
+            for dim,indices in zip(mask.dims, np.where(mask))
+        }
+        data_subset = data.isel(**slicedict)
+
+        # Transform the lats/lons to x, y
+        lats = data_subset.coords['latitude'].values.ravel()
+        lons = data_subset.coords['longitude'].values.ravel()
+        xs, ys = raster.transform_coordinates(
+            in_crs='EPSG:4326',
+            out_crs=out_crs,
+            in_x=lons,
+            in_y=lats
+        )
+        xSW, ySW = raster.transform_coordinates(
+            in_crs='EPSG:4326',
+            out_crs=out_crs,
+            in_x=southwest_lonlat[0],
+            in_y=southwest_lonlat[1]
+        )
+        
+        # reference (0,0)
+        xref = xSW[0]
+        yref = ySW[0]
+
+        # Get the Cartesian coordinates
+        dims = list(data_subset.sizes.values())
+        xs = xs.reshape(dims)
+        ys = ys.reshape(dims)
+        y1d = ys[:,0]
+        x1d = xs[0,:]
+
+        # Sanity check: Are we in Cartesian (not curvilinear) space?
+        dx = np.diff(x1d)
+        dy = np.diff(y1d)
+        assert np.allclose(dx, dx[0])
+        assert np.allclose(dy, dy[0])
+        assert np.allclose(x1d, xs[-1,:])
+        assert np.allclose(y1d, ys[:,-1])
+
+        data_subset = data_subset.assign_coords(y=y1d - yref, x=x1d - xref)
+
+        return data_subset
 

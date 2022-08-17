@@ -7,6 +7,7 @@ import numpy as np
 import rasterio as rs
 from rasterio.warp import transform, reproject
 from rasterio.crs import CRS
+from rasterio._err import CPLE_AppDefinedError
 
 
 def get_raster_in_projected_crs(
@@ -88,7 +89,8 @@ def transform_coordinates(
     in_crs: Union[str, rs.crs.CRS],
     out_crs: Union[str, rs.crs.CRS],
     in_x: Union[float, List[float], np.ndarray],
-    in_y: Union[float, List[float], np.ndarray]
+    in_y: Union[float, List[float], np.ndarray],
+    num_retries=5
 ):
     """Transform points from source crs to destination crs
 
@@ -99,9 +101,12 @@ def transform_coordinates(
     out_crs: string or rasterio.crs.CRS object
         Defines the coordinate ref system for the output
     in_x: float or List or numpy array
-        input values in x direction (easting)
+        Input values in x direction (easting)
     out_x: float or List or numpy array
-        output values in y direction (northing)
+        Output values in y direction (northing)
+    num_retries: int, optional
+        Number of times to attempt to call rasterio.warp.transform if
+        CPLE_AppDefinedError is encountered
 
     Returns:
     -------
@@ -127,15 +132,17 @@ def transform_coordinates(
     assert out_crs.is_valid
 
     # Perform the transformation
-    while True:
+    success = False
+    for i in range(num_retries):
         try:
             out_x, out_y = transform(in_crs, out_crs, in_x, in_y)
-        except:
-            continue
+        except CPLE_AppDefinedError as e:
+            pass
         else:
+            success = True
             break
-    # except Exception as _:
-    #     raise ValueError(f'Invalid coordinates {in_x}, {in_y}!') from None
+    assert success, 'Unable to transform coordinates\n'+e
+
 
     # reshape output to match the input numpy array
     if 'out_shape' in locals():

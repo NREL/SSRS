@@ -348,15 +348,15 @@ def getObs_maxw(height, hrrr, southwest_lonlat, extent, res):
         cp = 1005   # J/(kg*K)
 
         # Get mean wspd
-        u, xx, yy = hrrr.getSingleVariableOnGrid(':UGRD:80 m above ground',       southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
-        v, xx, yy = hrrr.getSingleVariableOnGrid(':UGRD:80 m above ground',       southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
+        u, xx, yy = hrrr.get_single_var_on_grid(':UGRD:80 m above ground',       southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
+        v, xx, yy = hrrr.get_single_var_on_grid(':UGRD:80 m above ground',       southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
         wspd = (u**2+v**2)**0.5
         meanwspd = np.mean(wspd)
 
         # Get heat flux
-        gflux_Wm2, xx, yy = hrrr.getSingleVariableOnGrid(':(GFLUX):',      southwest_lonlat, extent, res)   # ground heat flux
-        sensible,  xx, yy = hrrr.getSingleVariableOnGrid(':SHTFL:surface', southwest_lonlat, extent, res)   # sensible heat flux
-        latent,    xx, yy = hrrr.getSingleVariableOnGrid(':LHTFL:surface', southwest_lonlat, extent, res)   # latent heat flux
+        gflux_Wm2, xx, yy = hrrr.get_single_var_on_grid(':(GFLUX):',      southwest_lonlat, extent, res)   # ground heat flux
+        sensible,  xx, yy = hrrr.get_single_var_on_grid(':SHTFL:surface', southwest_lonlat, extent, res)   # sensible heat flux
+        latent,    xx, yy = hrrr.get_single_var_on_grid(':LHTFL:surface', southwest_lonlat, extent, res)   # latent heat flux
         hfx = (sensible + latent - gflux_Wm2 )/(rho*cp)
         meanhfx = np.mean(hfx)
 
@@ -394,7 +394,10 @@ def compute_thermals_3d(
     # Compute albedo
     albedo, xx, yy = hrrr.get_albedo(southwest_lonlat, extent, res)
     # Get boundary layer height
-    zi,     xx, yy = hrrr.getSingleVariableOnGrid(':(HPBL):',       southwest_lonlat, extent, res)   # boundary layer height
+    zi,     xx, yy = hrrr.get_single_var_on_grid(':(HPBL):',  # boundary layer height
+                                                 southwest_lonlat,
+                                                 extent,
+                                                 res)
 
 
     # Define updraft shape factors

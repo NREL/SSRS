@@ -94,6 +94,21 @@ def makedir_if_not_exists(filename: str) -> None:
             raise
 
 
+def construct_lonlat_mask(
+    lon, lat,
+    min_lon=-180, max_lon=180,
+    min_lat=-180, max_lat=180
+):
+    """Return a dataset mask given coodinate arrays for longitude and
+    latitude along with minima and maxima
+    """
+    assert max_lon > min_lon, 'Invalid longitude bounds'
+    assert max_lat > min_lat, 'Invalid latitude bounds'
+    lat_mask = (lat >= min_lat) & (lat <= max_lat)
+    lon_mask = (lon >= min_lon) & (lon <= max_lon)
+    return lat_mask & lon_mask
+
+
 def get_elapsed_time(start) -> str:
     "returns the elapsed time as string"
     hours, rem = divmod(tm.time() - start, 3600)

@@ -699,7 +699,6 @@ def compute_thermals_3d(
             w = w*wmax/np.max(w)
         else:
             print('The height requested is higher than observations. Skipping correction.')
->>>>>>> dev
 
     # Environment sink
     # we = np.zeros_like(w)

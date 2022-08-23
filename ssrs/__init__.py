@@ -7,4 +7,5 @@ from .config import Config
 from .turbines import TurbinesUSWTB
 from .layers import *
 from .raster import *
+from .hrrr import *
 # from .utils import *

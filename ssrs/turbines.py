@@ -3,6 +3,7 @@
 
 import os
 from typing import Tuple, Optional
+from urllib.error import HTTPError
 import pandas as pd
 from .raster import transform_coordinates
 
@@ -39,19 +40,42 @@ class TurbinesUSWTB:
         out_fpath: str = 'turbines.csv',
         print_verbose: bool = False
     ):
+        if crs_string.lower() == 'epsg:4326':
+            self.__xcol = 'xlong'
+            self.__ycol = 'ylat'
+        else:
+            self.__xcol = 'x'
+            self.__ycol = 'y'
+        try:
+            self.dframe = pd.read_csv(out_fpath)
+            print('TurbinesUSWTDB: Loaded saved turbine data from USWTDB')
+        except (ValueError, FileNotFoundError, pd.errors.ParserError):
+            self._download_db(bounds, crs_string, min_hubheight, out_fpath)
+        if print_verbose:
+            self.print_details()
 
+    def _download_db(
+        self,
+        bounds: Tuple[float, float, float, float],
+        crs_string: str = 'EPSG:4326',
+        min_hubheight: float = 50., # in meters
+        out_fpath: str = 'turbines.csv',
+    ):
         # load the USWTB turbine dataset in pandas dataframe
-        print('TurbinesUSWTB: Importing turbine data from USWTB..')
+        print('TurbinesUSWTDB: Importing turbine data from USWTDB..')
         try:
             dfraw = pd.read_json(self.url)
+            print('TurbinesUSWTDB: Successfully imported turbine data from USWTDB..')
+        except HTTPError as httperr:
+            print(f'Connection issues with USWTB database (error code {httperr.code}; ' \
+                   'see codes at https://eerscmap.usgs.gov/uswtdb/api-doc/).')
+            self.dframe = None
         except Exception as _:
-            print('Connection issues with USWTB database!')
+            print('Unknown connection issues with USWTDB database. Please submit a bug report.')
             self.dframe = None
         else:
             # compute the turbine locations in projected crs, if needed
             if crs_string.lower() != 'epsg:4326':
-                self.__xcol = 'x'
-                self.__ycol = 'y'
                 xlocs, ylocs = transform_coordinates(
                     self.lonlat_crs,
                     crs_string,
@@ -60,9 +84,6 @@ class TurbinesUSWTB:
                 )
                 dfraw[self.__xcol] = xlocs
                 dfraw[self.__ycol] = ylocs
-            else:
-                self.__xcol = 'xlong'
-                self.__ycol = 'ylat'
 
             # find the turbines within the requested bounds
             xbool = dfraw[self.__xcol].between(bounds[0], bounds[2], 'both')
@@ -70,12 +91,7 @@ class TurbinesUSWTB:
             hhbool = dfraw['t_hh'].between(min_hubheight, 10000., 'left')
             self.dframe = dfraw.loc[xbool & ybool & hhbool, :]
             if out_fpath is not None:
-                try:
-                    self.dframe.to_csv(fpath)
-                except:
-                    pass
-            if print_verbose:
-                self.print_details()
+                self.dframe.to_csv(out_fpath)
 
     def get_locations(self):
         """ Returns the locations of turbines """

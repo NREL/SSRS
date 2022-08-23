@@ -1,16 +1,11 @@
 """Module defining possible actions for heuristics-based movements 
-
 An action function is defined generally as:
-
     action(*args, **kwargs)
-
 *args are common data passed from
 `movmodel.generate_heuristic_eagle_track()` to all action functions, providing
 information about the eagle movement history and environment, which may or may
 not be used. **kwargs are optional, action-specific keyword arguments.
-
 The default arguments (*args) include:
-
 * trajectory: list
     The history of all previous positions [m] along the track, including
     the current position
@@ -36,10 +31,8 @@ The default arguments (*args) include:
     location [m/s]
 * elev_interp: function
     Elevation z(x,y) that can be evaluated at an arbitrary location [m]
-
 `kwargs` is an optional list of keywords describing additional action-specific
 parameters.
-
 """
 import numpy as np
 #from scipy import ndimage #for smoothing updraft field
@@ -49,10 +42,8 @@ from scipy.interpolate import RectBivariateSpline
 def random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,theshold,lookaheaddist,maxx,maxy,
                 wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=90.0):
     """Perform a random movement, neglecting the PAM
-
     Notes:
     - Currently, only information from the previous position is used.
-
     Additional Parameters
     ---------------------
     step: float
@@ -79,7 +70,6 @@ def dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,thr
                 wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=15.0):
     cur_pos = trajectory[-1]
     """Perform a random movement along the principle axis of migration (PAM)
-
     Additional Parameters
     ---------------------
     step: float
@@ -95,7 +85,34 @@ def dir_random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,thr
     
     return cur_pos + delta,step_wt
 
-def step_ahead_drw(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
+def simple_step_ahead_drw_orog(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
+                maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                step=30.0,dist=30.0,halfsector=45,Nsearch=5,sigma=0.0):
+    """Perform a step forward in near-PAM direction based on nearby updraft values
+        If no updraft above threshold, select randomly
+    """
+    cur_pos = trajectory[-1]  
+    elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
+                
+    wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2 = searcharc_w(trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_interp,step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
+    
+    # take step to one of five nearby locations based on wo above threshold
+    # otherwise choose randomly
+    if wo_max1 > threshold:
+        delta = step * np.array([np.cos(best_dir_wo1),np.sin(best_dir_wo1)])
+        new_pos = cur_pos + delta
+        step_wt=1.  #using orographic lift
+    else:
+        ang0 = np.radians((90. - PAM) - halfsector)
+        ang1 = np.radians((90. - PAM) + halfsector)
+        angles = np.linspace(ang0, ang1, Nsearch)
+        rand_ang=np.random.choice(angles)
+        delta = step * np.array([np.cos(rand_ang),np.sin(rand_ang)])
+        new_pos = cur_pos + delta
+        step_wt=1.
+    return new_pos,step_wt
+
+def step_ahead_drw_mixedlift(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
                 maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                 step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values
@@ -156,7 +173,7 @@ def step_ahead_drw(trajectory,directions,track_weight,PAM,windspeed,winddir,thre
     return new_pos,step_wt
 
 
-def step_ahead_look_ahead(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+def step_ahead_look_ahead_mixedlift(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                     wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
     """Perform a step forward in near-PAM direction based on nearby updraft values, but
         If thermal lift is detected, go to thermal soar and glide movement

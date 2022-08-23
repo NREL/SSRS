@@ -96,6 +96,10 @@ class Config:
                            '+k', 'xk', '*k', '.k', 'ok')
     turbine_mrkr_size: float = 3.
 
+    # plotting related
+    fig_height: float = 6.
+    fig_dpi: int = 200  # increase this to get finer plots
+
     def __str__(self):
         out_str = self.__doc__ + '\n'
         for i, (k, _) in enumerate(self.__dict__.items()):

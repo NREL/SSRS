@@ -336,10 +336,11 @@ def generate_heuristic_eagle_track(
         winddir: float, #uniform winddir - needs to be generalized for wtk
         threshold: float, #updraft threshold for flight - varies with species 
         lookaheaddist: float, #distance eagle can see and evaluate possible lift ahead
-        max_moves: int = 100,  #IMPORTANT change from 1000 to 100 for local movements
+        max_moves: int = 2000,  #IMPORTANT - depends on size of domain and movement model
+                #change from 1000 to 100 for local movements, depends on scale
         #TODO ask Eliot why next param has to be specified here rather than set to int,
-        random_walk_freq: int=300, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
-        random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
+        random_walk_freq: int=100000, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+        random_walk_step_size: float = 50.0, # when a random walk does occur, the distance traveled in each random movement
         random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
 ):
     
@@ -421,7 +422,8 @@ def generate_heuristic_eagle_track(
                     new_pos,step_wt = random_walk_local(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                         wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
 
-                if not ((0.05*xg[-1] < new_pos[0] < 0.95*xg[-1]) and (0.05*yg[-1] < new_pos[1] < 0.95*yg[-1])):
+                if not ((0.025*xg[-1] < new_pos[0] < 0.975*xg[-1]) and (0.025*yg[-1] < new_pos[1] < 0.975*yg[-1])):
+                    print('break')
                     break #db revised because we were getting a lot of random walks bunched up at the downstream boundary
                 delta = new_pos - trajectory[-1]
                 if ruleset!='local_moves':
@@ -491,8 +493,8 @@ def generate_heuristic_eagle_track(
     trajectory_3D = np.c_[trajectory,track_wt_10000]
     
     #this next just for troubleshooting
-    np.savetxt('output/wy_small_heuristic_local/figs/uniform/traj.csv', trajectory, delimiter=',')
-    np.savetxt('output/wy_small_heuristic_local/figs/uniform/movedir.csv', directions, delimiter=',')
+    #np.savetxt('output/wy_small_heuristic_local/figs/uniform/traj.csv', trajectory, delimiter=',')
+    #np.savetxt('output/wy_small_heuristic_local/figs/uniform/movedir.csv', directions, delimiter=',')
     
     iarr = trajectory_3D[:,1]
     jarr = trajectory_3D[:,0]

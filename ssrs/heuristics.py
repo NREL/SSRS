@@ -11,8 +11,8 @@ See the actions module for available action functions and descriptions of their
 action parameters.
 
 """
-from .actions import (random_walk, dir_random_walk, step_ahead_drw, step_ahead_look_ahead,look_ahead)
-from .actions_local import (local_moves)
+from .actions import (random_walk, dir_random_walk, simple_step_ahead_drw_orog, step_ahead_drw_mixedlift, step_ahead_look_ahead_mixedlift)
+from .actions_local import (local_moves_mixedlift)
 
 rulesets = {}
 
@@ -24,46 +24,21 @@ rulesets['dir_random_walk'] = [
     dir_random_walk,
 ]
 
-rulesets['step_ahead_drw'] = [
-    step_ahead_drw,
+rulesets['simple_step_ahead_drw_orog'] = [
+    simple_step_ahead_drw_orog,
 ]
 
-rulesets['step_ahead_look_ahead'] = [
-    step_ahead_look_ahead,
+rulesets['step_ahead_drw_mixedlift'] = [
+    step_ahead_drw_mixedlift,
 ]
 
-rulesets['local_moves'] = [
-    local_moves,
-]
-rulesets['lookahead'] = [
-    (look_ahead, dict(dist=100.0)),
-    (look_ahead, dict(dist=200.0)),
-    (look_ahead, dict(dist=300.0)),
+rulesets['step_ahead_look_ahead_mixedlift'] = [
+    step_ahead_look_ahead_mixedlift,
 ]
 
-rulesets['lookahead_with_uncertainty'] = [
-    (look_ahead, dict(dist=100.0, sigma=15.)),
-    (look_ahead, dict(dist=200.0, sigma=30.)),
-    (look_ahead, dict(dist=300.0, sigma=45.)),
+rulesets['local_moves_mixedlift'] = [
+    local_moves_mixedlift,
 ]
 
-rulesets['mixed'] = [
-    dir_random_walk,
-    (look_ahead, dict(dist=100.0)),
-    (look_ahead, dict(dist=200.0)),
-    (look_ahead, dict(dist=300.0)),
-    (look_ahead, dict(dist=200.0)),
-    (look_ahead, dict(dist=100.0)),
-]
-
-rulesets['mixed_with_uncertainty'] = [
-    dir_random_walk,
-    (look_ahead, dict(dist=100.0)),
-    (look_ahead, dict(dist=200.0)),
-    (look_ahead, dict(dist=300.0,sigma=45)),
-    (look_ahead, dict(dist=200.0,sigma=30)),
-    (look_ahead, dict(dist=100.0,sigma=15)),
-]
-
-rulesets['default'] = rulesets['mixed_with_uncertainty']
+rulesets['default'] = rulesets['dir_random_walk']
 

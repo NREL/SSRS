@@ -1,7 +1,7 @@
 import numpy as np
 from .actions import (searcharc_w,dir_random_walk)
 
-def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
+def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
                     maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
                     step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
                     
@@ -51,7 +51,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
             directions.append(move_dir)
             new_pos = cur_pos + delta
             step_wt=1.  #using orographic lift
-            if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+            if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
                 break
             trajectory.append(new_pos)
             track_weight.append(step_wt)
@@ -63,7 +63,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
             directions.append(move_dir)
             new_pos = cur_pos + delta
             step_wt=1.  #using orographic lift
-            if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+            if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
                 break
             trajectory.append(new_pos)
             track_weight.append(step_wt)
@@ -75,7 +75,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
             directions.append(move_dir)
             new_pos = cur_pos + delta
             step_wt=1.  #using orographic lift
-            if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+            if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
                 break
             trajectory.append(new_pos)
             track_weight.append(step_wt)
@@ -86,7 +86,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
             directions.append(move_dir)
             new_pos = cur_pos + delta
             step_wt=1.  #using orographic lift
-            if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+            if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
                 break
             trajectory.append(new_pos)
             track_weight.append(step_wt)
@@ -98,7 +98,7 @@ def local_moves(trajectory,directions,track_weight,PAM,windspeed,winddir,thresho
                 new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                                       wo_interp,wo_sm_interp,wt_interp,elev_interp,
                                       step=step,halfsector=15.0)
-                if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+                if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
                     break
                 delta = new_pos - trajectory[-1]
                 directions.append(move_dir)
@@ -156,9 +156,9 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     
     #assume minimum of 4 loops (32 steps) and max of 20 loops (160 steps), proportional to wt of the thermal, with max of 8 m/s
     #note that it takes 8 steps for a full circle with angle = pi/4
-    circlesteps=int(32+((wt_globalmax-threshold)/(8-threshold))*(160-32))
-    #circlesteps=np.random.randint(32, 96) #number of steps circling
-    soar_rad=np.random.uniform(30, 100) #soaring radius
+    #circlesteps=int(32+((wt_globalmax-threshold)/(8-threshold))*(160-32))
+    circlesteps=np.random.randint(32, 96) #number of steps circling
+    soar_rad=np.random.uniform(20, 60) #soaring radius
 
     #TODO this assumes a constant windfield everywhere. Need to code for WTK with u(x,y) and v(x,y)
     
@@ -185,7 +185,8 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
         delta=np.array([uwind*2,vwind*2]) + soar_rad * np.array([np.cos(angle),np.sin(angle)])
         #note tstep = approx 2 sec per pi/4 = 20 sec per circles/8 circle sectors - just a place holder for now
         new_pos=cur_pos + delta
-        if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+        if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
+           print('break')
            break
         directions.append(move_dir)
         trajectory.append(new_pos)
@@ -207,7 +208,8 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
         glide_wt=0.5*float(i)/float(glidesteps) #note that weighting increases linearly from 0 to 0.5 as end of glide is reached
         step_wt=glide_wt
         delta = new_pos - trajectory[-1]
-        if not ((0 < new_pos[0] < maxx) and (0 < new_pos[1] < maxy)):
+        if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
+           print('break')
            break
         directions.append(move_dir)
         trajectory.append(new_pos)

@@ -174,7 +174,8 @@ def get_above_threshold_speed_scalar(in_val, val):
         if in_val > val:
             fval = in_val
         else:
-            fval = val * (np.exp((in_val / val)**5) - 1) / (np.exp(1) - 1)
+            #fval = val * (np.exp((in_val / val)**5) - 1) / (np.exp(1) - 1)
+            fval=0.0
     else:
         fval = 0.
     return fval

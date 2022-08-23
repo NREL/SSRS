@@ -371,7 +371,7 @@ class Simulator(Config):
 
     def plot_directional_potentials(self, plot_turbs=True, show=False) -> None:
         """ Plot directional potential """
-        if self.movement_model == 'fluidflow':
+        if self.movement_model == 'fluid-flow':
             print('Plotting directional potential..')
             for case_id in self.case_ids:
                 updrafts = self.load_updrafts(case_id, apply_threshold=True)
@@ -418,7 +418,7 @@ class Simulator(Config):
                 if self.sim_seed > 0:
                     np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
-                if self.movement_model == 'fluidflow':
+                if self.movement_model == 'fluid-flow':
                     potential = self.get_directional_potential(
                         updraft, case_id, real_id)
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
@@ -622,7 +622,7 @@ class Simulator(Config):
     def plot_simulated_tracks_HSSRS(self, plot_turbs=True, show=False) -> None:
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
-        lwidth = 0.3 if self.track_count > 251 else 0.6
+        lwidth = 0.3 if self.track_count > 250 else 0.75
         elevation = self.get_terrain_elevation()
         xgrid, ygrid = self.get_terrain_grid()
         for case_id in self.case_ids:
@@ -660,11 +660,18 @@ class Simulator(Config):
                 ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
                 if self.movement_ruleset != 'step_ahead_look_ahead':
                     self.look_ahead_dist = 0.0
-                axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
-                    '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'
-                    % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
-                    self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,self.track_count),
-                    fontsize='xx-small',color='black')
+                if self.movement_ruleset == 'local_moves':
+                    axs.text(xtext, ytext, 'move model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
+                        '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'
+                        % (self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
+                        self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,self.track_count),
+                        fontsize='xx-small',color='black')
+                else:
+                    axs.text(xtext, ytext, 'move dir (deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km)= %2.1f'\
+                        '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %8.6f\nn tracks = %5d'
+                        % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
+                        self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,self.track_count),
+                        fontsize='xx-small',color='black')
                 
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_fig_dir)
@@ -832,8 +839,8 @@ class Simulator(Config):
         
         xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
         ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
-        axs.text(xtext, ytext, 'PAM(deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km) = %2.1f'\
-            '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %6.4f\nn tracks = %5d'\
+        axs.text(xtext, ytext, 'move dir (deg) = %6.1f\nmove model = %s\nruleset = %s\nlook ahead dist (km) = %2.1f'\
+            '\nthermal intensity scale =%4.1f\nwind = %s %4.0f %4.1f mps\nrandom walk freq = %8.6f\nn tracks = %5d'\
             '\nn thermal realizations = %3d\nmax_count/n_tracks = %4.2f'
             % (self.track_direction,self.sim_movement,self.movement_ruleset,self.look_ahead_dist/1000.,self.thermal_intensity_scale,
             self.sim_mode,self.uniform_winddirn,self.uniform_windspeed,1./self.random_walk_freq,
@@ -1134,10 +1141,10 @@ class Simulator(Config):
         """ Plotting terrain elevation """
         elevation = self.get_terrain_elevation()
         fig, axs = plt.subplots(figsize=self.fig_size)
-        curm = axs.imshow(elevation / 1000., cmap='terrain',
+        curm = axs.imshow(elevation, cmap='terrain',
                           extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Altitude (km)')
+        cbar.set_label('Elevation (m)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'elevation.png'), show)
@@ -1149,7 +1156,7 @@ class Simulator(Config):
         curm = axs.imshow(slope, cmap='magma_r',
                           extent=self.extent, origin='lower')
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Slope (Degrees)')
+        cbar.set_label('Slope (deg)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'slope.png'), show)
@@ -1161,7 +1168,7 @@ class Simulator(Config):
         curm = axs.imshow(aspect, cmap='hsv',
                           extent=self.extent, origin='lower', vmin=0, vmax=360.)
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
-        cbar.set_label('Aspect (Degrees)')
+        cbar.set_label('Aspect (deg)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)

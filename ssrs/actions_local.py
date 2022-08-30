@@ -2,8 +2,9 @@ import numpy as np
 from .actions import (searcharc_w,dir_random_walk)
 
 def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
-                    maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                    step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
+                          maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                          step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0,
+                          rand_step_range=(5,10)):
                     
     """
     perform a sequence of moves based on updraft fields, then update move_dir and repeat
@@ -21,7 +22,7 @@ def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,windd
         move_dir=move_dir-360.
     #print('move dir =',move_dir)
     
-    nsteps=np.random.randint(5, 10) #do a sequence of steps for a particular move_dir
+    nsteps=np.random.randint(*rand_step_range) #do a sequence of steps for a particular move_dir
     for i in range(nsteps):
             
         wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2 = searcharc_w(
@@ -93,7 +94,7 @@ def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,windd
 
         else:
             # no usable updraft found adjacent, do a directed random walk
-            drwsteps=np.random.randint(5, 10)
+            drwsteps=np.random.randint(*rand_step_range)
             for i in range(drwsteps):
                 new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                                       wo_interp,wo_sm_interp,wt_interp,elev_interp,

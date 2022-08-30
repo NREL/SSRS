@@ -111,7 +111,8 @@ def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,windd
     
     
 def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
-                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0):
+                             wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0,
+                             wind_speed_pert_scalar=0.1, wind_dir_pert=10.0):
     """Three part movement is taken whenever thermal lift > threshold is encountered
             1. search for center of thermal using the searcharc() function
             2. circle and drift downwind for specified number of times (4 to 12 times)
@@ -164,11 +165,10 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     #TODO this assumes a constant windfield everywhere. Need to code for WTK with u(x,y) and v(x,y)
     
     #allow for some random variation in uniform wind speed and direction
-    v=windspeed
     alpha=winddir
-    np.random.seed()
-    windspeed = windspeed + np.random.uniform(-0.1*v,0.1*v)
-    winddir = winddir + np.random.uniform(-10,10)
+    np.random.seed() # is this needed?
+    windspeed = windspeed * (1 + np.random.uniform(-wind_speed_pert_scalar, wind_speed_pert_scalar))
+    winddir = winddir + np.random.uniform(-wind_dir_pert, wind_dir_pert)
     if winddir < 0:
         winddir=360.+winddir
     if winddir > 360:

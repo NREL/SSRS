@@ -1158,6 +1158,12 @@ class Simulator(Config):
         if figsize is None: figsize=self.fig_size
         for case_id in self.case_ids:
             updrafts = self.load_updrafts(case_id, apply_threshold)
+
+            # Identify if one updraft field or list of updrafts for enumerate
+            if np.shape(np.shape(updrafts))[0] == 2:
+                 # Single updraft field
+                 updrafts = [updrafts]
+
             for real_id, updraft in enumerate(updrafts):
                 fig, axs = plt.subplots(figsize=self.fig_size)
                 if vmax is None:
@@ -1359,7 +1365,7 @@ class Simulator(Config):
                 #prprob /= np.amax(prprob)
                 case_prob += prprob
                 if plot_all:
-                    fig, _ = self._plot_presence_HSSRS(prprob, minval, plot_turbs)
+                    fig, ax = self._plot_presence_HSSRS(prprob, minval, plot_turbs)
                     fname = self._get_presence_fname(case_id, real_id,
                                                      self.mode_fig_dir)
                     self.save_fig(fig, f'{fname}.png', show)
@@ -1367,7 +1373,7 @@ class Simulator(Config):
             summary_prob += case_prob
             print('Max summary presence count =',np.amax(summary_prob))
             countmax=np.amax(summary_prob)
-            fig, _ = self._plot_presence_HSSRS(case_prob, countmax, minval, plot_turbs)
+            fig, ax = self._plot_presence_HSSRS(case_prob, countmax, minval, plot_turbs)
             fname = f'{self._get_id_string(case_id)}_presence.png'
             fpath = os.path.join(self.mode_fig_dir, fname)
             self.save_fig(fig, fpath, show)
@@ -1376,7 +1382,7 @@ class Simulator(Config):
         fname = os.path.join(self.mode_data_dir, 'summary_presence')
         np.save(f'{fname}.npy', summary_prob.astype(np.float32))
         if len(self.case_ids) > 1:
-            fig, _ = self._plot_presence_HSSRS(summary_prob, minval, plot_turbs)
+            fig, ax = self._plot_presence_HSSRS(summary_prob, minval, plot_turbs)
             fpath = os.path.join(self.mode_fig_dir, 'summary_presence.png')
             self.save_fig(fig, fpath, show)
 

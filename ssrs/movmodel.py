@@ -314,7 +314,7 @@ def generate_heuristic_eagle_track(
 
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
-    num_rows, num_cols = wo.shape
+    num_rows, num_cols = np.shape(wo)
     # initial conditions
     # note 1: we simulate actual positions and then convert these back to grid
     #         indices at the end
@@ -363,8 +363,9 @@ def generate_heuristic_eagle_track(
     #allow for some individual variation in PAM between eagles
 # TODO: this should not be needed
 #    np.random.seed()
-    PAM = PAM + np.random.uniform(-10., 10.) 
+    #PAM = PAM + np.random.uniform(-10., 10.) 
     
+
     # move through domain
     for imove in range(max_moves):
         iact = imove % len(rules)
@@ -376,6 +377,7 @@ def generate_heuristic_eagle_track(
         if random_walk_freq > 0:
             randwalk = np.random.randint(1, random_walk_freq)
             #randwalk = np.random.randint(1, 10)
+
         if randwalk==1:
             randy2 = np.random.randint(*random_walk_step_range) #number of steps
             #randy2 = np.random.randint(20,50) #number of steps
@@ -399,10 +401,10 @@ def generate_heuristic_eagle_track(
                 trajectory.append(new_pos)
                 track_weight.append(step_wt)
                 track_wo.append(wo_interp(new_pos[0],new_pos[1], grid=False))
+
         if callable(next_rule):
             new_pos, step_wt = next_rule(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                 wo_interp,wo_sm_interp,wt_interp,elev_interp) 
-        
         else:
             assert isinstance(next_rule, tuple)
             action = next_rule[0]
@@ -417,6 +419,7 @@ def generate_heuristic_eagle_track(
         # TODO: can do some validation here (to accept/reject new_pos)
 
         # process new positions
+
         try:
             assert len(new_pos[0]) == 2 # TODO: update this for 3-D tracks!
         except TypeError:
@@ -465,7 +468,7 @@ def generate_heuristic_eagle_track(
     iarr = trajectory_3D[:,1]
     jarr = trajectory_3D[:,0]
     karr = trajectory_3D[:,2]
-    
+
     return np.stack([iarr,jarr,karr],axis=-1).astype(np.int16) 
 
 

@@ -487,7 +487,12 @@ class Simulator(Config):
         """ Computes updrafts for the particular case """
         if self.thermals_realization_count > 0:
             print('Computing thermal updrafts...', flush=True)
-            aspect = self.get_terrain_aspect()
+            aspectHighRes = self.get_terrain_aspect()
+
+            # Thermal updrafts are computed using aspect (as of right now). Coarsening
+            # the aspect field so that we can later sum both orog and thermal updraft
+            aspect = highRes2lowRes(aspectHighRes, self.resolution_terrain, self.resolution)
+
             for real_id in range(self.thermals_realization_count):
                 thermals = compute_random_thermals(aspect, self.thermal_intensity_scale)
                 fname = self._get_thermal_fname(
@@ -500,17 +505,21 @@ class Simulator(Config):
     def load_updrafts(self, case_id: str, apply_threshold=True):
         """ Computes updrafts for the particular case """
         fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
-        updraft = np.load(f'{fname}.npy')
+        orographicupdraft = np.load(f'{fname}.npy')
         print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
-        updrafts = [updraft]
-        if self.thermals_realization_count > 0:
-            for real_id in range(self.thermals_realization_count):
-                fname = self._get_thermal_fname(
-                    case_id, real_id, self.mode_data_dir)
-                updrafts.append(updraft + np.load(f'{fname}.npy'))
-        if apply_threshold:
-            updrafts = [get_above_threshold_speed(
-                ix, self.updraft_threshold) for ix in updrafts]
+
+        updrafts= orographicupdraft
+
+        # Commenting this out for heuristics. This function needs to return only the orographic
+        # Add thermal updrafts to the `updrafts` field if available
+#        if self.thermals_realization_count > 0:
+#            for real_id in range(self.thermals_realization_count):
+#                fname = self._get_thermal_fname(
+#                    case_id, real_id, self.mode_data_dir)
+#                updrafts.append(updrafts + np.load(f'{fname}.npy'))
+#        if apply_threshold:
+#            updrafts = [get_above_threshold_speed(
+#                ix, self.updraft_threshold) for ix in updrafts]
         return updrafts
 
 
@@ -747,13 +756,19 @@ class Simulator(Config):
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = self._get_starting_indices()
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
+
         if PAM_stdev == 0:
-            dir_offsets = np.zeros(len(starting_locs))
+            #dir_offsets = np.zeros(len(starting_locs))
+            dir_offsets = 0
         else:
-            dir_offsets = np.random.normal(scale=PAM_stdev,
-                                           size=len(starting_locs))
+            #dir_offsets = np.random.normal(scale=PAM_stdev,
+            #                               size=len(starting_locs))
+            dir_offsets = np.random.normal(scale=PAM_stdev)
+
         self.PAM = self.track_direction + dir_offsets
-        starting_locs_PAM = list(zip(starting_rows, starting_cols, self.PAM))
+
+        #starting_locs_PAM = list(zip(starting_rows, starting_cols, self.PAM))
+        starting_locs_PAM = list(zip(starting_rows, starting_cols))
 
         num_cores = min(self.track_count, self.max_cores)
        
@@ -761,9 +776,9 @@ class Simulator(Config):
 #            tmp_str = f'{case_id}_{int(self.track_direction)}'
 #            print(f'{tmp_str}: Simulating {self.track_count} tracks..',
 #                  end="", flush=True)
-            updrafts = self.load_updrafts(case_id, apply_threshold=True)
-            orographicupdraft = np.load(self._get_orographicupdraft_fpath(case_id)) #for heuristic model
-            elevation = self.get_terrain_elevation() #for heuristic model
+            # Load orographic updraft only
+            orographicupdraft = self.load_updrafts(case_id, apply_threshold=True)
+            elevation = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
                                 
             #for real_id, updraft in enumerate(updrafts):  #this did not work for heuristics
             for real_id in range(self.thermals_realization_count):
@@ -809,7 +824,7 @@ class Simulator(Config):
                     
                     tracks = self._parallel_run(generate_heuristic_eagle_track,
                         starting_locs_PAM, #start_loc
-                        inp[2], #PAM
+                        self.PAM,
                         self.movement_ruleset,
                         orographicupdraft,
                         thermalupdraft,
@@ -817,6 +832,8 @@ class Simulator(Config):
                         self.resolution,
                         self.uniform_windspeed_h,  #TODO needs to be generalized to wind from WTK
                         self.uniform_winddirn_h,   #TODO needs to be generalized to wind from WTK
+                        self.updraft_threshold,
+                        self.look_ahead_dist,
                         **hssrs_kwargs
                     )
             
@@ -1012,8 +1029,9 @@ class Simulator(Config):
         """ Plots simulated tracks """
         print('Plotting simulated tracks..')
         lwidth = 0.3 if self.track_count > 250 else 0.75
-        elevation = self.get_terrain_elevation()
-        xgrid, ygrid = self.get_terrain_grid()
+        # Use analysis-resolution information
+        elevation = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
+        xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
         for case_id in self.case_ids:
             for real_id in range(self.thermals_realization_count):
                 fig, axs = plt.subplots(figsize=self.fig_size)
@@ -1175,7 +1193,7 @@ class Simulator(Config):
                 fig, axs = plt.subplots(figsize=self.fig_size)
                 curm = axs.imshow(thermal, cmap='viridis',
                               extent=self.extent, origin='lower',
-                              vmin=0, vmax=vmal)
+                              vmin=0, vmax=vmax)
                 cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
                 cbar.set_label('Thermal updraft velocity (m/s)')
                 if plot_turbs:

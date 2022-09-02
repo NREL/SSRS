@@ -32,7 +32,7 @@ config_base = Config(
     track_start_region=(10, 29.5, 39.5, 39.5),  #xmin, xmax, ymin, ymax
     #track_start_region=(12, 18, 15, 25),  #xmin, xmax, ymin, ymax. placed centrally for random walk case
     track_start_type='structured',  # structured, random
-    track_count=50,  #per thermals realization
+    track_count=50,  #50,  #per thermals realization
     
     # plotting related
     fig_height=6.,
@@ -84,10 +84,10 @@ if __name__ == '__main__':
         sim = Simulator(cfg)
 
         sim.plot_terrain_features()
-        sim.plot_orographic_updrafts()
+        sim.plot_updrafts(plot='pcolormesh')
         sim.plot_thermal_updrafts()
         #sim.plot_wtk_layers()
-        #sim.plot_directional_potentials()
-        sim.simulate_tracks_HSSRS()
+        sim.plot_directional_potentials()
+        sim.simulate_tracks_HSSRS(PAM_stdev=0.63)
         sim.plot_simulated_tracks_HSSRS()
         sim.plot_presence_map_HSSRS()

@@ -394,7 +394,8 @@ def searcharc_w(trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_
 
 
 def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
-                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0):
+                       wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0,
+                       thermaling_decay_coef=1.0):
     """Three part movement is taken whenever thermal lift > threshold is encountered
             1. search for center of thermal using the searcharc() function
             2. circle and drift downwind for specified number of times (4 to 12 times)
@@ -463,7 +464,7 @@ def thermal_soar_glide(trajectory,directions,track_weight,PAM,windspeed,winddir,
            break
         directions.append(delta)
         trajectory.append(new_pos)
-        circle_wt=0.5*np.exp(-1*float(i)/float(circlesteps)) #we assume thermalling eagle risk decays rapidly as it circles up
+        circle_wt=0.5*np.exp(-thermaling_decay_coef*float(i)/float(circlesteps)) #we assume thermalling eagle risk decays rapidly as it circles up
         step_wt=circle_wt
         track_weight.append(step_wt)
         cur_pos=new_pos

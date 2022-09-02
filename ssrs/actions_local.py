@@ -2,8 +2,9 @@ import numpy as np
 from .actions import (searcharc_w,dir_random_walk)
 
 def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,
-                    maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
-                    step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0):
+                          maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,
+                          step=50.0,dist=50.0,halfsector=30,Nsearch=10,sigma=0.0,
+                          rand_step_range=(5,10)):
                     
     """
     perform a sequence of moves based on updraft fields, then update move_dir and repeat
@@ -21,7 +22,7 @@ def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,windd
         move_dir=move_dir-360.
     #print('move dir =',move_dir)
     
-    nsteps=np.random.randint(5, 10) #do a sequence of steps for a particular move_dir
+    nsteps=np.random.randint(*rand_step_range) #do a sequence of steps for a particular move_dir
     for i in range(nsteps):
             
         wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2 = searcharc_w(
@@ -93,7 +94,7 @@ def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,windd
 
         else:
             # no usable updraft found adjacent, do a directed random walk
-            drwsteps=np.random.randint(5, 10)
+            drwsteps=np.random.randint(*rand_step_range)
             for i in range(drwsteps):
                 new_pos,step_wt = dir_random_walk(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
                                       wo_interp,wo_sm_interp,wt_interp,elev_interp,
@@ -110,11 +111,20 @@ def local_moves_mixedlift(trajectory,directions,track_weight,PAM,windspeed,windd
     
     
 def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
-                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0):
+                             wo_interp,wo_sm_interp,wt_interp,elev_interp,step=50.0,halfsector=180.0,
+                             wind_speed_pert_scalar=0.1, wind_dir_pert=10.0,
+                             step_wt=0.5,  #base of thermal, assume moderate height
+                             steps_per_circle=8, circling_steps_range=(32, 96),
+                             soaring_radius_range=(20., 60.),
+                             gliding_range=(500., 2000.)):
     """Three part movement is taken whenever thermal lift > threshold is encountered
-            1. search for center of thermal using the searcharc() function
-            2. circle and drift downwind for specified number of times (4 to 12 times)
-            3. glide in the PAMward direction for a distance proportional to circling time             
+    1. Search for center of thermal using the searcharc() function
+    2. Circle and drift downwind for specified number of times (4 to 12 times)
+    3. Glide in the PAMward direction for a distance proportional to circling time
+    
+    Notes on thermaling movements (for default thermaling params):
+    * assume minimum of 4 loops (32 steps) and max of 12 loops (96 steps) -- proportional to w_t of the thermal, with max of 8 m/s
+    * tstep ~ 2 sec per pi/4 sector = 16 sec per circle
     """                    
     cur_pos = trajectory[-1]
         
@@ -146,7 +156,6 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     new_pos = cur_pos + radius_wt * np.array([np.cos(best_dir_wt),np.sin(best_dir_wt)]) #location of max wt
     
     directions.append(move_dir)
-    step_wt=0.5  #base of thermal, assume moderate height
     trajectory.append(new_pos)
     track_weight.append(step_wt)
     
@@ -154,20 +163,16 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     
     #circle up and drift downwind in thermal
     
-    #assume minimum of 4 loops (32 steps) and max of 20 loops (160 steps), proportional to wt of the thermal, with max of 8 m/s
-    #note that it takes 8 steps for a full circle with angle = pi/4
-    #circlesteps=int(32+((wt_globalmax-threshold)/(8-threshold))*(160-32))
-    circlesteps=np.random.randint(32, 96) #number of steps circling
-    soar_rad=np.random.uniform(20, 60) #soaring radius
+    circlesteps=np.random.randint(circling_steps_range) #number of steps circling
+    soar_rad=np.random.uniform(soaring_radius_range) #soaring radius
 
     #TODO this assumes a constant windfield everywhere. Need to code for WTK with u(x,y) and v(x,y)
     
     #allow for some random variation in uniform wind speed and direction
-    v=windspeed
     alpha=winddir
-    np.random.seed()
-    windspeed = windspeed + np.random.uniform(-0.1*v,0.1*v)
-    winddir = winddir + np.random.uniform(-10,10)
+    np.random.seed() # is this needed?
+    windspeed = windspeed * (1 + np.random.uniform(-wind_speed_pert_scalar, wind_speed_pert_scalar))
+    winddir = winddir + np.random.uniform(-wind_dir_pert, wind_dir_pert)
     if winddir < 0:
         winddir=360.+winddir
     if winddir > 360:
@@ -176,14 +181,14 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     uwind=windspeed*np.cos(np.radians(270.-winddir))
     vwind=windspeed*np.sin(np.radians(270.-winddir))
 
-    angle=move_dir
+    angle_per_step = 2*np.pi / steps_per_circle
 
-    dir=np.random.randint(1,3) #direction of soar, either cw or ccw
+    dir=np.random.randint(1,3) # 1 or 2 
+    dir = (-1)**dir # direction of soar, either cw or ccw
 
     for i in range(circlesteps):
-        angle = angle+(np.pi/4)*(-1)**dir
+        angle = move_dir + (i+1)*angle_per_step*dir
         delta=np.array([uwind*2,vwind*2]) + soar_rad * np.array([np.cos(angle),np.sin(angle)])
-        #note tstep = approx 2 sec per pi/4 = 20 sec per circles/8 circle sectors - just a place holder for now
         new_pos=cur_pos + delta
         if not ((0.025*maxx < new_pos[0] < 0.975*maxx) and (0.025*maxy < new_pos[1] < 0.975*maxy)):
            print('break')
@@ -198,7 +203,8 @@ def thermal_soar_glide_local(trajectory,directions,track_weight,move_dir,windspe
     # then glide in PAM dir approx 0.5 to 2 km
     
     #gliding distance/steps should be approx 0.5 to 2 km, and proportional to circling time, so
-    glidesteps=int((500./step)+(circlesteps-32)/(160-32)*((2000./step)-(500./step)))
+    circle_steps_frac = (circlesteps-circling_steps_range[0]) / (circling_steps_range[1]-circling_steps_range[0])
+    glidesteps = int((gliding_range[0]/step) + circle_steps_frac*((gliding_range[1]/step) - (gliding_range[0]/step)))
     
     #glide using the DRW function
     #new_pos = []

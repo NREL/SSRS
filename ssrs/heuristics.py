@@ -42,3 +42,17 @@ rulesets['local_moves_mixedlift'] = [
 
 rulesets['default'] = rulesets['dir_random_walk']
 
+#
+# legacy rulesets
+#
+#rulesets['lookahead'] = [
+#    (look_ahead, dict(dist=100.0)),
+#    (look_ahead, dict(dist=200.0)),
+#    (look_ahead, dict(dist=300.0)),
+#]
+#
+#rulesets['lookahead_with_uncertainty'] = [
+#    (look_ahead, dict(dist=100.0, sigma=15.)),
+#    (look_ahead, dict(dist=200.0, sigma=30.)),
+#    (look_ahead, dict(dist=300.0, sigma=45.)),
+#]

@@ -21,6 +21,7 @@ config_base = Config(
     look_ahead_dist = 3000.0, #distance outward (m) that bird will scan for strong updrafts
     updraft_threshold=0.85,  
     
+    orographic_model='original',  # original, improved
     thermals_realization_count=1,
     thermal_intensity_scale=0, #1 gives weak random field, 3 gives v strong random field    
     
@@ -36,14 +37,16 @@ config_base = Config(
     
     # plotting related
     fig_height=6.,
-    fig_dpi=300
+    fig_dpi=150
 )
 
 config_uniform_northwest = replace(
     config_base,
     sim_mode='uniform',
-    uniform_winddirn=315.,
-    uniform_windspeed=8.,
+    uniform_winddirn_href=315.,
+    uniform_windspeed_href=8.,
+    uniform_winddirn_h=315.,
+    uniform_windspeed_h=8.,
 )
 
 
@@ -87,7 +90,7 @@ if __name__ == '__main__':
         sim.plot_updrafts(plot='pcolormesh')
         sim.plot_thermal_updrafts()
         #sim.plot_wtk_layers()
-        sim.plot_directional_potentials()
-        sim.simulate_tracks_HSSRS(PAM_stdev=0.63)
+        #sim.plot_directional_potentials()
+        sim.simulate_tracks_HSSRS(PAM_stdev=15.)
         sim.plot_simulated_tracks_HSSRS()
         sim.plot_presence_map_HSSRS()

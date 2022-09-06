@@ -291,7 +291,7 @@ def generate_simulated_tracks(
 
 def generate_heuristic_eagle_track(
         start_loc: List[int],
-        PAM: float, # principal axis of migration
+        PAM_noDist: float, # principal axis of migration
         ruleset: str,
         wo: np.ndarray, # orographic updraft
         wt: np.ndarray, # thermal updraft
@@ -330,7 +330,7 @@ def generate_heuristic_eagle_track(
     track_weight = [weight_start]
     track_wo=[wo_start] 
     
-    ref_ang = np.radians(90.0 - PAM)
+    ref_ang = np.radians(90.0 - PAM_noDist)
     current_heading = np.array([np.cos(ref_ang), np.sin(ref_ang)])
     if ruleset=='local_moves':
         np.random.seed()
@@ -362,9 +362,11 @@ def generate_heuristic_eagle_track(
 
     #allow for some individual variation in PAM between eagles
 # TODO: this should not be needed
-#    np.random.seed()
-    #PAM = PAM + np.random.uniform(-10., 10.) 
+    np.random.seed()
+    disturbance = np.random.uniform(-10, 10)
+    PAM = PAM_noDist + disturbance
     
+    print(f'Adding disturbance of {disturbance} to PAM, going from {PAM_noDist} to {PAM}.')
 
     # move through domain
     for imove in range(max_moves):

@@ -506,6 +506,7 @@ class Simulator(Config):
         """ Computes updrafts for the particular case """
         fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
         orographicupdraft = np.load(f'{fname}.npy')
+        print(f'inside load_updrafts, loaded {fname}.npy, with shape {np.shape(orographicupdraft)}.')
         print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
 
         updrafts= orographicupdraft
@@ -764,8 +765,9 @@ class Simulator(Config):
             #dir_offsets = np.random.normal(scale=PAM_stdev,
             #                               size=len(starting_locs))
             dir_offsets = np.random.normal(scale=PAM_stdev)
+            #print(f'Calculated dir_offsets: {dir_offsets}')
 
-        self.PAM = self.track_direction + dir_offsets
+        self.PAM = self.track_direction #+ dir_offsets
 
         #starting_locs_PAM = list(zip(starting_rows, starting_cols, self.PAM))
         starting_locs_PAM = list(zip(starting_rows, starting_cols))
@@ -1164,7 +1166,10 @@ class Simulator(Config):
                  # Single updraft field
                  updrafts = [updrafts]
 
+            print(f'updrafts shape is {np.shape(updrafts)}')
+
             for real_id, updraft in enumerate(updrafts):
+                print(f'inside plot_updraft. updraft shape is {np.shape(updraft)}')
                 fig, axs = plt.subplots(figsize=self.fig_size)
                 if vmax is None:
                     maxval = min(max(1, int(round(np.mean(updraft)))), 5)

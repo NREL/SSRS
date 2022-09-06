@@ -42,8 +42,11 @@ config_base = Config(
 config_uniform_northwest = replace(
     config_base,
     sim_mode='uniform',
-    uniform_winddirn=315.,
-    uniform_windspeed=8.,
+    uniform_winddirn_href=315.,
+    uniform_windspeed_href=8.,
+    uniform_winddirn_h=315.,
+    uniform_windspeed_h=8.,
+    orographic_model='improved',
 )
 
 
@@ -84,7 +87,7 @@ if __name__ == '__main__':
         sim = Simulator(cfg)
 
         sim.plot_terrain_features()
-        sim.plot_updrafts(plot='pcolormesh')
+        sim.plot_updrafts(plot='pcolormesh', vmax=3)
         sim.plot_thermal_updrafts()
         #sim.plot_wtk_layers()
         sim.plot_directional_potentials()

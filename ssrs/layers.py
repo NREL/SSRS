@@ -57,7 +57,9 @@ def calcOrographicUpdraft_original(
 
     w0_abovemin = np.maximum(min_updraft_val, w0)
     w0_abovemin_coarse = highRes2lowRes(w0_abovemin, res_terrain, res)
-
+    
+    #np.savetxt('wo_orig.csv',w0_abovemin_coarse,fmt='%.2f', delimiter=',')
+    
     return w0_abovemin_coarse
 
 
@@ -101,8 +103,10 @@ def calcOrographicUpdraft_improved(
     # Combine all factors
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
+    wo_imp=F*w0prime
+    wo_imp[np.isnan(wo_imp)] = 0.0  #needed to remove nan from last column and row
 
-    return F*w0prime
+    return wo_imp
 
 
 def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):

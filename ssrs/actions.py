@@ -94,10 +94,12 @@ def simple_step_ahead_drw_orog(trajectory,directions,track_weight,PAM,windspeed,
     cur_pos = trajectory[-1]  
     elev_cur_pos=elev_interp(cur_pos[0],cur_pos[1], grid=False)
                 
-    wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2 = searcharc_w(trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_interp,step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
+    wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2 = searcharc_w(
+                trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_interp,step=step,dist=dist,halfsector=halfsector,Nsearch=Nsearch)
     
     # take step to one of five nearby locations based on wo above threshold
     # otherwise choose randomly
+
     if wo_max1 > threshold:
         delta = step * np.array([np.cos(best_dir_wo1),np.sin(best_dir_wo1)])
         new_pos = cur_pos + delta
@@ -345,6 +347,7 @@ def searcharc_w(trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_
     search_x = cur_pos[0] + dist * np.cos(search_arc)
     search_y = cur_pos[1] + dist * np.sin(search_arc)
     check_wo = wo_interp(search_x, search_y, grid=False)
+        
     check_wt = wt_interp(search_x, search_y, grid=False)
     check_wtot=check_wo+check_wt
     check_elev=elev_interp(search_x,search_y, grid=False)
@@ -389,7 +392,6 @@ def searcharc_w(trajectory,directions,track_weight,PAM,wo_interp,wt_interp,elev_
     ycoord_elevmax = cur_pos[1] + dist * np.sin(search_arc[idx_elevmax])
     wo_elevmax = wo_interp(xcoord_elevmax,ycoord_elevmax, grid=False)   #wo at elev max
     
-
     return wo_max1,wt_max1,wo_max2,idx_womax1,idx_wtmax1,idx_womax2,best_dir_wo1,best_dir_wt1,best_dir_wo2,elev_wo_max1,elev_wo_max2
 
 

@@ -1070,24 +1070,32 @@ class Simulator(Config):
                 ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
                 if self.movement_ruleset != 'step_ahead_look_ahead':
                     self.look_ahead_dist = 0.0
+                if self.orographic_model=='original':
+                    orogmod='DO04'
+                if self.orographic_model=='improved':
+                    orogmod='EVVE'
                 if self.movement_ruleset == 'local_moves':
                     axs.text(xtext, ytext, f'move model = {self.sim_movement}\n'\
                                            f'ruleset = {self.movement_ruleset}\n'\
+                                           f'wo model = {orogmod}\n'\
                                            f'look ahead dist (km) = {self.look_ahead_dist/1000:.1f}\n'\
                                            f'thermal intensity scale = {self.thermal_intensity_scale:.1f}\n'\
-                                           f'wind = {self.sim_mode} {self.uniform_winddirn:.0f} deg {self.uniform_windspeed:.1f} m/s\n'\
+                                           f'wind = {self.sim_mode} {self.uniform_winddirn_h:.0f} deg {self.uniform_windspeed_h:.1f} m/s\n'\
                                            f'random walk freq = {1/self.random_walk_freq:.4f}\n'\
                                            f'n tracks = {self.track_count:5d}',
+                                           #f'n thermal realizations = {self.thermals_realization_count:3d}\n'\
                             fontsize='xx-small', color='black')
                 else:
                     axs.text(xtext, ytext, f'move dir (deg) = {self.track_direction:6.1f} \n'\
                                            f'move model = {self.sim_movement} \n'\
                                            f'ruleset = {self.movement_ruleset} \n'\
+                                           f'wo model = {orogmod}\n'\
                                            f'look ahead dist (km)= {self.look_ahead_dist/1000:2.1f} \n'\
                                            f'thermal intensity scale = {self.thermal_intensity_scale:4.1f} \n'\
-                                           f'wind = {self.sim_mode} {self.uniform_winddirn:4.0f} deg {self.uniform_windspeed:4.1f} m/s \n'\
+                                           f'wind = {self.sim_mode} {self.uniform_winddirn_h:4.0f} deg {self.uniform_windspeed_h:4.1f} m/s \n'\
                                            f'random walk freq = {1/self.random_walk_freq:8.6f} \n'\
                                            f'n tracks = {self.track_count:5d}',
+                                           #f'n thermal realizations = {self.thermals_realization_count:3d}\n'\
                             fontsize='xx-small',color='black')
 
                 fname = self._get_tracks_fname(
@@ -1328,15 +1336,20 @@ class Simulator(Config):
         
         xtext=self.extent[0]+0.5*(self.extent[1]-self.extent[0])
         ytext=self.extent[2]+0.04*(self.extent[3]-self.extent[2])
+        if self.orographic_model=='original':
+            orogmod='DO04'
+        if self.orographic_model=='improved':
+            orogmod='EVVE'
         axs.text(xtext, ytext, f'move dir (deg) = {self.track_direction:6.1f}\n'\
                                f'move model = {self.sim_movement}\n'\
                                f'ruleset = {self.movement_ruleset}\n'\
+                               f'wo model = {orogmod}\n'\
                                f'look ahead dist (km) = {self.look_ahead_dist/1000:2.1f}\n'\
                                f'thermal intensity scale = {self.thermal_intensity_scale:4.1f}\n'\
-                               f'wind = {self.sim_mode} {self.uniform_winddirn:4.0f} deg {self.uniform_windspeed:4.1f} m/s\n'\
+                               f'wind = {self.sim_mode} {self.uniform_winddirn_h:4.0f} deg {self.uniform_windspeed_h:4.1f} m/s\n'\
                                f'random walk freq = {1./self.random_walk_freq:8.6f}\n'\
                                f'n tracks = {self.track_count*self.thermals_realization_count:5d}\n'\
-                               f'n thermal realizations = {self.thermals_realization_count:3d}\n'\
+                               #f'n thermal realizations = {self.thermals_realization_count:3d}\n'\
                                f'max_count/n_tracks = {100.*countmax/(self.track_count*self.thermals_realization_count):4.2f}',
         fontsize='xx-small',color='black') 
             
@@ -1803,7 +1816,7 @@ class Simulator(Config):
         cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
         cbar.ax.set_yticks([0,45,90,135,180,225,270,315,360])
         cbar.ax.set_yticklabels(['N','NE','E','SE','S','SW','W','NW','N'])
-        cbar.set_label('Aspect (Degrees)')
+        cbar.set_label('Aspect (Direction)')
         if plot_turbs:
             self.plot_turbine_locations(axs)
         self.save_fig(fig, os.path.join(self.fig_dir, 'aspect.png'), show)

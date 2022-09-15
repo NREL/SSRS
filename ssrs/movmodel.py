@@ -291,7 +291,7 @@ def generate_simulated_tracks(
 
 def generate_heuristic_eagle_track(
         start_loc: List[int],
-        PAM_noDist: float, # principal axis of migration
+        PAM_const: float, # principal axis of migration
         ruleset: str,
         wo: np.ndarray, # orographic updraft
         wt: np.ndarray, # thermal updraft
@@ -330,7 +330,7 @@ def generate_heuristic_eagle_track(
     track_weight = [weight_start]
     track_wo=[wo_start] 
     
-    ref_ang = np.radians(90.0 - PAM_noDist)
+    ref_ang = np.radians(90.0 - PAM_const)
     current_heading = np.array([np.cos(ref_ang), np.sin(ref_ang)])
     if ruleset=='local_moves':
         np.random.seed()
@@ -342,14 +342,16 @@ def generate_heuristic_eagle_track(
     yg = np.arange(num_rows) * res
     maxx = xg[-1]
     maxy = yg[-1]
-    
+    #print(f'maxxg=',xg[-1],'maxyg=',yg[-1])
+    #print(f'shape of wo is',np.shape(wo))
+
     # setup updraft and elevation interpolation and smoothed wo for lookahead
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
     wo_smoothed=ndimage.gaussian_filter(wo, sigma=3, mode='constant') #db added
     wo_sm_interp=RectBivariateSpline(xg, yg, wo_smoothed.T) #db added
     wt_interp = RectBivariateSpline(xg, yg, wt.T)
     elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
-
+    
     # estimate spontaneous random walk params if needed
     if (random_walk_step_range[0] is None) or (random_walk_step_range[1] is None):
         # set default based on assumed ~2 km dist of travel
@@ -363,10 +365,10 @@ def generate_heuristic_eagle_track(
     #allow for some individual variation in PAM between eagles
 # TODO: this should not be needed
     np.random.seed()
-    disturbance = np.random.uniform(-10, 10)
-    PAM = PAM_noDist + disturbance
+    randomPAM = np.random.uniform(-10, 10)
+    PAM = PAM_const + randomPAM
     
-    print(f'Adding disturbance of {disturbance} to PAM, going from {PAM_noDist} to {PAM}.')
+    print(f'Adding random component of {randomPAM:.3f} to PAM, going from {PAM_const:.3f} to {PAM:.3f}.')
 
     # move through domain
     for imove in range(max_moves):

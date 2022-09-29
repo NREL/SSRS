@@ -389,9 +389,11 @@ class Simulator(Config):
     def get_terrain_sx(self):
         """ Returns low-res data for terrain Sx layer inprojected crs """
         try:
-            sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
+            #sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
+            sxfname_str = f'sx_d{int(self.Ang)}_lowres'
             sx = self.load_terrain_quantity(self.case_ids[0], sxfname_str)
-            print(f'Found sx map for {int(self.uniform_winddirn_href)} deg. Loading it..')
+            #print(f'Found sx map for {int(self.uniform_winddirn_href)} deg. Loading it..')
+            print(f'Found sx map for {int(self.Ang)} deg. Loading it..')
         except OSError:
             sx = self.compute_sx_case() 
         return sx
@@ -436,7 +438,8 @@ class Simulator(Config):
         sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
 
         # wind direction with proper convention for Sx calculation
-        wdirn_sx = (self.uniform_winddirn_href + 180)%360
+        #wdirn_sx = (self.uniform_winddirn_href + 180)%360
+        wdirn_sx = (self.Ang+180)%360
         sx = calcSx(xgrid, ygrid, elev_lowres.T, wdirn_sx)
         sx = sx.T  # adjust convention
 
@@ -496,6 +499,7 @@ class Simulator(Config):
             wspeed = self.uniform_windspeed_href * np.ones(self.gridsize_terrain)
             wdirn = self.uniform_winddirn_href * np.ones(self.gridsize_terrain)
             h = self.href
+            self.Ang = np.mean(wdirn)
             sx = self.get_terrain_sx() # low-res
 
         updraft = calcOrographicUpdraft(elev, wspeed, wdirn, slope, aspect,
@@ -543,6 +547,7 @@ class Simulator(Config):
                 h = self.h
             else:
                 h = self.href
+                self.Ang = wdirn_hrrr
                 sx = self.get_terrain_sx()
 
             updraft = calcOrographicUpdraft(elev, wspeed, wdirn, slope, aspect,
@@ -576,6 +581,7 @@ class Simulator(Config):
                 h = self.h
             else:
                 h = self.href
+                self.Ang = np.mean(wdirn)
                 sx = self.get_terrain_sx()
 
             updraft = calcOrographicUpdraft(elev, wspeed, wdirn, slope, aspect,

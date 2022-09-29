@@ -732,6 +732,8 @@ class Simulator(Config):
         out_str = f'{case_id}_{dirn_str}_{threshold_str}_{mov_str}'
         if real_id is not None:
             out_str += f'_r{int(real_id)}'
+        if self.orographic_model == 'improved':
+            out_str += f'_h{self.h}'
         return out_str
 
     def _get_potential_fname(self, case_id: str, real_id: int, dirname: str):

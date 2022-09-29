@@ -22,8 +22,11 @@ config_base = Config(
     updraft_threshold=0.85,  
     
     orographic_model='original',  # original, improved
+    thermal_model = 'naive',      # naive, 'improvedAllen'
+    wind_data_source='wtk',
+
     thermals_realization_count=1,
-    thermal_intensity_scale=0, #1 gives weak random field, 3 gives v strong random field    
+    thermal_intensity_scale=0,    # 1 gives weak random field, 3 gives v strong random field    
     
     southwest_lonlat=(-78.1, 40.35),  # (lon, lat) for southwest pt, no integers!
     region_width_km=(30., 40.),  # terrain width (xwidth, ywidth) in km
@@ -40,13 +43,53 @@ config_base = Config(
     fig_dpi=150
 )
 
-config_uniform_northwest = replace(
+config_uniform_northwest_bo04Orog_naiveTher = replace(
     config_base,
+    run_name='centralPA1_fall_simple_bo04Orog_naiveTher',
     sim_mode='uniform',
+    orographic_model='original',  # original, improved
+    thermal_model = 'naive',      # naive, 'improvedAllen'
+    thermal_intensity_scale=0,    # 1 gives weak random field, 3 gives v strong random field    
+    wind_data_source = 'wtk',
     uniform_winddirn_href=315.,
     uniform_windspeed_href=8.,
     uniform_winddirn_h=315.,
     uniform_windspeed_h=8.,
+    uniform_winddirn=315.,
+    uniform_windspeed=8.,
+)
+
+config_uniform_northwest_evveOrog_naiveTher = replace(
+    config_base,
+    run_name='centralPA1_fall_simple_evveOrog_naiveTher',
+    sim_mode='uniform',
+    orographic_model='improved',  # original, improved
+    h = 80,
+    href = 80,
+    thermal_model = 'naive',      # naive, 'improvedAllen'
+    thermal_intensity_scale=0,    # 1 gives weak random field, 3 gives v strong random field    
+    wind_data_source = 'wtk',
+    uniform_winddirn_href=315.,
+    uniform_windspeed_href=8.,
+    uniform_winddirn_h=315.,
+    uniform_windspeed_h=8.,
+    uniform_winddirn=315.,
+    uniform_windspeed=8.,
+)
+
+config_snapshot_northwest_evveOrog_evveTher = replace(
+    config_base,
+    run_name='centralPA1_fall_simple_evveOrog_evveTher',
+    sim_mode='snapshot',
+    orographic_model='improved',  # original, improved
+    h = 200,
+    href = 80,
+    thermal_model = 'improvedAllen',      # naive, 'improvedAllen'
+    wind_data_source = 'hrrr',
+    #region_width_km=(50., 60.),  # terrain width (xwidth, ywidth) in km
+    #resolution=50., # meters
+    thermals_realization_count=1,
+    snapshot_datetime=(2021, 6, 13, 22),
 )
 
 
@@ -69,7 +112,9 @@ config_seasonal_north = replace(
 if __name__ == '__main__':
  
     configs_to_run = (
-        config_uniform_northwest,
+        config_uniform_northwest_bo04Orog_naiveTher,
+        config_uniform_northwest_evveOrog_naiveTher,
+        config_snapshot_northwest_evveOrog_evveTher,
         #config_snapshot_north,
         # config_seasonal_north
     )
@@ -89,8 +134,10 @@ if __name__ == '__main__':
         sim.plot_terrain_features()
         sim.plot_updrafts(plot='pcolormesh', vmax=2)
         sim.plot_thermal_updrafts()
+        sim.plot_atmospheric_conditions_HRRR()
         #sim.plot_wtk_layers()
         #sim.plot_directional_potentials()
         sim.simulate_tracks_HSSRS(PAM_stdev=15.)
         sim.plot_simulated_tracks_HSSRS()
         sim.plot_presence_map_HSSRS()
+

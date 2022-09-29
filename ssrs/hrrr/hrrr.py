@@ -116,6 +116,9 @@ class HRRR:
         heights = np.array(list(height_to_mb.keys()))
 
         delta_h = heights - h
+
+        print(f'inside nearest_pressure. h is {h}, heights is {heights}, delta_h is {delta_h}')
+
         closest_height_above = heights[delta_h >= 0][-1]
         closest_height_below = heights[delta_h < 0][0]
         closest_pressure_above = height_to_mb[closest_height_above]
@@ -219,6 +222,7 @@ class HRRR:
             Datasets if the requested variables have different
             coordinates.
         """
+        #print(f'regex is {regex}')
         if regex not in self.datasets:
             # Retrieve GRIB2 data with Herbie
             # Note: There is an issue with how Herbie handles regular
@@ -231,11 +235,29 @@ class HRRR:
                     remove_grib=remove_grib
                 )
 
-            # Convert longitude from degrees east with range (0,360) to
-            # degrees east/west for +/- values with range (-180,180)
-            lon = ds.coords['longitude'].values
-            lon[np.where(lon > 180)] -= 360.
-            ds.coords['longitude'] = (ds.coords['longitude'].dims, lon)
+            #print(f'ds in hrrr is {ds}')
+            #print(f'len of ds is {len(ds)}')
+            #print(f'type of ds is {type(ds)}')
+            # Sometimes we have a list of xarray Dataset, depending on the
+            # regex requested. To make sure the coords call below is available,
+            # we get the first Dataset from the list
+            if isinstance(ds, list):
+                #print(f'ds is a list')
+                for i, ds_curr in enumerate(ds):
+                    #print(f'\n\nthis is a single ds, number {i}: {ds_curr}\n\n')
+                    # Convert longitude from degrees east with range (0,360) to
+                    # degrees east/west for +/- values with range (-180,180)
+                    lon = ds[i].coords['longitude'].values
+                    lon[np.where(lon > 180)] -= 360.
+                    ds[i].coords['longitude'] = (ds[i].coords['longitude'].dims, lon)
+
+
+            else:
+                # Convert longitude from degrees east with range (0,360) to
+                # degrees east/west for +/- values with range (-180,180)
+                lon = ds.coords['longitude'].values
+                lon[np.where(lon > 180)] -= 360.
+                ds.coords['longitude'] = (ds.coords['longitude'].dims, lon)
 
             self.datasets[regex] = ds
 
@@ -356,7 +378,8 @@ class HRRR:
             u_data_var = 'u'
             v_data_var = 'v'
         else:
-            nearest_pressures = self.nearest_pressures(ground_level_m)
+            # !!!!!!!!! I changed the height used in the next line. Is this a bug?
+            nearest_pressures = self.nearest_pressures(height_above_ground_m)
             closest_pressure_above = nearest_pressures['closest_pressure_above']
             grib_field = f'{varname}:{closest_pressure_above} mb'
             u_data_var = 'u'
@@ -476,12 +499,15 @@ class HRRR:
             vs = uv_grd[v_data_var].where(mask, drop=True).values.flatten()
             us = us[~np.isnan(us)]
             vs = vs[~np.isnan(vs)]
+            #print(f'inside hrrr. us is {us}')
+            #print(f'inside hrrr. shape of us is {np.shape(us)}')
 
             # Use linear B-spline interpolation to find U and V values
             pts = np.stack([xs,ys], axis=-1)
             xi = (center_x, center_y)
             u_interp = float(np.squeeze(griddata(pts, us, xi, method='linear')))
             v_interp = float(np.squeeze(griddata(pts, vs, xi, method='linear')))
+            print(f'inside hrrr.  u_interp is {u_interp}')
 
         # Calculate wind speed and direction, given easterly and
         # northerly velocity components, u and v, respectively
@@ -652,7 +678,14 @@ class HRRR:
             The mask to be used with the coordinates of the xarray
             dataset.
         """
-        southwest_lon, southwest_lat = southwest_lonlat
+        #print(f'inside mask_at_coordinate, southwest_lonlat is {southwest_lonlat}')
+
+        try:
+            southwest_lon, southwest_lat = southwest_lonlat
+        except ValueError:
+            print(f'Sometimes southwest_lonlat has 4 values. This except catches it')
+            southwest_lon, southwest_lat, _, _ = southwest_lonlat
+
         extent_deg_lat = HRRR.km_to_deg(extent_km_lat)
         extent_deg_lon = HRRR.km_to_deg(extent_km_lon)
 
@@ -668,7 +701,74 @@ class HRRR:
             min_lat, max_lat
         )
 
+
     def get_convective_velocity(self,
+        southwest_lonlat=(-106.21, 42.78),
+        extent=None,
+        res=50
+    ):
+        """
+        Returns the convective velocity.
+
+        Parameters
+        ----------
+        southwest_lonlat: Tuple[float, float]
+            The southwest corner of the latitude and longitude to
+            retrieve.
+        extent: Tuple[float, float, float, float]
+            Domain extents xmin, ymin, xmax, ymax. If none is provided,
+            the function returns an xarray on lat/lon on an irregular
+            grid. If extent and res are provided, a grid is created and
+            values interpolatd on that grid is returned, alongside the
+            meshgrid values.
+        res: float
+            Resolution of the grid the HRRR data will be interpolated
+            onto.
+
+        Returns
+        -------
+        If extent is given:
+            wstar: xarray.Dataset
+                A dataset containing the calculated wstar value with
+                coordinates lat/lon 
+
+        Else:
+            wstar: np.array
+                An array of wstar interpolated onto a regular grid xx,yy
+            xx, yy: np.array
+                Grid in meshgrid format
+        """
+
+        # Get the variables for calculating convective velocity
+        zi,        xx, yy = self.get_single_var_on_grid(':(HPBL):',       southwest_lonlat, extent, res)   # boundary layer height
+        gflux_Wm2, xx, yy = self.get_single_var_on_grid(':(GFLUX):',      southwest_lonlat, extent, res)   # ground heat flux
+        sensible,  xx, yy = self.get_single_var_on_grid(':SHTFL:surface', southwest_lonlat, extent, res)   # sensible heat flux
+        latent,    xx, yy = self.get_single_var_on_grid(':LHTFL:surface', southwest_lonlat, extent, res)   # latent heat flux
+        pot,       xx, yy = self.get_single_var_on_grid(':(POT):',        southwest_lonlat, extent, res)   # potential temp at 2m
+        
+        gflux_Wm2 = gflux_Wm2[list(gflux_Wm2.keys())[0]]
+        pot       = pot      [list(pot      .keys())[0]]
+        zi        = zi       [list(zi       .keys())[0]]
+        sensible  = sensible [list(sensible .keys())[0]]
+        latent    = latent   [list(latent   .keys())[0]]
+        
+        g = 9.81    # m/s^2
+        rho = 1.225 # kg/m^3
+        cp = 1005   # J/(kg*K)
+
+        # Energy budget
+        qs_Kms = (sensible + latent - gflux_Wm2)/(rho*cp)   # minus for sign convention
+        qs_Kms = qs_Kms.clip(min=0)
+
+        # Calculate wstar
+        wstar = ( g * zi * qs_Kms / pot)**(1/3)
+
+        return wstar, xx, yy    
+
+
+
+
+    def get_convective_velocity_old(self,
         southwest_lonlat=(-106.21, 42.78),
         extent=None,
         res=50
@@ -740,7 +840,7 @@ class HRRR:
         wstar = data['wstar'].where(mask, drop=True)
 
         if extent is not None:
-            return self.convert_to_regular_grid(wstar,
+            return self.interp_onto_regular_grid(wstar,
                                                 southwest_lonlat,
                                                 extent,
                                                 res)
@@ -796,6 +896,22 @@ class HRRR:
             res
         )
 
+        # Let's make sure the Su and Sd xarrays only really one data variable
+        #print(f'variables in Su are {list(Su.keys())}')
+        if len(list(Su.keys())) != 1:
+            raise ValueError(f"Computation of Su inside get_albedo returned more",\
+                             f"than one data variable. This shouldn't occur")
+        if len(list(Sd.keys())) != 1:
+            raise ValueError(f"Computation of Sd inside get_albedo returned more",\
+                             f"than one data variable. This shouldn't occur")
+
+        # There's only one variable in the Dataset, let's get it as a DataArray to perform
+        # the mean computation
+        Su = Su[list(Su.keys())[0]]
+        Sd = Sd[list(Sd.keys())[0]]
+
+        #print(f'Su is {Su}')
+        #print(f'mean of Su is {np.mean(Su)}')
         if np.mean(Su) == 0:
             alpha_surface_albedo = np.ones_like(Su) # night
             # TODO: this is a placeholder. We should just compute the
@@ -845,9 +961,24 @@ class HRRR:
         xform_long_sq = xform_long_sq - xref
         xform_lat_sq = xform_lat_sq - yref
 
-        # create grid
+        # create grid. bounds is now [xmin, xmax, ymin, ymax]
+        #print(f'bounds is (should be xmin,xmax, ymin,ymax) {bounds}')
         x = np.arange(bounds[0], bounds[2], res)
         y = np.arange(bounds[1], bounds[3], res)
+        #print(f'inside interp_onto_regular_grid. x is {x}')
+        #print(f'inside interp_onto_regular_grid. y is {y}')
+        #print(f'inside interp_onto_regular_grid. res is {res}')
+
+        # Sometimes when the division of the domain extent and resolution is not 
+        # a round number, we end up with arrays that are 1 position too large.
+        # To be consistent with other computations (e.g. orographic updrafts),
+        # here we determine how many points there should have been, and exclude
+        # the last, if there.
+        nPointsX = round(bounds[2]/res)
+        nPointsY = round(bounds[3]/res)
+        x = x[0:nPointsX]
+        y = y[0:nPointsY]
+
         xx, yy = np.meshgrid(x, y, indexing='ij')
 
         # interpolate
@@ -960,6 +1091,8 @@ class HRRR:
             data_interp[varname] = (('x','y'), fi)
 
         # Set dimension coordinate
+        #print(f'shape of xx is {np.shape(xx)}')
+        #print(f'shape of yy is {np.shape(yy)}')
         data_interp = data_interp.assign_coords(x=xx[:,0], y=yy[0,:])
 
         return data_interp, xx, yy

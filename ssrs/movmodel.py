@@ -309,6 +309,8 @@ def generate_heuristic_eagle_track(
         random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
 ):
     
+    #print(f'inside generate_heuristic_eagle_track. Shape of orographic w0 is {np.shape(wo)}; shape of thermal wt is {np.shape(wt)}')
+
     assert random_walk_freq >= 0
     assert (len(random_walk_step_range) == 2)
 
@@ -368,7 +370,7 @@ def generate_heuristic_eagle_track(
     randomPAM = np.random.uniform(-10, 10)
     PAM = PAM_const + randomPAM
     
-    print(f'Adding random component of {randomPAM:.3f} to PAM, going from {PAM_const:.3f} to {PAM:.3f}.')
+    #print(f'Adding random component of {randomPAM:.3f} to PAM, going from {PAM_const:.3f} to {PAM:.3f}.')
 
     # move through domain
     for imove in range(max_moves):

@@ -103,8 +103,10 @@ def calcOrographicUpdraft_improved(
     # Combine all factors
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
-    wo_imp=F*w0prime
-    wo_imp[np.isnan(wo_imp)] = 0.0  #needed to remove nan from last column and row
+
+    # Compute improved value and remove NaNs from last column and row (product of Sx calculation)
+    wo_imp = F*w0prime
+    wo_imp[np.isnan(wo_imp)] = 0.0
 
     return wo_imp
 
@@ -121,9 +123,16 @@ def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
     """
 
     ratio = res_h/res_l
+    #print(f'ratio to get a high res array to low res is {ratio}')
     if ratio == 1:
         # same resolution, nothing to do here
         return field
+    #elif ratio == 1/3:
+        #print(f'inside the if for ratio==1/3')
+        # This ratio results in the coarsened array having one position less
+        # It is due to fact that 4000/3 is, rounded, 1333. But in case such
+        # as this one, we want 1334. So we manually round the ratio.
+        #ratio = 0.3334
 
     sigma = sigma_in_m/res_h
     if sigma<=1:
@@ -421,7 +430,11 @@ def compute_random_thermals(
     aspect: np.ndarray,  # terrain aspect, used for weighting
     thermal_intensity_scale: float  # describe strength of field
 ) -> np.ndarray:
-    """ Returns field of smoothed random thermals from lognornal dist"""
+    """
+    Returns field of smoothed random thermals from lognornal dist
+
+    This method is only used if thermal_model is 'naive'
+    """
     ysize, xsize = aspect.shape
     wt_init = np.zeros([ysize, xsize])
     border_x = int(0.05 * xsize)
@@ -574,20 +587,24 @@ def compute_thermals_3d(
     southwest_lonlat: Tuple[float, float], 
     extent: Tuple[float, float, float, float],  # xmin, ymin, xmax, ymax
     res: int,   # uniform resolution
-    time: Tuple[int, int, int, int, int],  # y, m, d, hour, min
+    time,  # either tuple with [y, m, d, hour], or datetimeobject
     height: float = 150,
     wfipInformed: bool = True
     ) -> np.ndarray:
     '''
     Returns field of thermals based on Allen (2006)
     '''
-    #from ssrs.raster import *
-    #from ssrs import Terrain, HRRR
     
     # TODO: Loop over a list of `time`s
     
+    # Get string of time to pass to HRRR. Time can be passed either a tuple of datetime object
+    if isinstance(time, datetime):
+        timestr = f' {time.year}-{time.month:02d}-{time.day:02d} {time.hour:02d}:{time.minute:02d}'
+    else:
+        timestr = f'{time[0]}-{time[1]:02d}-{time[2]:02d} {time[3]:02d}:00'
+
     # Get hrrr data
-    hrrr = HRRR(valid_date=f'{time[0]}-{time[1]:02d}-{time[2]:02d} {time[3]:02d}:{time[4]:02d}')
+    hrrr = HRRR(valid_date = timestr)
 
     # Compute convective velocity
     wstar,  xx, yy = hrrr.get_convective_velocity(southwest_lonlat, extent, res=res)
@@ -598,7 +615,14 @@ def compute_thermals_3d(
                                                  southwest_lonlat,
                                                  extent,
                                                  res)
+    wstar  = wstar.values
+    albedo = albedo.values
+    zi = zi[list(zi.keys())[0]].values
 
+    #print(f'zi is {zi}')
+    if np.mean(zi) == np.nan:
+        raise ValueError(f'The value obtained for the boundary layer height contains NaNs.',\
+                         f'HRRR data is imcomplete at the site and time of interest.')
 
     # Define updraft shape factors
     r1r2shape = np.array([0.14, 0.25, 0.36, 0.47, 0.58, 0.69, 0.80])
@@ -615,7 +639,7 @@ def compute_thermals_3d(
     albedofactor = (0.1/(albedo)**0.5)
     spatialWeight = ( wstar**1 + albedofactor )**2
     # Mask the edges so no thermals there
-    fringe= 3000 # in [m]
+    fringe= 2000 # in [m]
     ifringe = int(fringe/res)
     spatialWeight[0:ifringe,:] = spatialWeight[-ifringe:,:] = 0
     spatialWeight[:,0:ifringe] = spatialWeight[:,-ifringe:] = 0
@@ -654,7 +678,7 @@ def compute_thermals_3d(
     wpeak=(3*wTbar*((r2**3)-(r2**2)*r1)) / ((r2**3)-(r1**3))
 
     # Create a realization of thermal's center location
-    print(f'Creating {nThermals} thermals. The average boundary layer height is {ziavg:1f}')
+    print(f'Creating {nThermals} thermals. The average boundary layer height is {ziavg:.1f} m')
     wt_init, sumOfRealizations = getRandomPointsWeighted(weight=spatialWeight, n=nThermals, nRealization=1)
 
     # Get distances to closest thermal center
@@ -709,6 +733,7 @@ def compute_thermals_3d(
     # Stretch updraft field to blend with sink at edge
     # w[dist>r1] = (w*(1-we/wpeak)+we)[dist>r1]
     
+    print(f'compute_thermals_3d returning a thermal field of shape {np.shape(w)}')
     return w
 
 

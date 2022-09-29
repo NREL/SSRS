@@ -18,6 +18,8 @@ class Config:
     sim_mode: str = 'uniform'  # snapshot, seasonal, uniform
     sim_movement: str = 'fluid-analogy' # fluid-analogy, heuristics
 
+    movement_model: str = 'fluid-flow'     # fluid-flow, drw, heuristics
+
     print_verbose: bool = False  # if want to print verbose
 
     # H-SSRS parameters (used if `sim_movement` == 'heuristics')
@@ -26,7 +28,6 @@ class Config:
     random_walk_step_size: float = 50.0 # when a random walk does occur, the distance traveled in each random movement
     random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
     look_ahead_dist: float = 2000.0
-    thermal_intensity_scale: float = 2.0 # #1 gives weak random thermal field, 3 gives v strong random thermal field
     
     # parameters defining the domain
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
@@ -48,17 +49,23 @@ class Config:
     seasonal_timeofday: str = 'daytime'  # morning, afternoon, evening, daytime
     seasonal_count: int = 8  # number of seasonal updraft computations
 
-    # downloading data from WTK
+    # wind data source option
+    wind_data_source: str = 'wtk'   # wtk, hrrr
+
+    # downloading data from WTK (only used if wind_data_source=='wtk')
     wtk_source: str = 'AWS'  # 'EAGLE', 'AWS', 'EAGLE_LED'
     wtk_orographic_height: int = 100  # WTK wind conditions at this height
     wtk_thermal_height: int = 100  # WTK pressure, temperature, at this height
     wtk_interp_type: str = 'linear'  # 'nearest' 'linear' 'cubic'
 
-    # parameters defining the updraft calculation
-    thermals_realization_count: bool = 0  # number of realizations of thermals
-    updraft_threshold: float = 0.75  # only use updrafts higher than this
-    movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
-    orographic_model: str = 'original'  # original, improved
+    # Parameters defining the updraft calculation
+    updraft_threshold: float = 0.75        # only use updrafts higher than this (hard cut-off)
+    # Parameters for orographic updraft model
+    orographic_model: str = 'original'     # original, improved
+    # Parameters for thermal updraft model
+    thermal_model: str = 'naive'           # 'naive', 'improvedAllen' (uses HRRR)
+    thermals_realization_count: bool = 0   # number of realizations of thermals
+    thermal_intensity_scale: float = 2.0   # 1 gives weak random thermal field, 3 gives v strong random thermal field (only used with 'naive')
 
     # Improved orographic model parameters (used if `orographic_model` == 'improved')
     h: float = 80.                                    # height of interest, height of flight

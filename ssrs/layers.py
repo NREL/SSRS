@@ -58,8 +58,6 @@ def calcOrographicUpdraft_original(
     w0_abovemin = np.maximum(min_updraft_val, w0)
     w0_abovemin_coarse = highRes2lowRes(w0_abovemin, res_terrain, res)
     
-    #np.savetxt('wo_orig.csv',w0_abovemin_coarse,fmt='%.2f', delimiter=',')
-    
     return w0_abovemin_coarse
 
 
@@ -123,16 +121,9 @@ def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
     """
 
     ratio = res_h/res_l
-    #print(f'ratio to get a high res array to low res is {ratio}')
     if ratio == 1:
         # same resolution, nothing to do here
         return field
-    #elif ratio == 1/3:
-        #print(f'inside the if for ratio==1/3')
-        # This ratio results in the coarsened array having one position less
-        # It is due to fact that 4000/3 is, rounded, 1333. But in case such
-        # as this one, we want 1334. So we manually round the ratio.
-        #ratio = 0.3334
 
     sigma = sigma_in_m/res_h
     if sigma<=1:
@@ -619,7 +610,6 @@ def compute_thermals_3d(
     albedo = albedo.values
     zi = zi[list(zi.keys())[0]].values
 
-    #print(f'zi is {zi}')
     if np.mean(zi) == np.nan:
         raise ValueError(f'The value obtained for the boundary layer height contains NaNs.',\
                          f'HRRR data is imcomplete at the site and time of interest.')

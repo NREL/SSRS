@@ -222,7 +222,6 @@ class HRRR:
             Datasets if the requested variables have different
             coordinates.
         """
-        #print(f'regex is {regex}')
         if regex not in self.datasets:
             # Retrieve GRIB2 data with Herbie
             # Note: There is an issue with how Herbie handles regular
@@ -235,16 +234,11 @@ class HRRR:
                     remove_grib=remove_grib
                 )
 
-            #print(f'ds in hrrr is {ds}')
-            #print(f'len of ds is {len(ds)}')
-            #print(f'type of ds is {type(ds)}')
             # Sometimes we have a list of xarray Dataset, depending on the
             # regex requested. To make sure the coords call below is available,
             # we get the first Dataset from the list
             if isinstance(ds, list):
-                #print(f'ds is a list')
                 for i, ds_curr in enumerate(ds):
-                    #print(f'\n\nthis is a single ds, number {i}: {ds_curr}\n\n')
                     # Convert longitude from degrees east with range (0,360) to
                     # degrees east/west for +/- values with range (-180,180)
                     lon = ds[i].coords['longitude'].values
@@ -499,7 +493,6 @@ class HRRR:
             vs = uv_grd[v_data_var].where(mask, drop=True).values.flatten()
             us = us[~np.isnan(us)]
             vs = vs[~np.isnan(vs)]
-            #print(f'inside hrrr. us is {us}')
             #print(f'inside hrrr. shape of us is {np.shape(us)}')
 
             # Use linear B-spline interpolation to find U and V values
@@ -678,7 +671,6 @@ class HRRR:
             The mask to be used with the coordinates of the xarray
             dataset.
         """
-        #print(f'inside mask_at_coordinate, southwest_lonlat is {southwest_lonlat}')
 
         try:
             southwest_lon, southwest_lat = southwest_lonlat
@@ -897,7 +889,6 @@ class HRRR:
         )
 
         # Let's make sure the Su and Sd xarrays only really one data variable
-        #print(f'variables in Su are {list(Su.keys())}')
         if len(list(Su.keys())) != 1:
             raise ValueError(f"Computation of Su inside get_albedo returned more",\
                              f"than one data variable. This shouldn't occur")
@@ -910,8 +901,6 @@ class HRRR:
         Su = Su[list(Su.keys())[0]]
         Sd = Sd[list(Sd.keys())[0]]
 
-        #print(f'Su is {Su}')
-        #print(f'mean of Su is {np.mean(Su)}')
         if np.mean(Su) == 0:
             alpha_surface_albedo = np.ones_like(Su) # night
             # TODO: this is a placeholder. We should just compute the
@@ -962,12 +951,8 @@ class HRRR:
         xform_lat_sq = xform_lat_sq - yref
 
         # create grid. bounds is now [xmin, xmax, ymin, ymax]
-        #print(f'bounds is (should be xmin,xmax, ymin,ymax) {bounds}')
         x = np.arange(bounds[0], bounds[2], res)
         y = np.arange(bounds[1], bounds[3], res)
-        #print(f'inside interp_onto_regular_grid. x is {x}')
-        #print(f'inside interp_onto_regular_grid. y is {y}')
-        #print(f'inside interp_onto_regular_grid. res is {res}')
 
         # Sometimes when the division of the domain extent and resolution is not 
         # a round number, we end up with arrays that are 1 position too large.
@@ -1091,8 +1076,6 @@ class HRRR:
             data_interp[varname] = (('x','y'), fi)
 
         # Set dimension coordinate
-        #print(f'shape of xx is {np.shape(xx)}')
-        #print(f'shape of yy is {np.shape(yy)}')
         data_interp = data_interp.assign_coords(x=xx[:,0], y=yy[0,:])
 
         return data_interp, xx, yy

@@ -309,8 +309,6 @@ def generate_heuristic_eagle_track(
         random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
 ):
     
-    #print(f'inside generate_heuristic_eagle_track. Shape of orographic w0 is {np.shape(wo)}; shape of thermal wt is {np.shape(wt)}')
-
     assert random_walk_freq >= 0
     assert (len(random_walk_step_range) == 2)
 
@@ -344,8 +342,6 @@ def generate_heuristic_eagle_track(
     yg = np.arange(num_rows) * res
     maxx = xg[-1]
     maxy = yg[-1]
-    #print(f'maxxg=',xg[-1],'maxyg=',yg[-1])
-    #print(f'shape of wo is',np.shape(wo))
 
     # setup updraft and elevation interpolation and smoothed wo for lookahead
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
@@ -442,7 +438,6 @@ def generate_heuristic_eagle_track(
         last_pos = trajectory[-1]
         for cur_pos in new_pos:
             if not ((0 < cur_pos[0] < xg[-1]) and (0 < cur_pos[1] < yg[-1])): 
-                #print('ending after',imove,'moves')
                 break
             delta = tuple(map(lambda i,j:i-j, cur_pos, last_pos))
             #delta = cur_pos - last_pos (this gives an error, unsupported operand for tuple)

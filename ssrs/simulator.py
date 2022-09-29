@@ -515,7 +515,6 @@ class Simulator(Config):
         aspect = self.get_terrain_aspect()
         elev = self.get_terrain_elevation()
 
-        #print(f'the entire hrrr object is {self.hrrr}')
         start_time = time.time()
         for t, (dtime, case_id) in enumerate( zip(self.dtimes, self.case_ids) ):
             #wtk_df = self.wtk.get_dataframe_for_this_time(dtime)
@@ -609,11 +608,6 @@ class Simulator(Config):
                     # We have a list of datetime (possibly of size 1), let's iterate through them
                     for time in self.dtimes:
                         print(f'Calculating thermals for {time}')
-                        #print(f'passing to compute_thermals_3d, southwest_lonlat is {self.southwest_lonlat}')
-                        #print(f'passing to compute_thermals_3d, extent is {self.extent}')
-                        # maybe the second argumetn should be self.lonlat_bounds[0:2] to get the xmin, ymin (southwest)
-                        # Somehow, SOMEHOW, the extent now is xmin,xmax,ymin,ymax, when it used to be xmin,ymin,xmax,ymax.
-                        # The thermal3d function used to get it in the old format. Changing it
                         extent_for_thermals_3d = [0, 0, self.region_width_km[0]*1000, self.region_width_km[1]*1000]  # xmin, ymin, xmax, ymax
                         thermals = compute_thermals_3d(aspect, self.southwest_lonlat, extent_for_thermals_3d, self.resolution,
                                                       time, self.h, wfipInformed=False)
@@ -630,7 +624,6 @@ class Simulator(Config):
         """ Computes updrafts for the particular case """
         fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
         orographicupdraft = np.load(f'{fname}.npy')
-        #print(f'inside load_updrafts, loaded {fname}.npy, with shape {np.shape(orographicupdraft)}.')
         print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
 
         updrafts= orographicupdraft
@@ -1302,8 +1295,6 @@ class Simulator(Config):
             if np.shape(np.shape(updrafts))[0] == 2:
                  # Single updraft field
                  updrafts = [updrafts]
-
-            #print(f'updrafts shape is {np.shape(updrafts)}')
 
             for real_id, updraft in enumerate(updrafts):
                 #print(f'inside plot_updraft. updraft shape is {np.shape(updraft)}')
@@ -2033,8 +2024,6 @@ class Simulator(Config):
                 # Extent is given from 0 to the dimensions of the terrain
                 extent   = [0, 0, self.region_width_km[0]*1000, self.region_width_km[1]*1000]  # xmin, ymin, xmax, ymax
                 res      = self.resolution
-
-                #print(f'Extent is {extent}')
 
                 # Compute wstar
                 wstar, xx, yy = hrrr.get_convective_velocity(SWlonlat, extent, res)

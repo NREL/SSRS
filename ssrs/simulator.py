@@ -229,17 +229,25 @@ class Simulator(Config):
         if self.orographic_model not in ['original','improved']:
            raise ValueError(f"Invalid option for orographic model. Options are 'original', 'improved'")
 
+        if self.wind_data_source not in ['hrrr','wtk']:
+            raise ValueError(f"Invalid option for wind data source. Options are 'hrrr', 'wtk'")
+
         if self.thermal_model == 'improvedAllen':
             if self.sim_mode == 'uniform':
                 raise ValueError(f"uniform mode is not compatible with improvedAllen thermal model. Pick ",\
                                  f"either snapshot of seasonal mode and provide the desired timestamp")
+            if self.wind_data_source == 'wtk':
+                raise ValueError(f"Improved Allen model for thermal updrafts require wind_data_source='hrrr'")
 
-        # naive thermal only with uniform mode
+        if self.thermal_model == 'naive':
+            if self.sim_mode != 'uniform':
+                print(f"WARNING: Naive thermal model is only recommended for 'uniform` mode.")
+                print(f"         When date is provided, it is recommended that thermal_model='improvedAllen'")
 
         if self.thermals_realization_count > 0:
            if self.thermal_model is None or self.thermal_model=='none':
                raise ValueError(f"WARNING: {self.thermal_realization_count} thermal realization requested, but ",\
-                                 f"no model specified. Options for `thermal_model` are 'naive', and 'improvedAllen'")
+                                f"no model specified. Options for `thermal_model` are 'naive', and 'improvedAllen'")
 
         if self.uniform_windspeed_h != self.uniform_windspeed:
             print(f"WARNING: Make sure `uniform_windspeed_h` is the same as `uniform_windspeed`")
@@ -432,14 +440,17 @@ class Simulator(Config):
         resolution because of speed.
         """
         # Get sx based on low-resolution terrain data
-        print(f'Getting Sx based on {self.resolution} m resolution maps')
         xgrid, ygrid = self.get_terrain_grid(self.resolution, self.gridsize)
         elev_lowres = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
-        sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
 
         # wind direction with proper convention for Sx calculation
-        #wdirn_sx = (self.uniform_winddirn_href + 180)%360
         wdirn_sx = (self.Ang+180)%360
+        # Approximate to closest 5 deg
+        wdirn_sx = 5*round(self.Ang/5)
+
+        print(f'Getting Sx for {wdirn_sx:.2f} degrees, based on {self.resolution} m resolution maps')
+        sxfname_str = f'sx_d{int(wdirn_sx)}_lowres'
+
         sx = calcSx(xgrid, ygrid, elev_lowres.T, wdirn_sx)
         sx = sx.T  # adjust convention
 

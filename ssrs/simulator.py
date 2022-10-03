@@ -234,7 +234,7 @@ class Simulator(Config):
 
         if self.thermal_model == 'improvedAllen':
             if self.sim_mode == 'uniform':
-                raise ValueError(f"uniform mode is not compatible with improvedAllen thermal model. Pick ",\
+                raise ValueError(f"uniform mode is not compatible with improvedAllen thermal model. Pick",\
                                  f"either snapshot of seasonal mode and provide the desired timestamp")
             if self.wind_data_source == 'wtk':
                 raise ValueError(f"Improved Allen model for thermal updrafts require wind_data_source='hrrr'")
@@ -244,10 +244,17 @@ class Simulator(Config):
                 print(f"WARNING: Naive thermal model is only recommended for 'uniform` mode.")
                 print(f"         When date is provided, it is recommended that thermal_model='improvedAllen'")
 
-        if self.thermals_realization_count > 0:
-           if self.thermal_model is None or self.thermal_model=='none':
-               raise ValueError(f"WARNING: {self.thermal_realization_count} thermal realization requested, but ",\
-                                f"no model specified. Options for `thermal_model` are 'naive', and 'improvedAllen'")
+        if self.thermal_model is None or self.thermal_model=='none':
+            try:
+                nreal = self.thermals_realization_count
+            except AttributeError:
+                # No thermal model selected, setting number of realizations to zero
+                self.thermals_realization_count = 0
+ 
+            if self.thermals_realization_count != 0:
+                print(f"WARNING: {self.thermals_realization_count} thermal realization requested, but",\
+                      f"no model specified. No realizations being computed. Valid options for `thermal_model`",\
+                      f"are 'naive', and 'improvedAllen'")
 
         if self.uniform_windspeed_h != self.uniform_windspeed:
             print(f"WARNING: Make sure `uniform_windspeed_h` is the same as `uniform_windspeed`")

@@ -44,7 +44,7 @@ class WtkSource:
             self.hsds = None
             # these should be automatically handled by the herbie interface
             self.valid_layers = None
-            self.varnames = None
+            self.varnames = ['windspeed_80m','winddirection_80m']
         else:
             print(f'Considering WindToolKit source: {sname}')
             self.file_names = [fname.replace('$YEAR', str(yr))

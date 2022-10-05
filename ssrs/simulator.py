@@ -1227,12 +1227,18 @@ class Simulator(Config):
                     vardata = wtk_df.loc[:, wtk_lyr].values.flatten()
                     interp_data = self._interpolate_wtk_vardata(vardata)
                     fig, axs = plt.subplots(figsize=self.fig_size)
-                    # cmap = 'hsv' if 'direction' in wtk_lyr else 'viridis'
-                    curm = axs.imshow(interp_data, cmap='viridis',
+                    if 'direction' in wtk_lyr:
+                        plotopts = dict(cmap='hsv',vmin=0,vmax=360)
+                    else:
+                        plotopts = dict(cmap='viridis')
+                    curm = axs.imshow(interp_data,
                                       origin='lower', extent=self.extent,
-                                      alpha=0.75)
+                                      alpha=0.75, **plotopts)
                     cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
                     cbar.set_label(wtk_lyr)
+                    if 'direction' in wtk_lyr:
+                        cbar.set_ticks(np.arange(0,361,45))
+                        cbar.set_ticklabels(['N','NE','E','SE','S','SW','W','NW','N'])
                     axs.set_xlim([self.extent[0], self.extent[1]])
                     axs.set_ylim([self.extent[2], self.extent[3]])
                     if plot_turbs:

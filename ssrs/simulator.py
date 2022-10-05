@@ -226,6 +226,15 @@ class Simulator(Config):
             # specify starting region based on width, origin, and rotation
             # parameters; track_start_region will be overwritten for plotting
             # purposes
+            if not self.track_start_region_origin_xy:
+                # convert from lon/lat
+                track_start_x, track_start_y = transform_coordinates(
+                    self.lonlat_crs, self.projected_crs, *self.track_start_region_origin)
+                self.track_start_region_origin = (
+                    (track_start_x[0] - self.bounds[0]) / 1000.,
+                    (track_start_y[0] - self.bounds[1]) / 1000.,
+                )
+                self.track_start_region_origin_xy = True
             sbounds = (self.track_start_region_origin[0] - self.track_start_region_width/2,
                        self.track_start_region_origin[0] + self.track_start_region_width/2,
                        self.track_start_region_origin[1] - self.track_start_region_depth/2,

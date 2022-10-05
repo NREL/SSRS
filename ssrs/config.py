@@ -80,6 +80,7 @@ class Config:
     track_start_region_width: float = 0. # long side of rectangular region [km] -- if specified, `track_start_region` is ignored, and `track_start_region_origin` and `track_start_region_rotation` are used instead
     track_start_region_depth: float = 1. # short side of rectangular region [km]
     track_start_region_origin: Tuple[float, float] = (0, 0) # center of the start region; `track_start_region_width` must be > 0
+    track_start_region_origin_xy: bool = True # if true, specify `track_start_region_origin` as (x,y) in km; otherwise as (lon,lat)
     track_start_region_rotation: float = 0.  # degrees (clockwise from N) to rotate start region about `track_start_region_origin`; `track_start_region_width` must be > 0
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves

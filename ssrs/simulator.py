@@ -104,6 +104,7 @@ class Simulator(Config):
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
             self.bounds, self.projected_crs, self.lonlat_crs)
+        #print(self.lonlat_bounds) # (lon_min, lat_min, lon_max, lat_max)
 
         # Get meshgrids for pcolormesh plotting
         xgrid_terrain, ygrid_terrain = self.get_terrain_grid()
@@ -478,17 +479,24 @@ class Simulator(Config):
         Computed orographic updrafts are in low resolution (analysis resolution)
         """
 
-        print('Computing orographic updrafts (using WTK) using {self.orographic_model} model..', end="")
+        print(f'Computing orographic updrafts ({self.wtk_source}) using {self.orographic_model} model..', end="")
         slope = self.get_terrain_slope()
         aspect = self.get_terrain_aspect()
         elev = self.get_terrain_elevation()
+
+        if self.wtk_source == 'HRRR':
+            wspdlayer = 'windspeed_80m'
+            wdirlayer = 'winddirection_80m'
+        else:
+            wspdlayer = self.wtk_layers['wspeed']
+            wdirlayer = self.wtk_layers['wdirn']
 
         start_time = time.time()
         for dtime, case_id in zip(self.dtimes, self.case_ids):
             wtk_df = self.wtk.get_dataframe_for_this_time(dtime)
             wspeed, wdirn = self._get_interpolated_wind_conditions(
-                wtk_df[self.wtk_layers['wspeed']],
-                wtk_df[self.wtk_layers['wdirn']]
+                wtk_df[wspdlayer],
+                wtk_df[wdirlayer]
             )
             if self.orographic_model.lower() == 'original':
                 sx = None

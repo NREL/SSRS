@@ -8,6 +8,7 @@ import pathos.multiprocessing as mp
 import numpy as np
 import pandas as pd
 from .wtksource import WtkSource
+from ..hrrr import HRRR
 
 
 class WTK(WtkSource):
@@ -51,13 +52,14 @@ class WTK(WtkSource):
 
         # validate variable names
         varnames = [varnames] if isinstance(varnames, str) else varnames
-        self.varnames = set(varnames).intersection(self.valid_layers)
-        if bool(self.varnames):
-            print(('WTK: Downloading following layers:\n'
-                   f'{chr(10).join(self.varnames)}'))
-        else:
-            raise ValueError(('WTK: No valid layer found among:\n'
-                              f'{chr(10).join(varnames)}\n'))
+        if self.valid_layers is not None:
+            self.varnames = set(varnames).intersection(self.valid_layers)
+            if len(self.varnames) > 0:
+                print(('WTK: Downloading following layers:\n'
+                       f'{chr(10).join(self.varnames)}'))
+            else:
+                raise ValueError(('WTK: No valid layer found among:\n'
+                                  f'{chr(10).join(varnames)}\n'))
 
     def validate_requested_time(
         self,
@@ -120,6 +122,39 @@ class WTK(WtkSource):
     ) -> pd.DataFrame:
         """Extracts WTK data for a given time and returns the dataframe"""
 
+        if self.module_name == 'herbie':
+            hrrr = HRRR(req_time)
+            # TODO: the HRRR module should take the exact domain extent and CRS
+            # as input, but they're currently not available to the WTK class
+            approx_x_extent_km = (self.lonlat_bounds[2] - self.lonlat_bounds[0]) * 111.
+            approx_y_extent_km = (self.lonlat_bounds[3] - self.lonlat_bounds[1]) * 111.
+            print('Approx extent for HRRR retrieval [km]:',
+                  approx_x_extent_km, approx_y_extent_km)
+            vel80 = hrrr.wind_velocity_direction_at_altitude(
+                lonlat=self.lonlat_bounds[:2], # SW corner
+                centered_lonlat=False,
+                extent_km_lon=approx_x_extent_km,
+                extent_km_lat=approx_y_extent_km,
+                height_above_ground_m=80.0)
+
+            fpath = os.path.join(self.out_dir, 'wtk_locations.csv')
+            newdf = pd.DataFrame({
+                'Latitude': vel80['lats'],
+                'Longitude': vel80['lons'],
+            })
+            newdf.to_csv(fpath)
+
+            fpath = os.path.join(self.out_dir, self.get_filename(req_time))
+            u = vel80['us']
+            v = vel80['vs']
+            newdf['ugrd'] = u
+            newdf['vgrd'] = v
+            newdf['windspeed_80m'] = np.sqrt(u**2 + v**2)
+            newdf['winddirection_80m'] = 180. + np.degrees(np.arctan2(u, v))
+            newdf.to_csv(fpath)
+
+            return newdf
+
         # validate request
         self.validate_requested_time(req_time)
         time_str = req_time.strftime('%I %p, %d %b %Y')
@@ -157,14 +192,17 @@ class WTK(WtkSource):
     def get_dataframe_for_this_time(self, req_time: datetime) -> pd.DataFrame:
         """ Returns saved dataframe"""
         fpath = os.path.join(self.out_dir, self.get_filename(req_time))
-        dfbase = self.get_locations()
+        if self.module_name != 'herbie':
+            dfbase = self.get_locations()
         try:
             newdf = pd.read_csv(fpath, index_col=0)
-            if not newdf['Indices'].equals(dfbase['Indices']):
-                raise FileNotFoundError
         except FileNotFoundError as _:
             print('WTK: Need to download first!')
             newdf = self.download_data_for_this_time(req_time)
+        else:
+            if (self.module_name != 'herbie') and \
+                (not newdf['Indices'].equals(dfbase['Indices'])):
+                raise FileNotFoundError
         return newdf
 
     def download_data(

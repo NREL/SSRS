@@ -1935,15 +1935,15 @@ class Simulator(Config):
         wdirn: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """ Interpolates wind speed and direction from wtk to terrain grid """
-        easterly = np.multiply(wspeed, np.sin(wdirn * np.pi / 180.))
-        northerly = np.multiply(wspeed, np.cos(wdirn * np.pi / 180.))
-        interp_easterly = self._interpolate_wtk_vardata(easterly)
-        interp_northerly = self._interpolate_wtk_vardata(northerly)
-        interp_wspeed = np.sqrt(np.square(interp_easterly) +
-                                np.square(interp_northerly))
-        interp_wdirn = np.arctan2(interp_easterly, interp_northerly)
-        interp_wdirn = np.mod(interp_wdirn + 2. * np.pi, 2. * np.pi)
-        return interp_wspeed, interp_wdirn * 180. / np.pi
+        ang = np.radians(270. - wdirn)
+        ueast = np.multiply(wspeed, np.cos(ang))
+        vnorth = np.multiply(wspeed, np.sin(ang))
+        interp_ueast = self._interpolate_wtk_vardata(ueast)
+        interp_vnorth = self._interpolate_wtk_vardata(vnorth)
+        interp_wspeed = np.sqrt(interp_ueast**2 + interp_vnorth**2)
+        interp_wdirn = 180. + np.degrees(np.arctan2(interp_ueast,
+                                                    interp_vnorth))
+        return interp_wspeed, interp_wdirn
 
     def plot_updraft_threshold_function(self, show=False):
         """Plots the threshold function """

@@ -256,7 +256,8 @@ class HRRR:
 
     def wind_velocity_direction_at_altitude(
         self,
-        center_lonlat: Tuple[float, float],
+        lonlat: Tuple[float, float],
+        centered_lonlat=True,
         ground_level_m=0.0,
         height_above_ground_m=80.0,
         extent_km_lat=6.0,
@@ -297,7 +298,15 @@ class HRRR:
 
         Parameters
         ----------
-        center_lonlat: Tuple[float, float]
+        lonlat: Tuple[float, float]
+            Location to query (longitude, latitude), depending on
+            `centered_lonlat`.  Longitude is in degrees east.
+
+        centered_lonlat: bool
+            If True, lonlat is the center of the area to query.
+            If False, lonlat is the southwest corner.
+
+        southwest_lonlat: Tuple[float, float]
             Center of the area to query. Longitude is in degrees east.
         
         ground_level_m: float
@@ -377,18 +386,38 @@ class HRRR:
             out_crs = self.get_CRS_from_attrs(uv_grd['gribfile_projection'])
 
         # Find x, y of the center location given
-        center_lon, center_lat = center_lonlat
-        center_x, center_y = raster.transform_coordinates(
-            in_crs='EPSG:4326',
-            out_crs=out_crs,
-            in_x=center_lon,
-            in_y=center_lat
-        )
+        if centered_lonlat:
+            center_lon, center_lat = lonlat
+            center_x, center_y = raster.transform_coordinates(
+                in_crs='EPSG:4326',
+                out_crs=out_crs,
+                in_x=center_lon,
+                in_y=center_lat
+            )
+            maskfun = self.centered_mask_at_coordinates
+
+        else: # southwest corner
+            # Find x, y of the center location given
+            sw_lon, sw_lat = lonlat
+            sw_x, sw_y = raster.transform_coordinates(
+                in_crs='EPSG:4326',
+                out_crs=out_crs,
+                in_x=sw_lon,
+                in_y=sw_lat
+            )
+            center_x = sw_x[0] + extent_km_lon/2
+            center_y = sw_y[0] + extent_km_lat/2
+            center_lon, center_lat = raster.transform_coordinates(
+                in_crs=out_crs,
+                out_crs='EPSG:4326',
+                in_x=center_x,
+                in_y=center_y
+            )
+            maskfun = self.mask_at_coordinates
 
         # Create the selection mask.
-        mask = self.centered_mask_at_coordinates(
-            uv_grd,
-            center_lonlat=center_lonlat,
+        mask = maskfun(
+            uv_grd, lonlat,
             extent_km_lat=extent_km_lat,
             extent_km_lon=extent_km_lon,
             fringe_deg_lat=fringe_deg_lat,

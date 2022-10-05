@@ -37,7 +37,7 @@ class WTK(WtkSource):
         lonlat_bounds: Tuple[float, float, float, float],
         varnames: Union[List[str], str],
         out_dir: str,
-        padding: float = 0.02
+        padding: float = 0.02 # deg
     ):
 
         # initiate
@@ -98,19 +98,20 @@ class WTK(WtkSource):
     def get_locations(self) -> pd.DataFrame:
         """ Returns dataframe containing lat/lon coordinate for wtk points """
         fpath = os.path.join(self.out_dir, 'wtk_locations.csv')
-        try:
-            dfbase = pd.read_csv(fpath, index_col=0)
-            if not (
-                (dfbase['Longitude'].min() <= self.lonlat_bounds[0]) &
-                (dfbase['Longitude'].max() >= self.lonlat_bounds[1]) &
-                (dfbase['Latitude'].min() <= self.lonlat_bounds[2]) &
-                (dfbase['Latitude'].max() >= self.lonlat_bounds[3])
-            ):
-                raise FileNotFoundError
-        except FileNotFoundError as _:
+        if not os.path.isfile(fpath):
             self.download_locations()
-            dfbase = pd.read_csv(fpath, index_col=0)
-            #print(f'WTK: Got {dfbase.shape[0]} data source points')
+        dfbase = pd.read_csv(fpath, index_col=0)
+        if not (
+            (dfbase['Longitude'].min() <= self.lonlat_bounds[0]) &
+            (dfbase['Latitude'].min() <= self.lonlat_bounds[1]) &
+            (dfbase['Longitude'].max() >= self.lonlat_bounds[2]) &
+            (dfbase['Latitude'].max() >= self.lonlat_bounds[3])
+        ):
+            print(dfbase['Longitude'].min(), '<=?', self.lonlat_bounds[0])
+            print(dfbase['Latitude'].min(),  '<=?', self.lonlat_bounds[1])
+            print(dfbase['Longitude'].max(), '>=?', self.lonlat_bounds[2])
+            print(dfbase['Latitude'].max(),  '>=?', self.lonlat_bounds[3])
+            raise ValueError
         return dfbase
 
     def download_data_for_this_time(

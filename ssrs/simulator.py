@@ -113,28 +113,49 @@ class Simulator(Config):
 
         # download terrain layers from USGS's 3DEP dataset
         self.region = Terrain(self.lonlat_bounds, self.data_dir)
-        try:
-            if self.slopeAspectMode == 'download':
-                self.terrain_layers = {
-                    'Elevation': 'DEM',
-                    'Slope': 'Slope Degrees',
-                    'Aspect': 'Aspect Degrees'
-                }
-            elif self.slopeAspectMode == 'compute':
-                self.terrain_layers = {
-                    'Elevation': 'DEM',
-                }
-            else:
-                raise ValueError ('Mode can only be compute or download')
+        if self.terrain_data_source == 'auto':
+            try:
+                if self.slopeAspectMode == 'download':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                        'Slope': 'Slope Degrees',
+                        'Aspect': 'Aspect Degrees'
+                    }
+                elif self.slopeAspectMode == 'compute':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                    }
+                else:
+                    raise ValueError ('Mode can only be compute or download')
 
-            self.region.download(self.terrain_layers.values())
-        except requests.exceptions.ReadTimeout:
-            print('Timeout issues with 3DEP WMS service. It might be worth stop and try again. Trying SRTM1..')
-            self.terrain_layers = {'Elevation': 'SRTM1'}
-            self.region.download(self.terrain_layers.values())
-        except Exception as _:
-            print('Unknown issue with 3DEP WMS service. Trying SRTM1..')
-            self.terrain_layers = {'Elevation': 'SRTM1'}
+                self.region.download(self.terrain_layers.values())
+            except requests.exceptions.ReadTimeout:
+                print('Timeout issues with 3DEP WMS service. It might be worth stop and try again. Trying SRTM1..')
+                self.terrain_layers = {'Elevation': 'SRTM1'}
+                self.region.download(self.terrain_layers.values())
+            except Exception as _:
+                print('Unknown issue with 3DEP WMS service. Trying SRTM1..')
+                self.terrain_layers = {'Elevation': 'SRTM1'}
+                self.region.download(self.terrain_layers.values())
+
+        else:
+            # specified data source
+            if self.terrain_data_source == '3DEP':
+                if self.slopeAspectMode == 'download':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                        'Slope': 'Slope Degrees',
+                        'Aspect': 'Aspect Degrees'
+                    }
+                elif self.slopeAspectMode == 'compute':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                    }
+                else:
+                    raise ValueError ('Mode can only be compute or download')
+            else:
+                self.terrain_layers = {'Elevation': self.terrain_data_source}
+
             self.region.download(self.terrain_layers.values())
 
         # setup turbine data

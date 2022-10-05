@@ -29,6 +29,7 @@ class Config:
     thermal_intensity_scale: float = 2.0 # #1 gives weak random thermal field, 3 gives v strong random thermal field
     
     # parameters defining the domain
+    terrain_data_source: str = 'auto'   # 'auto', '3DEP', 'SRTM1' (30-m), 'SRTM3' (90-m)
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
     region_width_km: Tuple[float, float] = (60., 50.)

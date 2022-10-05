@@ -55,17 +55,17 @@ class Config:
     wtk_interp_type: str = 'linear'  # 'nearest', 'linear', or 'cubic'
 
     # parameters defining the updraft calculation
-    thermals_realization_count: bool = 0  # number of realizations of thermals
-    updraft_threshold: float = 0.75  # only use updrafts higher than this
+    thermals_realization_count: int = 0  # number of realizations of thermals
+    updraft_threshold: float = 0.75  # only use updrafts higher than this (m/s)
     movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
     orographic_model: str = 'original'  # original, improved
 
     # Improved orographic model parameters (used if `orographic_model` == 'improved')
-    h: float = 80.                                    # height of interest, height of flight
-    uniform_windspeed_h : float = uniform_windspeed   # windspeed at height h
+    h: float = 80.                                    # height of interest, height of flight (m AGL)
+    uniform_windspeed_h : float = uniform_windspeed   # windspeed at height h (m/s)
     uniform_winddirn_h : float = uniform_winddirn     # wind dir at height h (for generality)
-    href: float = 80.                                 # reference height
-    uniform_windspeed_href : float = uniform_windspeed  # windspeed at ref height
+    href: float = 80.                                 # reference height (m AGL)
+    uniform_windspeed_href : float = uniform_windspeed  # windspeed at ref height (m/s)
     uniform_winddirn_href : float = uniform_winddirn  # wind dir at ref height (for generality)
 
     # Option for slope and aspect
@@ -73,7 +73,7 @@ class Config:
 
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
-    track_count: str = 1000  # number of simulated eagle tracks
+    track_count: int = 1000  # number of simulated eagle tracks
     track_start_type: str = 'structured'  # 'structured' or 'random'
     track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # (xmin, xmax, ymin, ymax) in km wrt to box selected by southwest_lonlat and regions_width_km
     track_start_region_width: float = 0. # long side of rectangular region [km] -- if specified, `track_start_region` is ignored, and `track_start_region_origin` and `track_start_region_rotation` are used instead

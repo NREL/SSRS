@@ -539,7 +539,7 @@ class Simulator(Config):
         """ Computes updrafts for the particular case """
         fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
         updraft = np.load(f'{fname}.npy')
-        print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
+        #print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
         updrafts = [updraft]
         if self.thermals_realization_count > 0:
             for real_id in range(self.thermals_realization_count):

@@ -29,6 +29,7 @@ class Config:
     thermal_intensity_scale: float = 2.0 # #1 gives weak random thermal field, 3 gives v strong random thermal field
     
     # parameters defining the domain
+    terrain_data_source: str = 'auto'   # 'auto', '3DEP', 'SRTM1' (30-m), 'SRTM3' (90-m)
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
     region_width_km: Tuple[float, float] = (60., 50.)
@@ -40,32 +41,32 @@ class Config:
     uniform_windspeed: float = 10.  # uniform wind speed in m/s
 
     # parameters for snapshot mode
-    snapshot_datetime: Tuple[int, int, int, int] = (2010, 6, 17, 13)
+    snapshot_datetime: Tuple[int, int, int, int] = (2010, 6, 17, 13) # UTC
 
     # parameters for seasonal mode
     seasonal_start: Tuple[int, int] = (3, 20)  # start of season (month, day)
     seasonal_end: Tuple[int, int] = (5, 15)  # end of season (month, day)
-    seasonal_timeofday: str = 'daytime'  # morning, afternoon, evening, daytime
+    seasonal_timeofday: str = 'daytime'  # 'morning', 'afternoon', 'evening', or 'daytime'
     seasonal_count: int = 8  # number of seasonal updraft computations
 
     # downloading data from WTK
     wtk_source: str = 'AWS'  # 'EAGLE', 'AWS', 'EAGLE_LED'
     wtk_orographic_height: int = 100  # WTK wind conditions at this height
     wtk_thermal_height: int = 100  # WTK pressure, temperature, at this height
-    wtk_interp_type: str = 'linear'  # 'nearest' 'linear' 'cubic'
+    wtk_interp_type: str = 'linear'  # 'nearest', 'linear', or 'cubic'
 
     # parameters defining the updraft calculation
-    thermals_realization_count: bool = 0  # number of realizations of thermals
-    updraft_threshold: float = 0.75  # only use updrafts higher than this
+    thermals_realization_count: int = 0  # number of realizations of thermals
+    updraft_threshold: float = 0.75  # only use updrafts higher than this (m/s)
     movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
     orographic_model: str = 'original'  # original, improved
 
     # Improved orographic model parameters (used if `orographic_model` == 'improved')
-    h: float = 80.                                    # height of interest, height of flight
-    uniform_windspeed_h : float = uniform_windspeed   # windspeed at height h
+    h: float = 80.                                    # height of interest, height of flight (m AGL)
+    uniform_windspeed_h : float = uniform_windspeed   # windspeed at height h (m/s)
     uniform_winddirn_h : float = uniform_winddirn     # wind dir at height h (for generality)
-    href: float = 80.                                 # reference height
-    uniform_windspeed_href : float = uniform_windspeed  # windspeed at ref height
+    href: float = 80.                                 # reference height (m AGL)
+    uniform_windspeed_href : float = uniform_windspeed  # windspeed at ref height (m/s)
     uniform_winddirn_href : float = uniform_winddirn  # wind dir at ref height (for generality)
 
     # Option for slope and aspect
@@ -73,12 +74,13 @@ class Config:
 
     # parameters for simulating tracks
     track_direction: float = 0  # movement direction measured clockwise from north
-    track_count: str = 1000  # number of simulated eagle tracks
-    track_start_type: str = 'structured'  # structured, random
-    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # [xmin, xmax, ymin, ymax] in km wrt to box selected by southwest_lonlat and regions_width_km
+    track_count: int = 1000  # number of simulated eagle tracks
+    track_start_type: str = 'structured'  # 'structured' or 'random'
+    track_start_region: Tuple[float, float, float, float] = (5, 55, 1, 2) # (xmin, xmax, ymin, ymax) in km wrt to box selected by southwest_lonlat and regions_width_km
     track_start_region_width: float = 0. # long side of rectangular region [km] -- if specified, `track_start_region` is ignored, and `track_start_region_origin` and `track_start_region_rotation` are used instead
     track_start_region_depth: float = 1. # short side of rectangular region [km]
     track_start_region_origin: Tuple[float, float] = (0, 0) # center of the start region; `track_start_region_width` must be > 0
+    track_start_region_origin_xy: bool = True # if true, specify `track_start_region_origin` as (x,y) in km; otherwise as (lon,lat)
     track_start_region_rotation: float = 0.  # degrees (clockwise from N) to rotate start region about `track_start_region_origin`; `track_start_region_width` must be > 0
     track_stochastic_nu: float = 1.  # scaling of move probs, 0 = random walk
     track_dirn_restrict: int = 1  # restrict within 45 deg of previous # moves

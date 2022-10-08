@@ -104,6 +104,7 @@ class Simulator(Config):
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
             self.bounds, self.projected_crs, self.lonlat_crs)
+        #print(self.lonlat_bounds) # (lon_min, lat_min, lon_max, lat_max)
 
         # Get meshgrids for pcolormesh plotting
         xgrid_terrain, ygrid_terrain = self.get_terrain_grid()
@@ -113,28 +114,49 @@ class Simulator(Config):
 
         # download terrain layers from USGS's 3DEP dataset
         self.region = Terrain(self.lonlat_bounds, self.data_dir)
-        try:
-            if self.slopeAspectMode == 'download':
-                self.terrain_layers = {
-                    'Elevation': 'DEM',
-                    'Slope': 'Slope Degrees',
-                    'Aspect': 'Aspect Degrees'
-                }
-            elif self.slopeAspectMode == 'compute':
-                self.terrain_layers = {
-                    'Elevation': 'DEM',
-                }
-            else:
-                raise ValueError ('Mode can only be compute or download')
+        if self.terrain_data_source == 'auto':
+            try:
+                if self.slopeAspectMode == 'download':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                        'Slope': 'Slope Degrees',
+                        'Aspect': 'Aspect Degrees'
+                    }
+                elif self.slopeAspectMode == 'compute':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                    }
+                else:
+                    raise ValueError ('Mode can only be compute or download')
 
-            self.region.download(self.terrain_layers.values())
-        except requests.exceptions.ReadTimeout:
-            print('Timeout issues with 3DEP WMS service. It might be worth stop and try again. Trying SRTM1..')
-            self.terrain_layers = {'Elevation': 'SRTM1'}
-            self.region.download(self.terrain_layers.values())
-        except Exception as _:
-            print('Unknown issue with 3DEP WMS service. Trying SRTM1..')
-            self.terrain_layers = {'Elevation': 'SRTM1'}
+                self.region.download(self.terrain_layers.values())
+            except requests.exceptions.ReadTimeout:
+                print('Timeout issues with 3DEP WMS service. It might be worth stop and try again. Trying SRTM1..')
+                self.terrain_layers = {'Elevation': 'SRTM1'}
+                self.region.download(self.terrain_layers.values())
+            except Exception as _:
+                print('Unknown issue with 3DEP WMS service. Trying SRTM1..')
+                self.terrain_layers = {'Elevation': 'SRTM1'}
+                self.region.download(self.terrain_layers.values())
+
+        else:
+            # specified data source
+            if self.terrain_data_source == '3DEP':
+                if self.slopeAspectMode == 'download':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                        'Slope': 'Slope Degrees',
+                        'Aspect': 'Aspect Degrees'
+                    }
+                elif self.slopeAspectMode == 'compute':
+                    self.terrain_layers = {
+                        'Elevation': 'DEM',
+                    }
+                else:
+                    raise ValueError ('Mode can only be compute or download')
+            else:
+                self.terrain_layers = {'Elevation': self.terrain_data_source}
+
             self.region.download(self.terrain_layers.values())
 
         # setup turbine data
@@ -204,6 +226,15 @@ class Simulator(Config):
             # specify starting region based on width, origin, and rotation
             # parameters; track_start_region will be overwritten for plotting
             # purposes
+            if not self.track_start_region_origin_xy:
+                # convert from lon/lat
+                track_start_x, track_start_y = transform_coordinates(
+                    self.lonlat_crs, self.projected_crs, *self.track_start_region_origin)
+                self.track_start_region_origin = (
+                    (track_start_x[0] - self.bounds[0]) / 1000.,
+                    (track_start_y[0] - self.bounds[1]) / 1000.,
+                )
+                self.track_start_region_origin_xy = True
             sbounds = (self.track_start_region_origin[0] - self.track_start_region_width/2,
                        self.track_start_region_origin[0] + self.track_start_region_width/2,
                        self.track_start_region_origin[1] - self.track_start_region_depth/2,
@@ -457,17 +488,24 @@ class Simulator(Config):
         Computed orographic updrafts are in low resolution (analysis resolution)
         """
 
-        print('Computing orographic updrafts (using WTK) using {self.orographic_model} model..', end="")
+        print(f'Computing orographic updrafts ({self.wtk_source}) using {self.orographic_model} model..', end="")
         slope = self.get_terrain_slope()
         aspect = self.get_terrain_aspect()
         elev = self.get_terrain_elevation()
+
+        if self.wtk_source == 'HRRR':
+            wspdlayer = 'windspeed_80m'
+            wdirlayer = 'winddirection_80m'
+        else:
+            wspdlayer = self.wtk_layers['wspeed']
+            wdirlayer = self.wtk_layers['wdirn']
 
         start_time = time.time()
         for dtime, case_id in zip(self.dtimes, self.case_ids):
             wtk_df = self.wtk.get_dataframe_for_this_time(dtime)
             wspeed, wdirn = self._get_interpolated_wind_conditions(
-                wtk_df[self.wtk_layers['wspeed']],
-                wtk_df[self.wtk_layers['wdirn']]
+                wtk_df[wspdlayer],
+                wtk_df[wdirlayer]
             )
             if self.orographic_model.lower() == 'original':
                 sx = None
@@ -501,7 +539,7 @@ class Simulator(Config):
         """ Computes updrafts for the particular case """
         fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
         updraft = np.load(f'{fname}.npy')
-        print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
+        #print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
         updrafts = [updraft]
         if self.thermals_realization_count > 0:
             for real_id in range(self.thermals_realization_count):
@@ -1198,12 +1236,18 @@ class Simulator(Config):
                     vardata = wtk_df.loc[:, wtk_lyr].values.flatten()
                     interp_data = self._interpolate_wtk_vardata(vardata)
                     fig, axs = plt.subplots(figsize=self.fig_size)
-                    # cmap = 'hsv' if 'direction' in wtk_lyr else 'viridis'
-                    curm = axs.imshow(interp_data, cmap='viridis',
+                    if 'direction' in wtk_lyr:
+                        plotopts = dict(cmap='hsv',vmin=0,vmax=360)
+                    else:
+                        plotopts = dict(cmap='viridis')
+                    curm = axs.imshow(interp_data,
                                       origin='lower', extent=self.extent,
-                                      alpha=0.75)
+                                      alpha=0.75, **plotopts)
                     cbar, _ = create_gis_axis(fig, axs, curm, self.km_bar)
                     cbar.set_label(wtk_lyr)
+                    if 'direction' in wtk_lyr:
+                        cbar.set_ticks(np.arange(0,361,45))
+                        cbar.set_ticklabels(['N','NE','E','SE','S','SW','W','NW','N'])
                     axs.set_xlim([self.extent[0], self.extent[1]])
                     axs.set_ylim([self.extent[2], self.extent[3]])
                     if plot_turbs:
@@ -1900,15 +1944,15 @@ class Simulator(Config):
         wdirn: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """ Interpolates wind speed and direction from wtk to terrain grid """
-        easterly = np.multiply(wspeed, np.sin(wdirn * np.pi / 180.))
-        northerly = np.multiply(wspeed, np.cos(wdirn * np.pi / 180.))
-        interp_easterly = self._interpolate_wtk_vardata(easterly)
-        interp_northerly = self._interpolate_wtk_vardata(northerly)
-        interp_wspeed = np.sqrt(np.square(interp_easterly) +
-                                np.square(interp_northerly))
-        interp_wdirn = np.arctan2(interp_easterly, interp_northerly)
-        interp_wdirn = np.mod(interp_wdirn + 2. * np.pi, 2. * np.pi)
-        return interp_wspeed, interp_wdirn * 180. / np.pi
+        ang = np.radians(270. - wdirn)
+        ueast = np.multiply(wspeed, np.cos(ang))
+        vnorth = np.multiply(wspeed, np.sin(ang))
+        interp_ueast = self._interpolate_wtk_vardata(ueast)
+        interp_vnorth = self._interpolate_wtk_vardata(vnorth)
+        interp_wspeed = np.sqrt(interp_ueast**2 + interp_vnorth**2)
+        interp_wdirn = 180. + np.degrees(np.arctan2(interp_ueast,
+                                                    interp_vnorth))
+        return interp_wspeed, interp_wdirn
 
     def plot_updraft_threshold_function(self, show=False):
         """Plots the threshold function """

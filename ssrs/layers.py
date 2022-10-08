@@ -396,16 +396,17 @@ def calcAspectDegrees_richdem(z_mat: np.ndarray, res: float) -> np.ndarray:
     return out
 
 
-def get_above_threshold_speed_scalar(in_val, val):
+def get_above_threshold_speed_scalar(in_val, threshold, transition_exp=5.0):
     """ Converts updraft using threshold speed """
     if in_val > 1e-02:
-        if in_val > val:
-            fval = in_val
+        if in_val > threshold:
+            usable_updraft = in_val
         else:
-            fval = val * (np.exp((in_val / val)**5) - 1) / (np.exp(1) - 1)
+            usable_updraft = threshold * (
+                np.exp((in_val / threshold)**transition_exp) - 1) / (np.exp(1) - 1)
     else:
-        fval = 0.
-    return fval
+        usable_updraft = 0.
+    return usable_updraft
 
 
 def get_above_threshold_speed(in_array: np.ndarray, threshold: float):

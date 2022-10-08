@@ -546,7 +546,7 @@ class Simulator(Config):
                 fname = self._get_thermal_fname(
                     case_id, real_id, self.mode_data_dir)
                 updrafts.append(updraft + np.load(f'{fname}.npy'))
-        if apply_threshold:
+        if apply_threshold and self.smooth_threshold_cutoff:
             updrafts = [get_above_threshold_speed(
                 ix, self.updraft_threshold) for ix in updrafts]
         return updrafts

@@ -606,9 +606,14 @@ def compute_thermals_3d(
                                                  southwest_lonlat,
                                                  extent,
                                                  res)
+    print(f'albedo is {albedo}')
     wstar  = wstar.values
-    albedo = albedo.values
+    try:
+        albedo = albedo.values
+    except AttributeError:  # it's an array already
+        pass
     zi = zi[list(zi.keys())[0]].values
+
 
     if np.mean(zi) == np.nan:
         raise ValueError(f'The value obtained for the boundary layer height contains NaNs.',\
@@ -638,7 +643,8 @@ def compute_thermals_3d(
     ziavg = np.mean(zi)
     zzi = height/zi
     zziavg = height/ziavg
-    assert ziavg > 300, 'The boundary layer is too shallow for thermals'
+    if ziavg > 300:
+        ValueError(f'The boundary layer is too shallow for thermals')
 
     # Calcualte average updraft size
     rbar=(.102*zzi**(1/3))*(1-(.25*zzi))*zi

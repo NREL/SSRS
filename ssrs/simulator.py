@@ -223,11 +223,15 @@ class Simulator(Config):
     def checkInputs(self):
         """ Check some inputs and print warning messages """
 
-        if self.thermal_model not in ['none',None,'naive','improvedAllen']:
-           raise ValueError(f"Invalid option for thermal model. Options are 'none', 'naive', 'improvedAllen'")
+
+        if self.thermal_model is None:
+            self.thermal_model = 'none'
+
+        if self.thermal_model not in ['none','naive','improvedAllen']:
+            raise ValueError(f"Invalid option for thermal model. Options are 'none', 'naive', 'improvedAllen'")
 
         if self.orographic_model not in ['original','improved']:
-           raise ValueError(f"Invalid option for orographic model. Options are 'original', 'improved'")
+            raise ValueError(f"Invalid option for orographic model. Options are 'original', 'improved'")
 
         if self.wind_data_source not in ['hrrr','wtk']:
             raise ValueError(f"Invalid option for wind data source. Options are 'hrrr', 'wtk'")
@@ -244,7 +248,7 @@ class Simulator(Config):
                 print(f"WARNING: Naive thermal model is only recommended for 'uniform` mode.")
                 print(f"         When date is provided, it is recommended that thermal_model='improvedAllen'")
 
-        if self.thermal_model is None or self.thermal_model=='none':
+        if self.thermal_model=='none':
             try:
                 nreal = self.thermals_realization_count
             except AttributeError:
@@ -2145,7 +2149,7 @@ class Simulator(Config):
                 fig.colorbar(cm, ax=axs[10], label='gound heat flux [W/m2]')
 
                 cm = axs[11].contourf(xx, yy, moisture, cmap='magma', levels=np.arange(0,100.1, 10))
-                fig.colorbar(cm, ax=axs[11], label='moisture [%]')
+                fig.colorbar(cm, ax=axs[11], label='soil moisture availability [%]')
 
 
                 cm = axs[12].contourf(xx, yy, zi, cmap='gist_ncar', levels=np.arange(0,3500.1, 100))

@@ -369,7 +369,11 @@ def generate_heuristic_eagle_track(
     #print(f'Adding random component of {randomPAM:.3f} to PAM, going from {PAM_const:.3f} to {PAM:.3f}.')
 
     # move through domain
+    breakTrack=False
     for imove in range(max_moves):
+        if breakTrack:
+            print(f'break track true. stopping track.')
+            break
         iact = imove % len(rules)
         next_rule = rules[iact]
 
@@ -438,6 +442,7 @@ def generate_heuristic_eagle_track(
         last_pos = trajectory[-1]
         for cur_pos in new_pos:
             if not ((0 < cur_pos[0] < xg[-1]) and (0 < cur_pos[1] < yg[-1])): 
+                breakTrack=True
                 break
             delta = tuple(map(lambda i,j:i-j, cur_pos, last_pos))
             #delta = cur_pos - last_pos (this gives an error, unsupported operand for tuple)

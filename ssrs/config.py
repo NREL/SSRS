@@ -58,6 +58,7 @@ class Config:
     # parameters defining the updraft calculation
     thermals_realization_count: int = 0  # number of realizations of thermals
     updraft_threshold: float = 0.75  # only use updrafts higher than this (m/s)
+    updraft_threshold_stdev: float = 0.0  # if > 0, sample from truncated normal distribution
     smooth_threshold_cutoff: bool = False  # set to True for legacy behavior
     movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
     orographic_model: str = 'original'  # original, improved

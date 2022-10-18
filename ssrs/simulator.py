@@ -25,7 +25,10 @@ from .turbines import TurbinesUSWTB
 from .config import Config
 from .layers import (calcOrographicUpdraft, calcAspectDegrees,
                      calcSlopeDegrees, compute_random_thermals,
-                     get_above_threshold_speed, blurQuantity,
+                     get_above_threshold_speed,
+                     get_above_threshold_hard_cutoff,
+                     get_random_threshold,
+                     blurQuantity,
                      calcSx, highRes2lowRes)
 from .raster import (get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
@@ -542,13 +545,27 @@ class Simulator(Config):
         #print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
         updrafts = [updraft]
         if self.thermals_realization_count > 0:
+            assert self.updraft_threshold_stdev > 0, \
+                'using a random threshold with thermals has not been tested'
             for real_id in range(self.thermals_realization_count):
                 fname = self._get_thermal_fname(
                     case_id, real_id, self.mode_data_dir)
                 updrafts.append(updraft + np.load(f'{fname}.npy'))
-        if apply_threshold and self.smooth_threshold_cutoff:
-            updrafts = [get_above_threshold_speed(
-                ix, self.updraft_threshold) for ix in updrafts]
+        if apply_threshold:
+            if apply_threshold == True:
+                threshold = self.updraft_threshold
+            else:
+                assert isinstance(apply_threshold, float)
+                threshold = apply_threshold
+            if self.smooth_threshold_cutoff:
+                # legacy model with threshold function
+                assert self.updraft_threshold_stdev == 0, \
+                    'random threshold with threshold function not supported'
+                updrafts = [get_above_threshold_speed(ix, threshold)
+                            for ix in updrafts]
+            else:
+                updrafts = [get_above_threshold_hard_cutoff(ix, threshold)
+                            for ix in updrafts]
         return updrafts
 
 

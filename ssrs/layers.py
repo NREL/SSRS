@@ -414,6 +414,21 @@ def get_above_threshold_speed(in_array: np.ndarray, threshold: float):
     return np.vectorize(get_above_threshold_speed_scalar)(in_array, threshold)
 
 
+def get_above_threshold_hard_cutoff(in_array: np.ndarray, threshold: float):
+    in_array[np.where(in_array < threshold)] = 0
+    return in_array
+
+
+def get_random_threshold(
+    threshold: float,
+    threshold_stdev: float
+):
+    cutoff = -1
+    while cutoff < 0:
+        cutoff = np.random.normal(loc=threshold, scale=threshold_stdev)
+    return cutoff
+
+
 def compute_random_thermals(
     aspect: np.ndarray,  # terrain aspect, used for weighting
     thermal_intensity_scale: float  # describe strength of field

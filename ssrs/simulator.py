@@ -210,9 +210,23 @@ class Simulator(Config):
         else:
             self.compute_orographic_updrafts_uniform()
 
-
         for case_id in self.case_ids:
             self.compute_thermal_updrafts(case_id)
+
+        if self.updraft_threshold_stdev > 0:
+            # calculate potential fields for updraft fields with a range of
+            # discrete threshold values
+            threshmin = self.updraft_threshold_realizations_min
+            threshmax = self.updraft_threshold_realizations_max
+            threshstep = self.updraft_threshold_realizations_step
+            self.threshold_realizations = np.arange(
+                    threshmin, threshmax+threshstep, threshstep)
+            print('Thresholds to calculate:',self.threshold_realizations,
+                  '*',self.updraft_threshold_stdev)
+            self.threshold_realizations *= self.updraft_threshold_stdev
+        else:
+            # legacy model
+            self.threshold_realizations = None
 
         # plotting settings
         fig_aspect = self.region_width_km[0] / self.region_width_km[1]
@@ -545,7 +559,7 @@ class Simulator(Config):
         #print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
         updrafts = [updraft]
         if self.thermals_realization_count > 0:
-            assert self.updraft_threshold_stdev > 0, \
+            assert not self.threshold_realizations, \
                 'using a random threshold with thermals has not been tested'
             for real_id in range(self.thermals_realization_count):
                 fname = self._get_thermal_fname(
@@ -559,7 +573,7 @@ class Simulator(Config):
                 threshold = apply_threshold
             if self.smooth_threshold_cutoff:
                 # legacy model with threshold function
-                assert self.updraft_threshold_stdev == 0, \
+                assert not self.threshold_realizations, \
                     'random threshold with threshold function not supported'
                 updrafts = [get_above_threshold_speed(ix, threshold)
                             for ix in updrafts]

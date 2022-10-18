@@ -59,6 +59,9 @@ class Config:
     thermals_realization_count: int = 0  # number of realizations of thermals
     updraft_threshold: float = 0.75  # only use updrafts higher than this (m/s)
     updraft_threshold_stdev: float = 0.0  # if > 0, sample from truncated normal distribution
+    updraft_threshold_realization_min: float = -2.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these thresolds (in stdevs about the mean `updraft_threshold`)
+    updraft_threshold_realization_max: float = 2.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these thresolds (in stdevs about the mean `updraft_threshold`)
+    updraft_threshold_realization_step: float = 0.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these thresolds (in stdevs about the mean `updraft_threshold`)
     smooth_threshold_cutoff: bool = False  # set to True for legacy behavior
     movement_model: str = 'fluid-flow'  # fluid-flow, drw, heuristics
     orographic_model: str = 'original'  # original, improved

@@ -216,14 +216,15 @@ class Simulator(Config):
         if self.updraft_threshold_stdev > 0:
             # calculate potential fields for updraft fields with a range of
             # discrete threshold values
-            threshmin = self.updraft_threshold_realizations_min
-            threshmax = self.updraft_threshold_realizations_max
-            threshstep = self.updraft_threshold_realizations_step
+            threshmin = self.updraft_threshold_realization_min
+            threshmax = self.updraft_threshold_realization_max
+            threshstep = self.updraft_threshold_realization_step
             self.threshold_realizations = np.arange(
                     threshmin, threshmax+threshstep, threshstep)
-            print('Thresholds to calculate:',self.threshold_realizations,
-                  '*',self.updraft_threshold_stdev)
-            self.threshold_realizations *= self.updraft_threshold_stdev
+            self.threshold_realizations = self.updraft_threshold + \
+                    self.updraft_threshold_stdev * self.threshold_realizations
+            print('Discrete thresholds to consider:',
+                  self.threshold_realizations)
         else:
             # legacy model
             self.threshold_realizations = None
@@ -559,7 +560,7 @@ class Simulator(Config):
         #print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
         updrafts = [updraft]
         if self.thermals_realization_count > 0:
-            assert not self.threshold_realizations, \
+            assert self.threshold_realizations is None, \
                 'using a random threshold with thermals has not been tested'
             for real_id in range(self.thermals_realization_count):
                 fname = self._get_thermal_fname(
@@ -573,13 +574,13 @@ class Simulator(Config):
                 threshold = apply_threshold
             if self.smooth_threshold_cutoff:
                 # legacy model with threshold function
-                assert not self.threshold_realizations, \
+                assert self.threshold_realizations is None, \
                     'random threshold with threshold function not supported'
-                updrafts = [get_above_threshold_speed(ix, threshold)
-                            for ix in updrafts]
+                updrafts = [get_above_threshold_speed(w0, threshold)
+                            for w0 in updrafts]
             else:
-                updrafts = [get_above_threshold_hard_cutoff(ix, threshold)
-                            for ix in updrafts]
+                updrafts = [get_above_threshold_hard_cutoff(w0, threshold)
+                            for w0 in updrafts]
         return updrafts
 
 
@@ -657,6 +658,26 @@ class Simulator(Config):
             print('NANs found in potential!')
         return potential
 
+    def get_directional_potential_realizations(self, updraft, case_id, real_id):
+        """Different potential fields are possible from different
+        updraft threshold values
+
+        TODO: parallelize this
+        """
+        assert real_id == 0, 'should have only one orographic updraft field'
+        potential_realizations = []
+        for real_id, threshold in enumerate(self.threshold_realizations):
+            print('Calculating potential for updraft threshold =',threshold)
+            updraft_with_threshold = get_above_threshold_hard_cutoff(updraft,
+                                                                     threshold)
+            np.save('debug--updraft_with_threshold.npy',updraft_with_threshold)
+            potential = self.get_directional_potential(
+                    updraft_with_threshold, case_id, real_id)
+            potential_realizations.append(potential)
+            print("BREAK HERE FOR TESTING")
+            break
+        return potential_realizations
+
     def _get_id_string(self, case_id: str, real_id: Optional[int] = None):
         """ Commong id string for saving/reading data and screen output"""
         dirn_str = f'd{int(self.track_direction % 360)}'
@@ -710,15 +731,25 @@ class Simulator(Config):
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
         num_cores = min(self.track_count, self.max_cores)
         for case_id in self.case_ids:
-            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            if self.threshold_realizations is None:
+                updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            else:
+                # range of threshold values to be evaluated later
+                updrafts = self.load_updrafts(case_id, apply_threshold=False)
             for real_id, updraft in enumerate(updrafts):
 # TODO: this should not be needed
 #                if self.sim_seed > 0:
 #                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
+
                 if self.movement_model == 'fluid-flow':
-                    potential = self.get_directional_potential(
-                        updraft, case_id, real_id)
+                    if self.threshold_realizations is None:
+                        potential = self.get_directional_potential(
+                            updraft, case_id, real_id)
+                    else:
+                        potentials = self.get_directional_potential_realizations(
+                            updraft, case_id, real_id)
+                        potential = potentials[0] # TESTING
                     start_time = time.time()
                     if self.track_converge_tol == 0:
                         print(f'{id_str}: Simulating {self.track_count} tracks..',
@@ -782,6 +813,7 @@ class Simulator(Config):
                         self.track_dirn_restrict,
                         self.track_stochastic_nu
                     )
+
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)

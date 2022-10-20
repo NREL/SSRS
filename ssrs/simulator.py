@@ -696,7 +696,12 @@ class Simulator(Config):
             print('Plotting directional potential..')
             for case_id in self.case_ids:
                 updrafts = self.load_updrafts(case_id, apply_threshold=True)
-                for real_id, _ in enumerate(updrafts):
+                if self.threshold_realizations is None:
+                    iterator = enumerate(updrafts)
+                else:
+                    assert len(updrafts) == 1
+                    iterator = enumerate(self.threshold_realizations)
+                for real_id, tmp in iterator:
                     fname = self._get_potential_fname(case_id, real_id,
                                                       self.mode_data_dir)
                     potential = np.load(f'{fname}.npy')
@@ -709,6 +714,8 @@ class Simulator(Config):
                     cbar.set_label('Directional potential')
                     if plot_turbs:
                         self.plot_turbine_locations(axs)
+                    if self.threshold_realizations is not None:
+                        axs.set_title(f'threshold = {tmp:g} m/s')
                     axs.set_xlim([self.extent[0], self.extent[1]])
                     axs.set_ylim([self.extent[2], self.extent[3]])
                     fname = self._get_potential_fname(case_id, real_id,
@@ -737,10 +744,8 @@ class Simulator(Config):
                                  size=len(starting_rows))
             cutoffs[np.where(cutoffs < self.threshold_realizations[0])] = self.threshold_realizations[0]
             cutoffs[np.where(cutoffs > self.threshold_realizations[-1])] = self.threshold_realizations[-1]
-            cutoffs[:] = self.threshold_realizations[0] # TESTING ONLY
             initial_conditions = [[x, y, w]
                     for x, y, w in zip(starting_rows, starting_cols, cutoffs)]
-
         else:
             # smooth function or hard cutoff, with constant threshold value
             initial_conditions = [[x, y] for x, y in zip(starting_rows, starting_cols)]

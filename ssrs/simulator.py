@@ -27,7 +27,7 @@ from .layers import (calcOrographicUpdraft, calcAspectDegrees,
                      calcSlopeDegrees, compute_random_thermals,
                      get_above_threshold_speed,
                      get_above_threshold_hard_cutoff,
-                     get_random_threshold,
+                     #get_random_threshold,
                      blurQuantity,
                      calcSx, highRes2lowRes)
 from .raster import (get_raster_in_projected_crs,
@@ -670,12 +670,9 @@ class Simulator(Config):
             print('Calculating potential for updraft threshold =',threshold)
             updraft_with_threshold = get_above_threshold_hard_cutoff(updraft,
                                                                      threshold)
-            np.save('debug--updraft_with_threshold.npy',updraft_with_threshold)
             potential = self.get_directional_potential(
                     updraft_with_threshold, case_id, real_id)
             potential_realizations.append(potential)
-            print("BREAK HERE FOR TESTING")
-            break
         return potential_realizations
 
     def _get_id_string(self, case_id: str, real_id: Optional[int] = None):
@@ -728,7 +725,26 @@ class Simulator(Config):
         # print(f'Memory parameter = {self.track_dirn_restrict}')
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = self._get_starting_indices()
-        starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
+        if self.threshold_realizations is not None:
+            # best practice RNG -- this is self contained and _should not_
+            # affect other calls to np.random.* when using the reseeded
+            # legacy BitGenerator (np.random.seed)
+            from numpy.random import MT19937
+            from numpy.random import RandomState, SeedSequence
+            rng = RandomState(MT19937(SeedSequence(123456789)))
+            cutoffs = rng.normal(loc=self.updraft_threshold,
+                                 scale=self.updraft_threshold_stdev,
+                                 size=len(starting_rows))
+            cutoffs[np.where(cutoffs < self.threshold_realizations[0])] = self.threshold_realizations[0]
+            cutoffs[np.where(cutoffs > self.threshold_realizations[-1])] = self.threshold_realizations[-1]
+            cutoffs[:] = self.threshold_realizations[0] # TESTING ONLY
+            initial_conditions = [[x, y, w]
+                    for x, y, w in zip(starting_rows, starting_cols, cutoffs)]
+
+        else:
+            # smooth function or hard cutoff, with constant threshold value
+            initial_conditions = [[x, y] for x, y in zip(starting_rows, starting_cols)]
+
         num_cores = min(self.track_count, self.max_cores)
         for case_id in self.case_ids:
             if self.threshold_realizations is None:
@@ -750,21 +766,25 @@ class Simulator(Config):
                         potentials = self.get_directional_potential_realizations(
                             updraft, case_id, real_id)
                         potential = potentials[0] # TESTING
+
                     start_time = time.time()
                     if self.track_converge_tol == 0:
                         print(f'{id_str}: Simulating {self.track_count} tracks..',
                               end="", flush=True)
                         tracks = self._parallel_run(generate_simulated_tracks,
-                            starting_locs,
+                            initial_conditions,
                             self.track_direction,
                             self.track_dirn_restrict,
                             self.track_stochastic_nu,
                             updraft,
                             potential,
+                            threshold_realizations=self.threshold_realizations
                         )
 
                     else:
                         assert self.track_converge_tol > 0
+                        if self.threshold_realizations is not None:
+                            raise NotImplementedError('Track convergence mode not set up for random updraft thresholds')
                         if self.track_start_type != 'random':
                             print('WARNING: In track convergence mode, track_start_type should be random')
                         print(f'{id_str}: Simulating up to {self.track_count} tracks'
@@ -778,7 +798,7 @@ class Simulator(Config):
                             start_loc_range = slice(istart, istart+self.track_converge_check_interval)
                             # append to list of all tracks simulated thus far
                             tracks += self._parallel_run(generate_simulated_tracks,
-                                starting_locs[start_loc_range],
+                                initial_conditions[start_loc_range],
                                 self.track_direction,
                                 self.track_dirn_restrict,
                                 self.track_stochastic_nu,
@@ -808,7 +828,7 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
                     tracks = self._parallel_run(generate_simulated_tracks,
-                        starting_locs,
+                        initial_conditions,
                         self.track_direction,
                         self.track_dirn_restrict,
                         self.track_stochastic_nu
@@ -817,6 +837,7 @@ class Simulator(Config):
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
+                np.save(f'{fname}_initcond.npy', initial_conditions)
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)
                 
@@ -941,12 +962,13 @@ class Simulator(Config):
 #            print('initializing',worker,'with seed',myseed)
 #            np.random.seed(myseed)
 
-    def _parallel_run(self, func, start_locs, *args):
+    def _parallel_run(self, func, initial_conditions, *args, **kwargs):
         num_cores = min(self.track_count, self.max_cores)
 # use with import pathos.multiprocessing as mp
         #print('Using map with num_cores=',num_cores)
         with mp.Pool(num_cores) as pool:
-            output = pool.map(lambda start_loc: func(start_loc,*args), start_locs)
+            output = pool.map(lambda ic: func(ic,*args,**kwargs),
+                              initial_conditions)
 # use with import multiprocessing as mp
 #        #print('Using starmap with num_cores=',num_cores)
 #        arglist = [repeat(arg) for arg in args]

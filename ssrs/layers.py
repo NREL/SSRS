@@ -415,18 +415,19 @@ def get_above_threshold_speed(in_array: np.ndarray, threshold: float):
 
 
 def get_above_threshold_hard_cutoff(in_array: np.ndarray, threshold: float):
-    in_array[np.where(in_array < threshold)] = 0
-    return in_array
+    thresholded_array = np.copy(in_array)
+    thresholded_array[np.where(in_array < threshold)] = 0
+    return thresholded_array
 
 
-def get_random_threshold(
-    threshold: float,
-    threshold_stdev: float
-):
-    cutoff = -1
-    while cutoff < 0:
-        cutoff = np.random.normal(loc=threshold, scale=threshold_stdev)
-    return cutoff
+#def get_random_threshold(
+#    threshold: float,
+#    threshold_stdev: float
+#):
+#    cutoff = -1
+#    while cutoff < 0:
+#        cutoff = np.random.normal(loc=threshold, scale=threshold_stdev)
+#    return cutoff
 
 
 def compute_random_thermals(

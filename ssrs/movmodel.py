@@ -1,13 +1,15 @@
 """ Module for implementing fluid-flow based movement model """
 
 from math import sqrt
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 import numpy as np
 import matplotlib.pyplot as plt #temp for plotting wt_test
 from scipy import ndimage #for smoothing updraft field
 import scipy.signal as ssg
 import scipy.sparse as ss
 from scipy.interpolate import RectBivariateSpline
+
+from .layers import get_above_threshold_hard_cutoff
 
 from .heuristics import rulesets
 from .actions import random_walk
@@ -236,14 +238,24 @@ def get_harmonic_mean(in_first, in_second):
 
 
 def generate_simulated_tracks(
-        start_location: Tuple[int, int],
+        initial_cond: Union[Tuple[int, int], Tuple[int, int, float]],
         move_dirn: float,
         memory_parameter: int = 1,
         scaling_parameter: float = 1.,
         updraft_field: Optional[np.ndarray] = None,
-        potential_field: Optional[np.ndarray] = None
+        potential_field: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
+        threshold_realizations: Optional[np.ndarray] = None,
 ):
     """ Generate an eagle track """
+    start_location = initial_cond[:2]
+    if len(initial_cond) == 3:
+        threshold = initial_cond[2]
+        assert threshold_realizations is not None
+        #assert isinstance(potential_field, list)
+        #assert len(potential_field) == len(threshold_realizations)
+        updraft_field = get_above_threshold_hard_cutoff(updraft_field,
+                                                        threshold)
+        #TODO: interpolate potential field
 
     num_rows, num_cols = updraft_field.shape
     burnin_length = int(min(num_rows, num_cols) / 10)

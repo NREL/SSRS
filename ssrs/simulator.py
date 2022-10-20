@@ -763,9 +763,8 @@ class Simulator(Config):
                         potential = self.get_directional_potential(
                             updraft, case_id, real_id)
                     else:
-                        potentials = self.get_directional_potential_realizations(
+                        potential = self.get_directional_potential_realizations(
                             updraft, case_id, real_id)
-                        potential = potentials[0] # TESTING
 
                     start_time = time.time()
                     if self.track_converge_tol == 0:
@@ -777,7 +776,7 @@ class Simulator(Config):
                             self.track_dirn_restrict,
                             self.track_stochastic_nu,
                             updraft,
-                            potential,
+                            potential, # single field -OR- list of fields
                             threshold_realizations=self.threshold_realizations
                         )
 

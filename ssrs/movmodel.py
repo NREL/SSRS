@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt #temp for plotting wt_test
 from scipy import ndimage #for smoothing updraft field
 import scipy.signal as ssg
 import scipy.sparse as ss
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, interp1d
 
 from .layers import get_above_threshold_hard_cutoff
 
@@ -248,16 +248,20 @@ def generate_simulated_tracks(
 ):
     """ Generate an eagle track """
     start_location = initial_cond[:2]
+    num_rows, num_cols = updraft_field.shape
+
     if len(initial_cond) == 3:
         threshold = initial_cond[2]
-        assert threshold_realizations is not None
-        #assert isinstance(potential_field, list)
-        #assert len(potential_field) == len(threshold_realizations)
         updraft_field = get_above_threshold_hard_cutoff(updraft_field,
                                                         threshold)
-        #TODO: interpolate potential field
+        assert threshold_realizations is not None
+        assert isinstance(potential_field, list)
+        assert len(potential_field) == len(threshold_realizations)
+        interpfun = interp1d(threshold_realizations,
+                             np.array([pot.ravel() for pot in potential_field]),
+                             axis=0)
+        potential_field = interpfun(threshold).reshape((num_rows, num_cols))
 
-    num_rows, num_cols = updraft_field.shape
     burnin_length = int(min(num_rows, num_cols) / 10)
     max_moves = num_rows//2 * num_cols//2
     directions = [[0, 0]]

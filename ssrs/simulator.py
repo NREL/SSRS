@@ -733,12 +733,12 @@ class Simulator(Config):
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = self._get_starting_indices()
         if self.threshold_realizations is not None:
-            # best practice RNG -- this is self contained and _should not_
+            # "best practice" RNG -- this is self contained and _should not_
             # affect other calls to np.random.* when using the reseeded
-            # legacy BitGenerator (np.random.seed)
-            from numpy.random import MT19937
-            from numpy.random import RandomState, SeedSequence
-            rng = RandomState(MT19937(SeedSequence(123456789)))
+            # legacy BitGenerator (np.random.seed), i.e., when Config.sim_seed
+            # is specified
+            from numpy.random import RandomState, MT19937
+            rng = RandomState(MT19937(self.updraft_threshold_seed))
             cutoffs = rng.normal(loc=self.updraft_threshold,
                                  scale=self.updraft_threshold_stdev,
                                  size=len(starting_rows))

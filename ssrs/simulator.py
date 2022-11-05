@@ -835,7 +835,8 @@ class Simulator(Config):
                         initial_conditions,
                         self.track_direction,
                         self.track_dirn_restrict,
-                        self.track_stochastic_nu
+                        self.track_stochastic_nu,
+                        domain_shape = updraft.shape
                     )
 
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
@@ -923,7 +924,8 @@ class Simulator(Config):
                         starting_locs,
                         self.track_direction,
                         self.track_dirn_restrict,
-                        self.track_stochastic_nu
+                        self.track_stochastic_nu,
+                        domain_shape = orographicupdraft.shape
                     )
             
                 elif self.sim_movement == 'heuristics':

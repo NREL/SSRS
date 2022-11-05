@@ -245,10 +245,15 @@ def generate_simulated_tracks(
         updraft_field: Optional[np.ndarray] = None,
         potential_field: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
         threshold_realizations: Optional[np.ndarray] = None,
+        domain_shape: Optional[Tuple[int, int]] = None,
 ):
     """ Generate an eagle track """
     start_location = initial_cond[:2]
-    num_rows, num_cols = updraft_field.shape
+    if updraft_field is not None:
+        num_rows, num_cols = updraft_field.shape
+    else:
+        assert domain_shape is not None, 'domain_shape should be specified for DRW'
+        num_rows, num_cols = domain_shape
 
     if len(initial_cond) == 3:
         threshold = initial_cond[2]

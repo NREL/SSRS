@@ -20,8 +20,6 @@ class HRRR:
     downloaded by Herbie and accessed with xarray.
     """
 
-    Albers_CRS = 'ESRI:102008'  # Albers Equal Area Conic
-
     proj_aliases = {
         'lambert_conformal_conic': 'lcc',
     }
@@ -30,7 +28,7 @@ class HRRR:
                  date: str = None,
                  valid_date: str = None,
                  fxx: int = 0,
-                 projected_CRS=Albers_CRS):
+                 projected_CRS=raster.albers_crs):
         """
         Either `valid_date` or `date` should be specified. These are
         related through the forecast lead time (default=0 hrs), `fxx`:
@@ -843,7 +841,7 @@ class HRRR:
         southwest_lonlat,
         bounds,
         res=50,
-        out_crs=Albers_CRS
+        out_crs=raster.albers_crs
     ):
         from scipy.interpolate import griddata
 

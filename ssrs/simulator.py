@@ -30,7 +30,8 @@ from .layers import (calcOrographicUpdraft, calcAspectDegrees,
                      #get_random_threshold,
                      blurQuantity,
                      calcSx, highRes2lowRes)
-from .raster import (get_raster_in_projected_crs,
+from .raster import (lonlat_crs,
+                     get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 
 from .movmodel import (generate_heuristic_eagle_track,compute_smooth_presence_counts_HSSRS)
@@ -49,7 +50,6 @@ from .utils import (makedir_if_not_exists, get_elapsed_time,
 class Simulator(Config):
     """ Class for SSRS simulation """
 
-    lonlat_crs = 'EPSG:4326'
     time_format = 'y%Ym%md%dh%H'
 
     def __init__(self, in_config: Config = None, **kwargs) -> None:
@@ -99,14 +99,14 @@ class Simulator(Config):
 
         # figure out bounds in both lon/lat and in projected crs
         proj_west, proj_south = transform_coordinates(
-            self.lonlat_crs, self.projected_crs,
+            lonlat_crs, self.projected_crs,
             self.southwest_lonlat[0], self.southwest_lonlat[1])
         proj_east = proj_west[0] + (xsize - 1) * self.resolution
         proj_north = proj_south[0] + (ysize - 1) * self.resolution
         self.bounds = (proj_west[0], proj_south[0], proj_east, proj_north)
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
-            self.bounds, self.projected_crs, self.lonlat_crs)
+            self.bounds, self.projected_crs, lonlat_crs)
         #print(self.lonlat_bounds) # (lon_min, lat_min, lon_max, lat_max)
 
         # Get meshgrids for pcolormesh plotting
@@ -247,7 +247,7 @@ class Simulator(Config):
             if not self.track_start_region_origin_xy:
                 # convert from lon/lat
                 track_start_x, track_start_y = transform_coordinates(
-                    self.lonlat_crs, self.projected_crs, *self.track_start_region_origin)
+                    lonlat_crs, self.projected_crs, *self.track_start_region_origin)
                 self.track_start_region_origin = (
                     (track_start_x[0] - self.bounds[0]) / 1000.,
                     (track_start_y[0] - self.bounds[1]) / 1000.,
@@ -1945,7 +1945,7 @@ class Simulator(Config):
         """ Returns xlocs and ylocs of wtk data points """
         wtk_lons, wtk_lats = self.wtk.get_coordinates()
         wtk_xlocs, wtk_ylocs = transform_coordinates(
-            self.lonlat_crs, self.projected_crs, wtk_lons, wtk_lats)
+            lonlat_crs, self.projected_crs, wtk_lons, wtk_lats)
         return wtk_xlocs, wtk_ylocs
 
     def get_seasonal_datetimes(self) -> List[datetime]:

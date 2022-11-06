@@ -205,7 +205,9 @@ class Simulator(Config):
         print(f'Analysis height is {self.h}')
 
         # Calculate the orographic updraft based on mode
-        if self.sim_mode.lower() != 'uniform':
+        if self.movement_model == 'drw':
+            self.compute_dummy_updraft_field()
+        elif self.sim_mode.lower() != 'uniform':
             self.compute_orographic_updrafts_using_wtk()
         else:
             self.compute_orographic_updrafts_uniform()
@@ -537,6 +539,20 @@ class Simulator(Config):
             fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
             np.save(f'{fname}.npy',updraft.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)}', flush=True)
+
+    def compute_dummy_updraft_field(self) -> None:
+        """This should be deprecated in the future!
+
+        For DRW, updraft field need not be calculated. However, a number
+        of routines (e.g., plot_*()) will load the updraft field from
+        file just to get the domain size. This should be fixed in a
+        future code refactor.
+        """
+        grid_size = (1000*np.array(self.region_width_km) / self.resolution).astype(int)
+        updraft = np.zeros(grid_size)
+        for dtime, case_id in zip(self.dtimes, self.case_ids):
+            fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
+            np.save(f'{fname}.npy',updraft.astype(np.float32))
 
 
     def compute_thermal_updrafts(self, case_id: str):

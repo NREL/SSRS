@@ -408,12 +408,18 @@ class Simulator(Config):
     def get_terrain_sx(self):
         """ Returns low-res data for terrain Sx layer inprojected crs """
         try:
-            #sxfname_str = f'sx_d{int(self.uniform_winddirn_href)}_lowres'
-            sxfname_str = f'sx_d{int(self.Ang)}_lowres'
+
+            # wind direction with proper convention for Sx calculation
+            wdirn_sx_ = (self.Ang+180)%360
+            # Approximate to closest 5 deg
+            wdirn_sx = 5*round(wdirn_sx_/5)
+
+            sxfname_str = f'sx_d{int(wdirn_sx)}_lowres'
             sx = self.load_terrain_quantity(self.case_ids[0], sxfname_str)
-            #print(f'Found sx map for {int(self.uniform_winddirn_href)} deg. Loading it..')
-            print(f'Found sx map for {int(self.Ang)} deg. Loading it..')
+
+            print(f'Found sx map for {int(wdirn_sx)} deg (angle flipped). Loading it..')
         except OSError:
+            print(f'Could not find {sxfname_str}.')
             sx = self.compute_sx_case() 
         return sx
 
@@ -455,11 +461,11 @@ class Simulator(Config):
         elev_lowres = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
 
         # wind direction with proper convention for Sx calculation
-        wdirn_sx = (self.Ang+180)%360
+        wdirn_sx_ = (self.Ang+180)%360
         # Approximate to closest 5 deg
-        wdirn_sx = 5*round(self.Ang/5)
+        wdirn_sx = 5*round(wdirn_sx_/5)
 
-        print(f'Getting Sx for {wdirn_sx:.2f} degrees, based on {self.resolution} m resolution maps')
+        print(f'Getting Sx for {wdirn_sx:.2f} degrees (angle flipped), based on {self.resolution} m resolution maps')
         sxfname_str = f'sx_d{int(wdirn_sx)}_lowres'
 
         sx = calcSx(xgrid, ygrid, elev_lowres.T, wdirn_sx)
@@ -904,7 +910,6 @@ class Simulator(Config):
                 for i,action in enumerate(rulesets[self.movement_ruleset]):
                     print(f'{i+1}.',action)
 
-        # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = self._get_starting_indices()
         starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
 
@@ -915,7 +920,6 @@ class Simulator(Config):
             #dir_offsets = np.random.normal(scale=PAM_stdev,
             #                               size=len(starting_locs))
             dir_offsets = np.random.normal(scale=PAM_stdev)
-            #print(f'Calculated dir_offsets: {dir_offsets}')
 
         self.PAM = self.track_direction #+ dir_offsets
 
@@ -932,7 +936,11 @@ class Simulator(Config):
             orographicupdraft = self.load_updrafts(case_id, apply_threshold=True)
             elevation = highRes2lowRes(self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
                                 
-            #for real_id, updraft in enumerate(updrafts):  #this did not work for heuristics
+            if self.thermals_realization_count==0:
+                # Workaound for Heuristics SSRS
+                self.thermals_realization_count=1
+
+            #for real_id, updraft in enumerate(updrafts):  # This does not work for heuristics
             for real_id in range(self.thermals_realization_count):
 #                if self.sim_seed > 0:
 #                    # TODO: this should not be needed
@@ -970,7 +978,12 @@ class Simulator(Config):
                 elif self.sim_movement == 'heuristics':
                     
                     fname_thermal = self._get_thermal_updraft_fname(case_id, real_id, self.mode_data_dir)
-                    thermalupdraft=np.load(f'{fname_thermal}.npy')
+                    try:
+                        thermalupdraft=np.load(f'{fname_thermal}.npy')
+                    except FileNotFoundError:
+                        # no thermals in this case. Let's set a zero array for that
+                        thermalupdraft = np.zeros_like(orographicupdraft)
+
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                         end="", flush=True)
                     
@@ -996,18 +1009,6 @@ class Simulator(Config):
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)                
 
-# use with import multiprocessing as mp
-#    def init_worker(self):
-#        if self.sim_seed >= 0:
-#            myseed = self.sim_seed
-#            worker = mp.current_process()
-#            if self.max_cores > 1:
-#                workerid = worker._identity[0]
-#                # TODO: workerid increases with each new mp.Pool, _not_ guaranteed
-#                # to be 1..num_cores
-#                myseed += workerid
-#            print('initializing',worker,'with seed',myseed)
-#            np.random.seed(myseed)
 
     def _parallel_run(self, func, start_locs, *args):
         num_cores = min(self.track_count, self.max_cores)
@@ -1325,7 +1326,6 @@ class Simulator(Config):
                  updrafts = [updrafts]
 
             for real_id, updraft in enumerate(updrafts):
-                #print(f'inside plot_updraft. updraft shape is {np.shape(updraft)}')
                 fig, axs = plt.subplots(figsize=self.fig_size)
                 if vmax is None:
                     maxval = min(max(1, int(round(np.mean(updraft)))), 5)

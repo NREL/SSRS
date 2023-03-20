@@ -60,7 +60,7 @@ class MovModel:
                 (north_bnodes[:col_len], west_bnodes[row_len:]))
         bndry_nodes = np.concatenate((low_nodes, high_nodes))
         bndry_potential = np.zeros((bndry_nodes.size))
-        bndry_potential[bndry_nodes.size // 2:] = 1000.
+        bndry_potential[bndry_nodes.size // 2:] = 100.
         return bndry_nodes, bndry_potential
 
     def assemble_sparse_linear_system(self):
@@ -107,7 +107,7 @@ class MovModel:
         conductivity_a = conductivity.ravel(order='F')[row_inds].astype(float)
         conductivity_b = conductivity.ravel(order='F')[col_inds].astype(float)
         vals = np.empty_like(conductivity_a)
-        vals[:] = 1e-08
+        vals[:] = 1e-05
         non0 = np.where((conductivity_a != 0) & (conductivity_b != 0))
         vals[non0] = get_harmonic_mean(conductivity_a[non0], conductivity_b[non0])
         vals /= facs

@@ -21,7 +21,7 @@ def calcOrographicUpdraft(
     res: float,            # low-res analysis resolution
     sx: np.ndarray = None, # low-res
     h: float = 80.,
-    min_updraft_val: float = 0.
+    min_updraft_val: float = 1e-5
 ) -> np.ndarray:
     """
     Returns orographic updraft using wind speed, wind direction, slope
@@ -44,12 +44,13 @@ def calcOrographicUpdraft_original(
     aspect: np.ndarray,
     res_terrain: float, # high-res terrain data resolution
     res: float,         # low-res analysis resolution
-    min_updraft_val: float = 0.
+    min_updraft_val: float = 1e-5
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using Brandes and Ombalski model
     
         Receives high-res array, returns coarsened updraft field
     """
+    print('Computing orograhpic updraft with vector model')
 
     sinterm = np.sin(np.deg2rad(slope))
     costerm = np.cos(np.deg2rad(aspect-wdirn))
@@ -71,7 +72,7 @@ def calcOrographicUpdraft_improved(
     res: float,         # low-res analysis resolution
     sx: np.ndarray = None, # low-res
     h : float = 80.,
-    min_updraft_val: float = 0.
+    min_updraft_val: float = 1e-5
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using our improved model"""
 

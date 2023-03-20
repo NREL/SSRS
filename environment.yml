@@ -2,7 +2,7 @@ name: ssrs_env
 channels:
   - conda-forge
 dependencies:
-  - python >=3.8
+  - python>=3.8
   - matplotlib>=3.4
   - numpy>=1.21
   - scipy>=1.7
@@ -13,9 +13,11 @@ dependencies:
   - timezonefinder>=5.2
   - owslib>=0.25
   - richdem>=0.3.4
-  - ecCodes
+  - pygrib>=2.1.4
+  - cartopy>=0.20.3
   - pip
   - pip:
       - elevation>=1.1
       - h5pyd>=0.8
       - astral>=2.2
+      - herbie-data>=0.0.10

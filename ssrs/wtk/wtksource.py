@@ -27,27 +27,42 @@ class WtkSource:
             self.years = list(range(2018, 2020))
             fname = '/lustre/eaglefs/shared-projects/wtk-led/ERA5_En1/wtk_ERA5_En1_$YEAR.h5'
             self.module_name = 'h5py'
+        elif sname == 'HRRR':
+            # This has nothing to do with WTK, but this makes the
+            # High-Resolution Rapid Refresh dataset work in this same framework
+            from datetime import date
+            thisyr = date.today().year
+            self.years = list(range(2014,thisyr+1))
+            fname = ''
+            self.module_name = 'herbie'
         else:
             raise ValueError((f'Invalid WindToolKit source: {sname}\nOptions:'
                               f'\n{chr(10).join(self.valid_sources)}\n'))
 
-        print(f'Considering WindToolKit source: {sname}')
-        self.file_names = [fname.replace('$YEAR', str(yr))
-                           for yr in self.years]
-        self.hsds = importlib.import_module(self.module_name)
-        try:
-            with self.hsds.File(self.file_names[0], mode='r') as f_obj:
-                self.valid_layers = list(f_obj)
-        except FileNotFoundError as _:
-            if sname in ('EAGLE', 'EAGLE_LED'):
-                tmp_str = (f'WTK source {sname} requires access to NREL '
-                           f'EAGLE system, choose AWS instead!')
-            else:
-                tmp_str = 'Connection issues! Try again.'
-            raise FileNotFoundError(
-                f'Cannot find {self.file_names[0]}\n{tmp_str}') from None
-        if sname == 'AWS':
-            self.validate_aws_source()
+        if self.module_name == 'herbie':
+            self.file_names = None
+            self.hsds = None
+            # these should be automatically handled by the herbie interface
+            self.valid_layers = None
+            self.varnames = ['windspeed_80m','winddirection_80m']
+        else:
+            print(f'Considering WindToolKit source: {sname}')
+            self.file_names = [fname.replace('$YEAR', str(yr))
+                               for yr in self.years]
+            self.hsds = importlib.import_module(self.module_name)
+            try:
+                with self.hsds.File(self.file_names[0], mode='r') as f_obj:
+                    self.valid_layers = list(f_obj)
+            except FileNotFoundError as _:
+                if sname in ('EAGLE', 'EAGLE_LED'):
+                    tmp_str = (f'WTK source {sname} requires access to NREL '
+                               f'EAGLE system, choose AWS instead!')
+                else:
+                    tmp_str = 'Connection issues! Try again.'
+                raise FileNotFoundError(
+                    f'Cannot find {self.file_names[0]}\n{tmp_str}') from None
+            if sname == 'AWS':
+                self.validate_aws_source()
 
     def validate_aws_source(self):
         """ Check if AWS source for WTK data is connectable """

@@ -58,7 +58,7 @@ def calcOrographicUpdraft_original(
 
     w0_abovemin = np.maximum(min_updraft_val, w0)
     w0_abovemin_coarse = highRes2lowRes(w0_abovemin, res_terrain, res)
-
+    
     return w0_abovemin_coarse
 
 
@@ -103,7 +103,11 @@ def calcOrographicUpdraft_improved(
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
 
-    return F*w0prime
+    # Compute improved value and remove NaNs from last column and row (product of Sx calculation)
+    wo_imp = F*w0prime
+    wo_imp[np.isnan(wo_imp)] = 0.0
+
+    return wo_imp
 
 
 def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
@@ -396,16 +400,19 @@ def calcAspectDegrees_richdem(z_mat: np.ndarray, res: float) -> np.ndarray:
     return out
 
 
-def get_above_threshold_speed_scalar(in_val, threshold, transition_exp=5.0):
-    """ Converts updraft using threshold speed """
-    if in_val > 1e-02:
-        if in_val > threshold:
-            usable_updraft = in_val
-        else:
-            usable_updraft = threshold * (
-                np.exp((in_val / threshold)**transition_exp) - 1) / (np.exp(1) - 1)
-    else:
-        usable_updraft = 0.
+def get_above_threshold_speed_scalar(in_val, threshold, apply_legacy_function=False, transition_exp=5.0):
+    """ Converts updraft using threshold speed
+
+    Legacy thresholding function is applied if `apply_legacy_function`
+    kwarg is True and the updraft is at least 0.01 m/s; otherwise, a
+    hard cutoff is applied and the updraft is zeroed below the threshold.
+    """
+    usable_updraft = 0.
+    if in_val > threshold:
+        usable_updraft = in_val
+    elif (in_val > 1e-02) and apply_legacy_function:
+        usable_updraft = threshold * (
+            np.exp((in_val / threshold)**transition_exp) - 1) / (np.exp(1) - 1)
     return usable_updraft
 
 
@@ -434,11 +441,15 @@ def compute_random_thermals(
     aspect: np.ndarray,  # terrain aspect, used for weighting
     thermal_intensity_scale: float  # describe strength of field
 ) -> np.ndarray:
-    """ Returns field of smoothed random thermals from lognornal dist"""
+    """
+    Returns field of smoothed random thermals from lognornal dist
+
+    This method is only used if thermal_model is 'naive'
+    """
     ysize, xsize = aspect.shape
     wt_init = np.zeros([ysize, xsize])
-    border_x = int(0.1 * xsize)
-    border_y = int(0.1 * ysize)
+    border_x = int(0.05 * xsize)
+    border_y = int(0.05 * ysize)
     # border with no thermals used to reduce problems of circling out of the domain
     for i in range(border_y, ysize - border_y):
         for j in range(border_x, xsize - border_x):
@@ -457,6 +468,75 @@ def compute_random_thermals(
     wt = ndimage.gaussian_filter(wt_init, sigma=4, mode='constant')
 
     return wt
+
+#def compute_terrain_linearity_index(
+#    elevation: np.ndarray,
+#    aspect: np.ndarray,
+#    min_updraft_val: float = 0.
+#) -> np.ndarray:
+#    """ UNFINISHED Returns a measure of terrain linearity based on contiguous regions of similar aspect """
+#    ysize, xsize = aspect.shape
+#    for m in range(1, ysize):
+#        for n in range(1, xsize):
+#            count[m,n]=0.
+#            for i in range(m-1,m+1)
+#                for j in range(n-1,n+1)
+#                    if abs(aspect[i,j]-aspect[m,n])<5:
+#                        count[m,n]=count[m,n]+1
+#   
+#    return tli
+        
+        
+# def computeDatetimeGain(datetime):
+#
+#     tofday_hour = datetime.hour
+#     tofyear_mon = datetime.month
+#
+#     # Compute the diurnal cycle weights
+#
+#     tsunrise = 6       # time of sunrise, in hours. Tipically 6AM. Given in military time
+#     tsunset = 18       # time of sunset, in hours. Tipically 6PM. Given in military time
+#     maxfactor = 1.2  # factor by which the quantities will be multiplied by at the solar zenith
+#     # factor by which the quantities will be multiplied by at night (could be negative, indicating a stable boundary layer)
+#     minfactor = 0
+#
+#     tday = np.linspace(tsunrise, tsunset, 100)
+#     period = tsunrise - tsunset
+#     phase = period / 2 + tsunrise
+#     amp = (maxfactor - minfactor) / 2
+#     offset = (maxfactor + minfactor) / 2
+#     tofday_weight = amp * \
+#         np.cos((2 * np.pi * (1 / period) * (tday - phase))) + offset
+#
+#     # Add bounds of simulation times
+#     tday = np.concatenate(([0], tday, [24]))
+#     tofday_weight = np.concatenate(([minfactor], tofday_weight, [minfactor]))
+#
+#     # Compute the seasonal cycle weights
+#
+#     # month in which the summer begins. Left for generality. 1=Jan; 12=Dec.
+#     moSummerStart = 4
+#     # month in which the summer ends. Left for generality. 1=Jan; 12=Dec.
+#     moSummerEnd = 9
+#     maxfactor = 1.1  # factor by which the quantities will be multiplied by middle of Summer
+#     minfactor = 0.5  # factor by which the quantities will be multiplied by at other seasons
+#
+#     tyear = np.linspace(moSummerStart, moSummerEnd, 100)
+#     period = moSummerStart - moSummerEnd
+#     phase = period / 2 + moSummerStart
+#     amp = (maxfactor - minfactor) / 2
+#     offset = (maxfactor + minfactor) / 2
+#     tofyear_weight = amp * \
+#         np.cos((2 * np.pi * (1 / period) * (tyear - phase))) + offset
+#
+#     # Add bounds of simulation times
+#     tyear = np.concatenate(([0], tyear, [12]))
+#     tofyear_weight = np.concatenate(([minfactor], tofyear_weight, [minfactor]))
+#
+#     diurnalgain = np.interp(tofday_hour, tday, tofday_weight)
+#     seasonalgain = np.interp(tofyear_mon, tyear, tofyear_weight)
+#
+#     return diurnalgain, seasonalgain
 
 
 def getRandomPointsWeighted (weight, n, nRealization=1):
@@ -518,20 +598,24 @@ def compute_thermals_3d(
     southwest_lonlat: Tuple[float, float], 
     extent: Tuple[float, float, float, float],  # xmin, ymin, xmax, ymax
     res: int,   # uniform resolution
-    time: Tuple[int, int, int, int, int],  # y, m, d, hour, min
+    time,  # either tuple with [y, m, d, hour], or datetimeobject
     height: float = 150,
     wfipInformed: bool = True
     ) -> np.ndarray:
     '''
     Returns field of thermals based on Allen (2006)
     '''
-    #from ssrs.raster import *
-    #from ssrs import Terrain, HRRR
     
     # TODO: Loop over a list of `time`s
     
+    # Get string of time to pass to HRRR. Time can be passed either a tuple of datetime object
+    if isinstance(time, datetime):
+        timestr = f' {time.year}-{time.month:02d}-{time.day:02d} {time.hour:02d}:{time.minute:02d}'
+    else:
+        timestr = f'{time[0]}-{time[1]:02d}-{time[2]:02d} {time[3]:02d}:00'
+
     # Get hrrr data
-    hrrr = HRRR(valid_date=f'{time[0]}-{time[1]:02d}-{time[2]:02d} {time[3]:02d}:{time[4]:02d}')
+    hrrr = HRRR(valid_date = timestr)
 
     # Compute convective velocity
     wstar,  xx, yy = hrrr.get_convective_velocity(southwest_lonlat, extent, res=res)
@@ -542,7 +626,18 @@ def compute_thermals_3d(
                                                  southwest_lonlat,
                                                  extent,
                                                  res)
+    print(f'albedo is {albedo}')
+    wstar  = wstar.values
+    try:
+        albedo = albedo.values
+    except AttributeError:  # it's an array already
+        pass
+    zi = zi[list(zi.keys())[0]].values
 
+
+    if np.mean(zi) == np.nan:
+        raise ValueError(f'The value obtained for the boundary layer height contains NaNs.',\
+                         f'HRRR data is imcomplete at the site and time of interest.')
 
     # Define updraft shape factors
     r1r2shape = np.array([0.14, 0.25, 0.36, 0.47, 0.58, 0.69, 0.80])
@@ -559,7 +654,7 @@ def compute_thermals_3d(
     albedofactor = (0.1/(albedo)**0.5)
     spatialWeight = ( wstar**1 + albedofactor )**2
     # Mask the edges so no thermals there
-    fringe= 3000 # in [m]
+    fringe= 2000 # in [m]
     ifringe = int(fringe/res)
     spatialWeight[0:ifringe,:] = spatialWeight[-ifringe:,:] = 0
     spatialWeight[:,0:ifringe] = spatialWeight[:,-ifringe:] = 0
@@ -568,7 +663,8 @@ def compute_thermals_3d(
     ziavg = np.mean(zi)
     zzi = height/zi
     zziavg = height/ziavg
-    assert ziavg > 300, 'The boundary layer is too shallow for thermals'
+    if ziavg > 300:
+        ValueError(f'The boundary layer is too shallow for thermals')
 
     # Calcualte average updraft size
     rbar=(.102*zzi**(1/3))*(1-(.25*zzi))*zi
@@ -598,7 +694,7 @@ def compute_thermals_3d(
     wpeak=(3*wTbar*((r2**3)-(r2**2)*r1)) / ((r2**3)-(r1**3))
 
     # Create a realization of thermal's center location
-    print(f'Creating {nThermals} thermals. The average boundary layer height is {ziavg:1f}')
+    print(f'Creating {nThermals} thermals. The average boundary layer height is {ziavg:.1f} m')
     wt_init, sumOfRealizations = getRandomPointsWeighted(weight=spatialWeight, n=nThermals, nRealization=1)
 
     # Get distances to closest thermal center
@@ -653,6 +749,7 @@ def compute_thermals_3d(
     # Stretch updraft field to blend with sink at edge
     # w[dist>r1] = (w*(1-we/wpeak)+we)[dist>r1]
     
+    print(f'compute_thermals_3d returning a thermal field of shape {np.shape(w)}')
     return w
 
 

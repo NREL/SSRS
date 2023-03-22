@@ -13,6 +13,7 @@ from .layers import get_above_threshold_hard_cutoff
 
 from .heuristics import rulesets
 from .actions import random_walk
+from .actions_local import random_walk_local
 from .utils import random_choice_movement, clip_inplace
 
 class MovModel:
@@ -311,18 +312,21 @@ def generate_simulated_tracks(
 
 def generate_heuristic_eagle_track(
         start_loc: List[int],
-        PAM: float, # principal axis of migration
+        PAM_const: float, # principal axis of migration
         ruleset: str,
         wo: np.ndarray, # orographic updraft
         wt: np.ndarray, # thermal updraft
         elev: np.ndarray, # elevation from DEM - db added
         res: float, # grid resolution
         windspeed: float, # uniform windspeed - needs to be generalized for wtk 
-        winddir: float, #uniform winddir - needs to be generalized for wtk 
-        max_moves: int = 1000,  #change from 1000 to 200 for local movements
+        winddir: float, #uniform winddir - needs to be generalized for wtk
+        threshold: float, #updraft threshold for flight - varies with species 
+        lookaheaddist: float, #distance eagle can see and evaluate possible lift ahead
+        max_moves: int = 2000,  #IMPORTANT - depends on size of domain and movement model
+                #change from 1000 to 100 for local movements, depends on scale
         #TODO ask Eliot why next param has to be specified here rather than set to int,
-        random_walk_freq: int=300, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
-        random_walk_step_size: float = 100.0, # when a random walk does occur, the distance traveled in each random movement
+        random_walk_freq: int=100000, # if > 0, how often random walks will randomly occur -- approx every 1/random_walk_freq steps
+        random_walk_step_size: float = 50.0, # when a random walk does occur, the distance traveled in each random movement
         random_walk_step_range: tuple = (None,None) # when a random walk does occur, the number of random steps will occur in this range
 ):
     
@@ -331,7 +335,7 @@ def generate_heuristic_eagle_track(
 
     """ Generate an eagle track based on heuristics """
     rules = rulesets[ruleset]
-    num_rows, num_cols = wo.shape
+    num_rows, num_cols = np.shape(wo)
     # initial conditions
     # note 1: we simulate actual positions and then convert these back to grid
     #         indices at the end
@@ -342,25 +346,31 @@ def generate_heuristic_eagle_track(
     wo_start=np.array(0.0)
      #set up a list for adding a altitude-based weighting for each move
     #weighting applied to moves based on presumed low (wt=1), moderate (wt=0.5), or high flight (wt=0)
+
     trajectory = [current_position]  
     track_weight = [weight_start]
     track_wo=[wo_start] 
     
-    ref_ang = np.radians(90.0 - PAM)
+    ref_ang = np.radians(90.0 - PAM_const)
     current_heading = np.array([np.cos(ref_ang), np.sin(ref_ang)])
-    directions = [current_heading]
+    if ruleset=='local_moves':
+        np.random.seed()
+        move_dir=np.random.uniform(0., 360.)
+        directions=[move_dir]
+    else:
+        directions = [current_heading]
     xg = np.arange(num_cols) * res
     yg = np.arange(num_rows) * res
     maxx = xg[-1]
     maxy = yg[-1]
-    
+
     # setup updraft and elevation interpolation and smoothed wo for lookahead
     wo_interp = RectBivariateSpline(xg, yg, wo.T)
     wo_smoothed=ndimage.gaussian_filter(wo, sigma=3, mode='constant') #db added
     wo_sm_interp=RectBivariateSpline(xg, yg, wo_smoothed.T) #db added
     wt_interp = RectBivariateSpline(xg, yg, wt.T)
     elev_interp = RectBivariateSpline(xg, yg, elev.T) #db added
-
+    
     # estimate spontaneous random walk params if needed
     if (random_walk_step_range[0] is None) or (random_walk_step_range[1] is None):
         # set default based on assumed ~2 km dist of travel
@@ -373,11 +383,18 @@ def generate_heuristic_eagle_track(
 
     #allow for some individual variation in PAM between eagles
 # TODO: this should not be needed
-#    np.random.seed()
-    PAM = PAM + np.random.uniform(-10., 10.) 
+    np.random.seed()
+    randomPAM = np.random.uniform(-10, 10)
+    PAM = PAM_const + randomPAM
     
+    #print(f'Adding random component of {randomPAM:.3f} to PAM, going from {PAM_const:.3f} to {PAM:.3f}.')
+
     # move through domain
+    breakTrack=False
     for imove in range(max_moves):
+        if breakTrack:
+            print(f'break track true. stopping track.')
+            break
         iact = imove % len(rules)
         next_rule = rules[iact]
 
@@ -387,22 +404,34 @@ def generate_heuristic_eagle_track(
         if random_walk_freq > 0:
             randwalk = np.random.randint(1, random_walk_freq)
             #randwalk = np.random.randint(1, 10)
+
         if randwalk==1:
             randy2 = np.random.randint(*random_walk_step_range) #number of steps
             #randy2 = np.random.randint(20,50) #number of steps
             for i in range(randy2):
-                new_pos,step_wt = random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
-                #if not ((0 < new_pos[0] < xg[-1]) and (0 < new_pos[1] < yg[-1])):
-                if not ((0.05*xg[-1] < new_pos[0] < 0.95*xg[-1]) and (0.05*yg[-1] < new_pos[1] < 0.95*yg[-1])):
+                if ruleset!='local_moves':
+                    new_pos,step_wt = random_walk(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
+                else:
+                    move_dir=directions[-1]
+                    new_pos,step_wt = random_walk_local(trajectory,directions,track_weight,move_dir,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                        wo_interp,wo_sm_interp,wt_interp,elev_interp,step=random_walk_step_size,halfsector=90.0)
+
+                if not ((0.025*xg[-1] < new_pos[0] < 0.975*xg[-1]) and (0.025*yg[-1] < new_pos[1] < 0.975*yg[-1])):
+                    print('break')
                     break #db revised because we were getting a lot of random walks bunched up at the downstream boundary
                 delta = new_pos - trajectory[-1]
-                directions.append(delta)
+                if ruleset!='local_moves':
+                    directions.append(delta)
+                else:
+                    directions.append(move_dir)
                 trajectory.append(new_pos)
                 track_weight.append(step_wt)
                 track_wo.append(wo_interp(new_pos[0],new_pos[1], grid=False))
+
         if callable(next_rule):
-            new_pos, step_wt = next_rule(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp) 
-        
+            new_pos, step_wt = next_rule(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                wo_interp,wo_sm_interp,wt_interp,elev_interp) 
         else:
             assert isinstance(next_rule, tuple)
             action = next_rule[0]
@@ -411,11 +440,13 @@ def generate_heuristic_eagle_track(
                 kwargs = next_rule[1]
             except IndexError:
                 kwargs = {}
-            new_pos, step_wt = action(trajectory,directions,track_weight,PAM,windspeed,winddir,maxx,maxy,wo_interp,wo_sm_interp,wt_interp,elev_interp,**kwargs) 
+            new_pos, step_wt = action(trajectory,directions,track_weight,PAM,windspeed,winddir,threshold,lookaheaddist,maxx,maxy,
+                wo_interp,wo_sm_interp,wt_interp,elev_interp) 
         
         # TODO: can do some validation here (to accept/reject new_pos)
 
         # process new positions
+
         try:
             assert len(new_pos[0]) == 2 # TODO: update this for 3-D tracks!
         except TypeError:
@@ -432,11 +463,14 @@ def generate_heuristic_eagle_track(
         last_pos = trajectory[-1]
         for cur_pos in new_pos:
             if not ((0 < cur_pos[0] < xg[-1]) and (0 < cur_pos[1] < yg[-1])): 
-                #print('ending after',imove,'moves')
+                breakTrack=True
                 break
             delta = tuple(map(lambda i,j:i-j, cur_pos, last_pos))
             #delta = cur_pos - last_pos (this gives an error, unsupported operand for tuple)
-            directions.append(delta)
+            #if ruleset=='local_moves':
+            #    directions.append(move_dir)
+            if ruleset!='local_moves':
+                directions.append(delta)
             trajectory.append(cur_pos)
             track_weight.append(step_wt)
             track_wo.append(wo_interp(cur_pos[0],cur_pos[1],grid=False))
@@ -453,12 +487,15 @@ def generate_heuristic_eagle_track(
     
     #combine traj with track_weight
     trajectory_3D = np.c_[trajectory,track_wt_10000]
-    np.savetxt('output/traj.csv', trajectory, delimiter=',')
+    
+    #this next just for troubleshooting
+    #np.savetxt('output/wy_small_heuristic_local/figs/uniform/traj.csv', trajectory, delimiter=',')
+    #np.savetxt('output/wy_small_heuristic_local/figs/uniform/movedir.csv', directions, delimiter=',')
     
     iarr = trajectory_3D[:,1]
     jarr = trajectory_3D[:,0]
     karr = trajectory_3D[:,2]
-    
+
     return np.stack([iarr,jarr,karr],axis=-1).astype(np.int16) 
 
 

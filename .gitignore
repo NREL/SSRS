@@ -8,9 +8,17 @@ ssrs/output
 ssrs/older/
 ssrs/__pycache__/
 
+# output data
+*.npy
+*.npz
+*.pkl
+
+# system files
+.DS_Store
+*.swp
+
 # Compiled
 __pycache__/
-.DS_Store
 *.pyc
 *.pyo
 .pytest_cache
@@ -19,7 +27,6 @@ __pycache__/
 docs/_build/
 docs/_template/
 docs/_static/
-
 
 # Distribution / packaging
 .Python

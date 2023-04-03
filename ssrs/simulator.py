@@ -26,9 +26,12 @@ from .turbines import TurbinesUSWTB
 from .config import Config
 from .layers import (calcOrographicUpdraft, calcAspectDegrees,
                      calcSlopeDegrees, compute_random_thermals,
-                     get_above_threshold_speed, blurQuantity,
+                     get_above_threshold_speed,
+                     get_above_threshold_hard_cutoff,
+                     blurQuantity,
                      calcSx, highRes2lowRes, compute_thermals_3d)
-from .raster import (get_raster_in_projected_crs,
+from .raster import (lonlat_crs,
+                     get_raster_in_projected_crs,
                      transform_bounds, transform_coordinates)
 
 from .movmodel import (generate_heuristic_eagle_track,compute_smooth_presence_counts_HSSRS)
@@ -47,7 +50,6 @@ from .utils import (makedir_if_not_exists, get_elapsed_time,
 class Simulator(Config):
     """ Class for SSRS simulation """
 
-    lonlat_crs = 'EPSG:4326'
     time_format = 'y%Ym%md%dh%H'
 
     def __init__(self, in_config: Config = None, **kwargs) -> None:
@@ -101,14 +103,14 @@ class Simulator(Config):
 
         # Determine bounds in both lon/lat and in projected crs
         proj_west, proj_south = transform_coordinates(
-            self.lonlat_crs, self.projected_crs,
+            lonlat_crs, self.projected_crs,
             self.southwest_lonlat[0], self.southwest_lonlat[1])
         proj_east = proj_west[0] + (xsize - 1) * self.resolution
         proj_north = proj_south[0] + (ysize - 1) * self.resolution
         self.bounds = (proj_west[0], proj_south[0], proj_east, proj_north)
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
-            self.bounds, self.projected_crs, self.lonlat_crs)
+            self.bounds, self.projected_crs, lonlat_crs)
         #print(self.lonlat_bounds) # (lon_min, lat_min, lon_max, lat_max)
 
         # Get meshgrids for pcolormesh plotting
@@ -218,7 +220,11 @@ class Simulator(Config):
 
 
         # Calculate the orographic updraft based on mode
-        if self.sim_mode.lower() == 'uniform':
+        if self.movement_model == 'drw':
+            self.compute_dummy_updraft_field()
+        elif self.sim_mode.lower() != 'uniform':
+            self.compute_orographic_updrafts_using_wtk()
+        else:
             self.compute_orographic_updrafts_uniform()
         else:
             if self.wind_data_source == 'wtk':
@@ -229,6 +235,23 @@ class Simulator(Config):
         # Calculate the thermal updraft for each case IDs (diff timestamps)
         for case_id in self.case_ids:
             self.compute_thermal_updrafts(case_id)
+
+        # Consider a distribution of updraft thresholds
+        if self.updraft_threshold_stdev > 0:
+            # calculate potential fields for updraft fields with a range of
+            # discrete threshold values
+            threshmin = self.updraft_threshold_realization_min
+            threshmax = self.updraft_threshold_realization_max
+            threshstep = self.updraft_threshold_realization_step
+            self.threshold_realizations = np.arange(
+                    threshmin, threshmax+threshstep, threshstep)
+            self.threshold_realizations = self.updraft_threshold + \
+                    self.updraft_threshold_stdev * self.threshold_realizations
+            print('Discrete thresholds to consider:',
+                  self.threshold_realizations)
+        else:
+            # legacy model
+            self.threshold_realizations = None
 
         # Plotting settings
         fig_aspect = self.region_width_km[0] / self.region_width_km[1]
@@ -312,7 +335,7 @@ class Simulator(Config):
             if not self.track_start_region_origin_xy:
                 # convert from lon/lat
                 track_start_x, track_start_y = transform_coordinates(
-                    self.lonlat_crs, self.projected_crs, *self.track_start_region_origin)
+                    lonlat_crs, self.projected_crs, *self.track_start_region_origin)
                 self.track_start_region_origin = (
                     (track_start_x[0] - self.bounds[0]) / 1000.,
                     (track_start_y[0] - self.bounds[1]) / 1000.,
@@ -658,6 +681,19 @@ class Simulator(Config):
             np.save(f'{fname}.npy',updraft.astype(np.float32))
         print(f'took {get_elapsed_time(start_time)} to get orographic updrafts using WTK', flush=True)
 
+    def compute_dummy_updraft_field(self) -> None:
+        """This should be deprecated in the future!
+
+        For DRW, updraft field need not be calculated. However, a number
+        of routines (e.g., plot_*()) will load the updraft field from
+        file just to get the domain size. This should be fixed in a
+        future code refactor.
+        """
+        updraft = np.zeros(self.gridsize)
+        for dtime, case_id in zip(self.dtimes, self.case_ids):
+            fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
+            np.save(f'{fname}.npy',updraft.astype(np.float32))
+
 
     def compute_thermal_updrafts(self, case_id: str):
         """ Computes updrafts for the particular case """
@@ -696,23 +732,37 @@ class Simulator(Config):
     def load_updrafts(self, case_id: str, apply_threshold=True):
         """ Computes updrafts for the particular case """
         fname = self._get_orographicupdraft_fname(case_id, self.mode_data_dir)
-
         orographicupdraft = np.load(f'{fname}.npy')
         print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
 
+        #updrafts = [orographicupdraft] # is this needed??
         updrafts= orographicupdraft
 
         # Removing this for heuristics. This function needs to return only the orographic
         # Add thermal updrafts to the `updrafts` field if available
         if self.sim_movement != 'heuristics':
             if self.thermals_realization_count > 0:
+                assert self.threshold_realizations is None, \
+                    'using a random threshold with thermals has not been tested'
                 for real_id in range(self.thermals_realization_count):
                     fname = self._get_thermal_updraft_fname(
                         case_id, real_id, self.mode_data_dir)
                     updrafts.append(updrafts + np.load(f'{fname}.npy'))
             if apply_threshold:
-                updrafts = [get_above_threshold_speed(
-                    ix, self.updraft_threshold) for ix in updrafts]
+                if apply_threshold == True:
+                    threshold = self.updraft_threshold
+                else:
+                    assert isinstance(apply_threshold, float)
+                    threshold = apply_threshold
+                if self.smooth_threshold_cutoff:
+                    # legacy model with threshold function
+                    assert self.threshold_realizations is None, \
+                        'random threshold with threshold function not supported'
+                    updrafts = [get_above_threshold_speed(w0, threshold)
+                                for w0 in updrafts]
+                else:
+                    updrafts = [get_above_threshold_hard_cutoff(w0, threshold)
+                                for w0 in updrafts]
 
         return updrafts
 
@@ -793,6 +843,23 @@ class Simulator(Config):
             print('NANs found in potential!')
         return potential
 
+    def get_directional_potential_realizations(self, updraft, case_id, real_id):
+        """Different potential fields are possible from different
+        updraft threshold values
+
+        TODO: parallelize this
+        """
+        assert real_id == 0, 'should have only one orographic updraft field'
+        potential_realizations = []
+        for real_id, threshold in enumerate(self.threshold_realizations):
+            print('Calculating potential for updraft threshold =',threshold)
+            updraft_with_threshold = get_above_threshold_hard_cutoff(updraft,
+                                                                     threshold)
+            potential = self.get_directional_potential(
+                    updraft_with_threshold, case_id, real_id)
+            potential_realizations.append(potential)
+        return potential_realizations
+
     def _get_id_string(self, case_id: str, real_id: Optional[int] = None):
         """ Commong id string for saving/reading data and screen output"""
         dirn_str = f'd{int(self.track_direction % 360)}'
@@ -816,7 +883,12 @@ class Simulator(Config):
             print('Plotting directional potential..')
             for case_id in self.case_ids:
                 updrafts = self.load_updrafts(case_id, apply_threshold=True)
-                for real_id, _ in enumerate(updrafts):
+                if self.threshold_realizations is None:
+                    iterator = enumerate(updrafts)
+                else:
+                    assert len(updrafts) == 1
+                    iterator = enumerate(self.threshold_realizations)
+                for real_id, tmp in iterator:
                     fname = self._get_potential_fname(case_id, real_id,
                                                       self.mode_data_dir)
                     potential = np.load(f'{fname}.npy')
@@ -829,6 +901,8 @@ class Simulator(Config):
                     cbar.set_label('Directional potential')
                     if plot_turbs:
                         self.plot_turbine_locations(axs)
+                    if self.threshold_realizations is not None:
+                        axs.set_title(f'threshold = {tmp:g} m/s')
                     axs.set_xlim([self.extent[0], self.extent[1]])
                     axs.set_ylim([self.extent[2], self.extent[3]])
                     fname = self._get_potential_fname(case_id, real_id,
@@ -845,33 +919,63 @@ class Simulator(Config):
         # print(f'Memory parameter = {self.track_dirn_restrict}')
         # print('Getting starting locations for simulating eagle tracks..')
         starting_rows, starting_cols = self._get_starting_indices()
-        starting_locs = [[x, y] for x, y in zip(starting_rows, starting_cols)]
+        if self.threshold_realizations is not None:
+            # "best practice" RNG -- this is self contained and _should not_
+            # affect other calls to np.random.* when using the reseeded
+            # legacy BitGenerator (np.random.seed), i.e., when Config.sim_seed
+            # is specified
+            from numpy.random import RandomState, MT19937
+            rng = RandomState(MT19937(self.updraft_threshold_seed))
+            cutoffs = rng.normal(loc=self.updraft_threshold,
+                                 scale=self.updraft_threshold_stdev,
+                                 size=len(starting_rows))
+            cutoffs[np.where(cutoffs < self.threshold_realizations[0])] = self.threshold_realizations[0]
+            cutoffs[np.where(cutoffs > self.threshold_realizations[-1])] = self.threshold_realizations[-1]
+            initial_conditions = [[x, y, w]
+                    for x, y, w in zip(starting_rows, starting_cols, cutoffs)]
+        else:
+            # smooth function or hard cutoff, with constant threshold value
+            initial_conditions = [[x, y] for x, y in zip(starting_rows, starting_cols)]
+
         num_cores = min(self.track_count, self.max_cores)
         for case_id in self.case_ids:
-            updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            if self.threshold_realizations is None:
+                updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            else:
+                # range of threshold values to be evaluated later
+                updrafts = self.load_updrafts(case_id, apply_threshold=False)
             for real_id, updraft in enumerate(updrafts):
 # TODO: this should not be needed
 #                if self.sim_seed > 0:
 #                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
+
                 if self.movement_model == 'fluid-flow':
-                    potential = self.get_directional_potential(
-                        updraft, case_id, real_id)
+                    if self.threshold_realizations is None:
+                        potential = self.get_directional_potential(
+                            updraft, case_id, real_id)
+                    else:
+                        potential = self.get_directional_potential_realizations(
+                            updraft, case_id, real_id)
+
                     start_time = time.time()
                     if self.track_converge_tol == 0:
                         print(f'{id_str}: Simulating {self.track_count} tracks..',
                               end="", flush=True)
                         tracks = self._parallel_run(generate_simulated_tracks,
-                            starting_locs,
+                            initial_conditions,
                             self.track_direction,
                             self.track_dirn_restrict,
                             self.track_stochastic_nu,
                             updraft,
-                            potential,
+                            potential, # single field -OR- list of fields
+                            threshold_realizations=self.threshold_realizations
                         )
 
                     else:
                         assert self.track_converge_tol > 0
+                        if self.threshold_realizations is not None:
+                            raise NotImplementedError('Track convergence mode not set up for random updraft thresholds')
                         if self.track_start_type != 'random':
                             print('WARNING: In track convergence mode, track_start_type should be random')
                         print(f'{id_str}: Simulating up to {self.track_count} tracks'
@@ -885,7 +989,7 @@ class Simulator(Config):
                             start_loc_range = slice(istart, istart+self.track_converge_check_interval)
                             # append to list of all tracks simulated thus far
                             tracks += self._parallel_run(generate_simulated_tracks,
-                                starting_locs[start_loc_range],
+                                initial_conditions[start_loc_range],
                                 self.track_direction,
                                 self.track_dirn_restrict,
                                 self.track_stochastic_nu,
@@ -915,14 +1019,17 @@ class Simulator(Config):
                     print(f'{id_str}: Simulating {self.track_count} tracks..',
                           end="", flush=True)
                     tracks = self._parallel_run(generate_simulated_tracks,
-                        starting_locs,
+                        initial_conditions,
                         self.track_direction,
                         self.track_dirn_restrict,
-                        self.track_stochastic_nu
+                        self.track_stochastic_nu,
+                        domain_shape = updraft.shape
                     )
+
                 print(f'took {get_elapsed_time(start_time)}', flush=True)
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
+                np.save(f'{fname}_initcond.npy', initial_conditions)
                 with open(f'{fname}.pkl', "wb") as fobj:
                     pickle.dump(tracks, fobj)
                 
@@ -1014,7 +1121,8 @@ class Simulator(Config):
                         starting_locs,
                         self.track_direction,
                         self.track_dirn_restrict,
-                        self.track_stochastic_nu
+                        self.track_stochastic_nu,
+                        domain_shape = orographicupdraft.shape
                     )
             
                 elif self.sim_movement == 'heuristics':
@@ -1052,12 +1160,13 @@ class Simulator(Config):
                     pickle.dump(tracks, fobj)                
 
 
-    def _parallel_run(self, func, start_locs, *args):
+    def _parallel_run(self, func, initial_conditions, *args, **kwargs):
         num_cores = min(self.track_count, self.max_cores)
 # use with import pathos.multiprocessing as mp
         #print('Using map with num_cores=',num_cores)
         with mp.Pool(num_cores) as pool:
-            output = pool.map(lambda start_loc: func(start_loc,*args), start_locs)
+            output = pool.map(lambda ic: func(ic,*args,**kwargs),
+                              initial_conditions)
 # use with import multiprocessing as mp
 #        #print('Using starmap with num_cores=',num_cores)
 #        arglist = [repeat(arg) for arg in args]
@@ -2256,7 +2365,7 @@ class Simulator(Config):
         """ Returns xlocs and ylocs of wtk data points """
         wtk_lons, wtk_lats = self.wtk.get_coordinates()
         wtk_xlocs, wtk_ylocs = transform_coordinates(
-            self.lonlat_crs, self.projected_crs, wtk_lons, wtk_lats)
+            lonlat_crs, self.projected_crs, wtk_lons, wtk_lats)
         return wtk_xlocs, wtk_ylocs
 
     def get_seasonal_datetimes(self) -> List[datetime]:

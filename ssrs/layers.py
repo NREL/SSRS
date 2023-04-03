@@ -400,22 +400,41 @@ def calcAspectDegrees_richdem(z_mat: np.ndarray, res: float) -> np.ndarray:
     return out
 
 
-def get_above_threshold_speed_scalar(in_val, val):
-    """ Converts updraft using threshold speed """
-    if in_val > 1e-02:
-        if in_val > val:
-            fval = in_val
-        else:
-            #fval = val * (np.exp((in_val / val)**5) - 1) / (np.exp(1) - 1)
-            fval=0.0
-    else:
-        fval = 0.
-    return fval
+def get_above_threshold_speed_scalar(in_val, threshold, apply_legacy_function=False, transition_exp=5.0):
+    """ Converts updraft using threshold speed
+
+    Legacy thresholding function is applied if `apply_legacy_function`
+    kwarg is True and the updraft is at least 0.01 m/s; otherwise, a
+    hard cutoff is applied and the updraft is zeroed below the threshold.
+    """
+    usable_updraft = 0.
+    if in_val > threshold:
+        usable_updraft = in_val
+    elif (in_val > 1e-02) and apply_legacy_function:
+        usable_updraft = threshold * (
+            np.exp((in_val / threshold)**transition_exp) - 1) / (np.exp(1) - 1)
+    return usable_updraft
 
 
 def get_above_threshold_speed(in_array: np.ndarray, threshold: float):
     """ vectorized form """
     return np.vectorize(get_above_threshold_speed_scalar)(in_array, threshold)
+
+
+def get_above_threshold_hard_cutoff(in_array: np.ndarray, threshold: float):
+    thresholded_array = np.copy(in_array)
+    thresholded_array[np.where(in_array < threshold)] = 0
+    return thresholded_array
+
+
+#def get_random_threshold(
+#    threshold: float,
+#    threshold_stdev: float
+#):
+#    cutoff = -1
+#    while cutoff < 0:
+#        cutoff = np.random.normal(loc=threshold, scale=threshold_stdev)
+#    return cutoff
 
 
 def compute_random_thermals(

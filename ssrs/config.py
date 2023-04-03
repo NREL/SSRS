@@ -60,9 +60,17 @@ class Config:
     wtk_interp_type: str = 'linear'  # 'nearest', 'linear', or 'cubic'
 
     # Parameters defining the updraft calculation
-    updraft_threshold: float = 0.75        # only use updrafts higher than this (hard cut-off; m/s)
+    updraft_threshold: float = 0.75         # only use updrafts higher than this (m/s)
+    updraft_threshold_stdev: float = 0.0    # if > 0, sample from truncated normal distribution
+    updraft_threshold_seed: int = 123456789 # if `updraft_threshold_stdev` > 0, used to initialize the RNG
+    updraft_threshold_realization_min: float = -2.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these discrete threshold values (in stdevs about the mean `updraft_threshold`)
+    updraft_threshold_realization_max: float = 2.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these discrete thresold values (in stdevs about the mean `updraft_threshold`)
+    updraft_threshold_realization_step: float = 0.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these discrete thresold values (in stdevs about the mean `updraft_threshold`)
+    smooth_threshold_cutoff: bool = False   # set to True for legacy behavior
+
     # Parameters for orographic updraft model
-    orographic_model: str = 'original'     # original, improved
+    orographic_model: str = 'original'      # original, improved
+
     # Parameters for thermal updraft model
     thermal_model: str = 'naive'           # 'naive', 'improvedAllen' (uses HRRR)
     thermals_realization_count: int = 0    # number of realizations of thermals

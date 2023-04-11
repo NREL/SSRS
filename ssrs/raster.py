@@ -9,6 +9,10 @@ from rasterio.warp import transform, reproject
 from rasterio.crs import CRS
 from rasterio._err import CPLE_AppDefinedError
 
+# Coordinate Reference Systems
+lonlat_crs = 'EPSG:4326'
+albers_crs = 'ESRI:102008'  # Albers Equal Area Conic
+
 
 def get_raster_in_projected_crs(
     fpath: str,

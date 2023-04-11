@@ -17,18 +17,19 @@ config_base = Config(
     random_walk_step_range=(30,60), # when a random walk does occur, the number of random steps will occur in this range
     look_ahead_dist = 2000.0, #distance outward that bird will scan for strong updrafts
     
-    thermals_realization_count=10,
+    thermals_realization_count=20,
     thermal_intensity_scale=1, #1 gives weak random field, 3 gives v strong random field    
     updraft_threshold=0.85,
     
-    southwest_lonlat=(-78.35, 40.45),  # (lon, lat) for southwest pt, no integers!
-    region_width_km=(30., 40.),  # terrain width (xwidth, ywidth) in km
+    southwest_lonlat=(-78.45, 40.45),  # (lon, lat) for southwest pt, no integers!
+    region_width_km=(40., 40.),  # terrain width (xwidth, ywidth) in km
     resolution=30., # meters
     
-    track_direction=15., #202.5,
+    track_direction=45., #202.5,
     track_start_region=(1, 29, 0.5, 0.5),  #xmin, xmax, ymin, ymax
     #track_start_region=(12, 18, 15, 25),  #xmin, xmax, ymin, ymax. placed centrally for random walk case
-    track_count=100,  #per thermals realization
+    track_start_type='structured',  # structured, random
+    track_count=50,  #per thermals realization
     
     # plotting related
     fig_height=6.,
@@ -39,7 +40,7 @@ config_uniform_north = replace(
     config_base,
     sim_mode='uniform',
     uniform_winddirn=135.,
-    uniform_windspeed=8.,
+    uniform_windspeed=6.,
 )
 
 
@@ -80,6 +81,8 @@ if __name__ == '__main__':
         sim = Simulator(cfg)
         sim.simulate_tracks_HSSRS()
         sim.plot_terrain_features()
+        sim.plot_orographic_updrafts()
+        sim.plot_thermal_updrafts()
         #sim.plot_wtk_layers()
         #sim.plot_directional_potentials()
         sim.plot_simulated_tracks_HSSRS()

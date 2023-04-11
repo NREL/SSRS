@@ -30,6 +30,7 @@ defaults = {
     # updraft calculations
     'orographic_model': 'original', # 'original', 'improved'
     'updraft_threshold': 0.0, # no thresholding applied [m/s]
+    'smooth_threshold_cutoff': True,
     
     # track simulation
     'track_count': 500,  # number of simulated eagle tracks

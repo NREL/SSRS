@@ -39,13 +39,14 @@ class ThreeDEP(WMS):
         "Contour Smoothed 25",
     )
     crs_str = 'EPSG:4326'
+    res = 1 / 3600. / 3.  # 1/3 arc second = 10 m = 1/3600/3 degrees
 
     def __init__(
         self,
         layer: str,
         bnds: Tuple[float, float, float, float],
         fpath: str,
-        res=1 / 3600. / 3.  # 1/3 arc second = 10 m = 1/3600/3 degrees
+        verbose: bool = True
     ):
         if layer in self.valid_layers:
             if layer == 'DEM':
@@ -55,9 +56,8 @@ class ThreeDEP(WMS):
             raise ValueError(f'ThreeDEP:{layer} not a valid layer!\nOptions:' +
                              f'\n{chr(10).join(self.valid_layers)}\n')
         self.layer_name = f'3DEPElevation:{layer}'
-        self.res = res
         self.fpath = fpath
-        super().__init__(bnds, self.crs_str, self.wms_url, 2000)
+        super().__init__(bnds, self.crs_str, self.wms_url, 2000, verbose)
 
     def download(self):
         """ Download the data """

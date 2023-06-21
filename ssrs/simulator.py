@@ -222,9 +222,7 @@ class Simulator(Config):
         # Calculate the orographic updraft based on mode
         if self.movement_model == 'drw':
             self.compute_dummy_updraft_field()
-        elif self.sim_mode.lower() != 'uniform':
-            self.compute_orographic_updrafts_using_wtk()
-        else:
+        elif self.sim_mode.lower() == 'uniform':
             self.compute_orographic_updrafts_uniform()
         else:
             if self.wind_data_source == 'wtk':

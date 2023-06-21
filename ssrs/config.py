@@ -60,7 +60,7 @@ class Config:
     wtk_interp_type: str = 'linear'  # 'nearest', 'linear', or 'cubic'
 
     # Parameters defining the updraft calculation
-    updraft_threshold: float = 0.75         # only use updrafts higher than this (m/s)
+    updraft_threshold: float = 0.0          # only use updrafts (m/s) higher than this -- no threshold is applied by default
     updraft_threshold_stdev: float = 0.0    # if > 0, sample from truncated normal distribution
     updraft_threshold_seed: int = 123456789 # if `updraft_threshold_stdev` > 0, used to initialize the RNG
     updraft_threshold_realization_min: float = -2.5  # if `updraft_threshold_stdev` > 0, potentials are calculated for these discrete threshold values (in stdevs about the mean `updraft_threshold`)

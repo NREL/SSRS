@@ -222,9 +222,7 @@ class Simulator(Config):
         # Calculate the orographic updraft based on mode
         if self.movement_model == 'drw':
             self.compute_dummy_updraft_field()
-        elif self.sim_mode.lower() != 'uniform':
-            self.compute_orographic_updrafts_using_wtk()
-        else:
+        elif self.sim_mode.lower() == 'uniform':
             self.compute_orographic_updrafts_uniform()
         else:
             if self.wind_data_source == 'wtk':
@@ -735,8 +733,8 @@ class Simulator(Config):
         orographicupdraft = np.load(f'{fname}.npy')
         print(f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
 
-        #updrafts = [orographicupdraft] # is this needed??
-        updrafts= orographicupdraft
+        # note: updrafts should be a list of updraft realizations
+        updrafts = [orographicupdraft]
 
         # Removing this for heuristics. This function needs to return only the orographic
         # Add thermal updrafts to the `updrafts` field if available
@@ -944,6 +942,7 @@ class Simulator(Config):
             else:
                 # range of threshold values to be evaluated later
                 updrafts = self.load_updrafts(case_id, apply_threshold=False)
+            # loop over updraft realizations (default is to have only 1)
             for real_id, updraft in enumerate(updrafts):
 # TODO: this should not be needed
 #                if self.sim_seed > 0:
@@ -955,6 +954,12 @@ class Simulator(Config):
                         potential = self.get_directional_potential(
                             updraft, case_id, real_id)
                     else:
+                        # create list of potential fields corresponding
+                        #   to different cutoff thresholds; call to
+                        #   generate_simulated_tracks() below will
+                        #   interpolate between potential fields based
+                        #   on initial conditions that include x0,y0 as
+                        #   well as a randomly chosen cutoff value
                         potential = self.get_directional_potential_realizations(
                             updraft, case_id, real_id)
 

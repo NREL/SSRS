@@ -120,6 +120,11 @@ class Simulator(Config):
                 *self.center_lonlat)
             proj_west = ori_west[0] - xsize//2 * self.resolution
             proj_south = ori_south[0] - ysize//2 * self.resolution
+            # save southwest lonlat for other parts of the code
+            SWlon, SWlat = transform_coordinates(
+                self.projected_crs, lonlat_crs,
+                proj_west, proj_south)
+            self.southwest_lonlat = (SWlon[0],SWlat[0])
         proj_east = proj_west + (xsize - 1) * self.resolution
         proj_north = proj_south + (ysize - 1) * self.resolution
         self.bounds = (proj_west, proj_south, proj_east, proj_north)

@@ -822,8 +822,6 @@ def compute_thermals_3d(
         f'compute_thermals_3d returning a thermal field of shape {np.shape(w)}')
     return w
 
-    return w
-
 
 # def compute_adjusted_orographic_updraft (
 #     wspeedAtRefHeight: np.ndarray,

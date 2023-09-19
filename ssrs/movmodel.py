@@ -131,10 +131,10 @@ class MovModel:
 # define static constants for eagle track generation
 neighbour_deltas = []
 neighbour_delta_norms_inv = np.empty((3, 3), dtype=np.float32)
-center = (np.array(neighbour_delta_norms_inv.shape, dtype=np.int) - 1) // 2
+center = (np.array(neighbour_delta_norms_inv.shape, dtype=int) - 1) // 2
 for r in range(neighbour_delta_norms_inv.shape[0]):
     for c in range(neighbour_delta_norms_inv.shape[1]):
-        delta = np.array([r, c], dtype=np.int) - center
+        delta = np.array([r, c], dtype=int) - center
         neighbour_deltas.append(delta)
         distance = np.linalg.norm(delta)
         neighbour_delta_norms_inv[r, c] = 1.0 / \

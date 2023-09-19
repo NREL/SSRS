@@ -250,7 +250,7 @@ def compute_thermals(
 #         zi  # Equation 12 from updraft paper
 
 #     # CALCULATE NUMBER OF UPDRAFTS IN GIVEN AREA
-#     N = np.int(np.round(.6 * Y * X / (zi * r2)))
+#     N = int(np.round(.6 * Y * X / (zi * r2)))
 
 #     # SET PERTURBATION GAINS FOR EACH UPDRAFT
 #     wgain = np.repeat(1, N)  # multiplier on vertical velocity

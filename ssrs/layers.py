@@ -12,14 +12,14 @@ import pathos.multiprocessing as mp
 
 
 def calcOrographicUpdraft(
-    elev: np.ndarray,      # high-res 
+    elev: np.ndarray,      # high-res
     wspeed: np.ndarray,    # high-res
     wdirn: np.ndarray,     # high-res
     slope: np.ndarray,     # high-res
     aspect: np.ndarray,    # high-res
     res_terrain: float,    # high-res terrain data resolution
     res: float,            # low-res analysis resolution
-    sx: np.ndarray = None, # low-res
+    sx: np.ndarray = None,  # low-res
     h: float = 80.,
     min_updraft_val: float = 1e-5
 ) -> np.ndarray:
@@ -42,23 +42,23 @@ def calcOrographicUpdraft_original(
     wdirn: np.ndarray,
     slope: np.ndarray,
     aspect: np.ndarray,
-    res_terrain: float, # high-res terrain data resolution
+    res_terrain: float,  # high-res terrain data resolution
     res: float,         # low-res analysis resolution
     min_updraft_val: float = 1e-5
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using Brandes and Ombalski model
-    
+
         Receives high-res array, returns coarsened updraft field
     """
-    print('Computing orograhpic updraft with vector model')
+    #print('Computing orograhpic updraft with vector model')
 
     sinterm = np.sin(np.deg2rad(slope))
-    costerm = np.cos(np.deg2rad(aspect-wdirn))
+    costerm = np.cos(np.deg2rad(aspect - wdirn))
     w0 = wspeed * sinterm * costerm
 
     w0_abovemin = np.maximum(min_updraft_val, w0)
     w0_abovemin_coarse = highRes2lowRes(w0_abovemin, res_terrain, res)
-    
+
     return w0_abovemin_coarse
 
 
@@ -68,10 +68,10 @@ def calcOrographicUpdraft_improved(
     slope: np.ndarray,
     aspect: np.ndarray,
     elev: np.ndarray,
-    res_terrain: float, # high-res terrain data resolution
+    res_terrain: float,  # high-res terrain data resolution
     res: float,         # low-res analysis resolution
-    sx: np.ndarray = None, # low-res
-    h : float = 80.,
+    sx: np.ndarray = None,  # low-res
+    h: float = 80.,
     min_updraft_val: float = 1e-5
 ) -> np.ndarray:
     """ Return dimensional orographic updraft using our improved model"""
@@ -82,29 +82,38 @@ def calcOrographicUpdraft_improved(
 
     # Compute height adjustment
     print('Computing adjusting factors from improved model (1/3)..', end='\r')
-    a=0.00004;  b=0.0028;  c=0.8;  d=0.35;  e=0.095;  f=-0.09
+    a = 0.00004
+    b = 0.0028
+    c = 0.8
+    d = 0.35
+    e = 0.095
+    f = -0.09
     slope_lowres = highRes2lowRes(slope, res_terrain, res)
-    factor_height = ( a*h**2 + b*h + c ) * d**(-np.cos(np.deg2rad(slope_lowres)) + e) + f  # low-res
+    factor_height = (a * h**2 + b * h + c) * \
+        d**(-np.cos(np.deg2rad(slope_lowres)) + e) + f  # low-res
     # Compute Sx adjustment
     print('Computing adjusting factors from improved model (2/3)..', end='\r')
-    factor_sx = 1 + np.tan(np.deg2rad(sx))
+    factor_sx = 1 + np.tan(np.deg2rad(sx)) if sx is not None else 1.
     # Compute terrain complexity adjustment
     print('Computing adjusting factors from improved model (3/3)..', end='\r')
-    filterSize_in_m = 500
-    filterSize = int(np.floor(filterSize_in_m/res_terrain))
+    filterSize_in_m = 100
+    filterSize = int(np.floor(filterSize_in_m / res_terrain))
     elev_lowres = highRes2lowRes(elev, res_terrain, res)
-    local_zmean = ndimage.generic_filter(elev_lowres, np.mean, footprint=np.ones((filterSize,filterSize)) )
-    local_zmin  = ndimage.generic_filter(elev_lowres, np.min,  footprint=np.ones((filterSize,filterSize)) )
-    local_zmax  = ndimage.generic_filter(elev_lowres, np.max,  footprint=np.ones((filterSize,filterSize)) )
+    local_zmean = ndimage.generic_filter(
+        elev_lowres, np.mean, footprint=np.ones((filterSize, filterSize)))
+    local_zmin = ndimage.generic_filter(
+        elev_lowres, np.min, footprint=np.ones((filterSize, filterSize)))
+    local_zmax = ndimage.generic_filter(
+        elev_lowres, np.max, footprint=np.ones((filterSize, filterSize)))
     tc = (local_zmean - local_zmin) / (local_zmax - local_zmin)
-    factor_tc = 1 + tc*(h/40)  # low-res
-    
+    factor_tc = 1 + tc * (h / 40)  # low-res
+
     # Combine all factors
     print('Computing adjusting factors from improved model..       ')
     F = factor_tc * factor_sx / factor_height
 
     # Compute improved value and remove NaNs from last column and row (product of Sx calculation)
-    wo_imp = F*w0prime
+    wo_imp = F * w0prime
     wo_imp[np.isnan(wo_imp)] = 0.0
 
     return wo_imp
@@ -121,18 +130,18 @@ def highRes2lowRes(field, res_h, res_l, sigma_in_m=30):
     The value of the filter can be changed using the sigma_in_m varible.
     """
 
-    ratio = res_h/res_l
+    ratio = res_h / res_l
     if ratio == 1:
         # same resolution, nothing to do here
         return field
 
-    sigma = sigma_in_m/res_h
-    if sigma<=1:
+    sigma = sigma_in_m / res_h
+    if sigma <= 1:
         print('    ! Low resolution terrain data. Consider ',
               'increasing the resolution (`resolution_terrain`).')
 
     filtered = ndimage.gaussian_filter(field, sigma=sigma)
-    field_coarse = ndimage.zoom(filtered,  (ratio, ratio))
+    field_coarse = ndimage.zoom(filtered, (ratio, ratio))
 
     return field_coarse
 
@@ -241,8 +250,10 @@ def calcAspectDegrees(z_mat: np.ndarray, res: float):
     angle_mod = 90. * np.divide(dz_dx, np.absolute(dz_dx))
     aspect[1:-1, 1:-1] = 180. - angle + angle_mod
     # change reference
-    aspect = (-aspect+90)%360
+    #print('i am here')
+    aspect = (-aspect + 90) % 360
     return np.nan_to_num(aspect)
+
 
 def blurQuantity(quant: np.ndarray, res: float, h: float):
     '''
@@ -250,8 +261,8 @@ def blurQuantity(quant: np.ndarray, res: float, h: float):
     on the height h
     '''
 
-    sigma_in_m = min(0.8*h + 16, 300) # size of kernel in meters
-    return ndimage.gaussian_filter(quant, sigma=sigma_in_m/res)
+    sigma_in_m = min(0.8 * h + 16, 300)  # size of kernel in meters
+    return ndimage.gaussian_filter(quant, sigma=sigma_in_m / res)
 
 
 def calcSx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
@@ -279,68 +290,92 @@ def calcSx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
     '''
     from scipy.interpolate import griddata
     import xarray as xr
-    
+
     xx, yy = np.meshgrid(xgrid, ygrid, indexing='ij')
 
     # get resolution (assumes uniform resolution)
-    res = xx[1,0] - xx[0,0]
-    npoints = 1+int(dmax/res)
+    res = xx[1, 0] - xx[0, 0]
+    npoints = 1 + int(dmax / res)
     if dmax < res:
-        raise ValueError('dmax needs to be larger or equal to the resolution of the grid')
-    
+        raise ValueError(
+            'dmax needs to be larger or equal to the resolution of the grid')
+
     # Get upstream direction
-    A = A%360
-    if    A==0:   upstreamDirX=0;  upstreamDirY=-1
-    elif  A==90:  upstreamDirX=-1; upstreamDirY=0
-    elif  A==180: upstreamDirX=0;  upstreamDirY=1
-    elif  A==270: upstreamDirX=1;  upstreamDirY=0
-    elif  A>0  and A<90:   upstreamDirX=-1; upstreamDirY=-1
-    elif  A>90  and A<180:  upstreamDirX=-1; upstreamDirY=1
-    elif  A>180 and A<270:  upstreamDirX=1;  upstreamDirY=1
-    elif  A>270 and A<360:  upstreamDirX=1;  upstreamDirY=-1
+    A = A % 360
+    if A == 0:
+        upstreamDirX = 0
+        upstreamDirY = -1
+    elif A == 90:
+        upstreamDirX = -1
+        upstreamDirY = 0
+    elif A == 180:
+        upstreamDirX = 0
+        upstreamDirY = 1
+    elif A == 270:
+        upstreamDirX = 1
+        upstreamDirY = 0
+    elif A > 0 and A < 90:
+        upstreamDirX = -1
+        upstreamDirY = -1
+    elif A > 90 and A < 180:
+        upstreamDirX = -1
+        upstreamDirY = 1
+    elif A > 180 and A < 270:
+        upstreamDirX = 1
+        upstreamDirY = 1
+    elif A > 270 and A < 360:
+        upstreamDirX = 1
+        upstreamDirY = -1
 
     # change angle notation
-    ang = np.deg2rad(270-A)
+    ang = np.deg2rad(270 - A)
 
     # array for interpolation using griddata
-    points = np.array( (xx.flatten(), yy.flatten()) ).T
+    points = np.array((xx.flatten(), yy.flatten())).T
     if isinstance(zagl, xr.DataArray):
         zagl = zagl.values
     values = zagl.flatten()
 
     # create rotated grid. This way we sample into a interpolated grid that has the exact points we need
-    xmin = min(xx[:,0]);  xmax = max(xx[:,0])
-    ymin = min(yy[0,:]);  ymax = max(yy[0,:])
-    if A%90 == 0:
+    xmin = min(xx[:, 0])
+    xmax = max(xx[:, 0])
+    ymin = min(yy[0, :])
+    ymax = max(yy[0, :])
+    if A % 90 == 0:
         # if flow is aligned, we don't need a new grid
-        xrot = xx[:,0]
-        yrot = yy[0,:]
+        xrot = xx[:, 0]
+        yrot = yy[0, :]
         xxrot = xx
         yyrot = yy
         elevrot = zagl
     else:
-        xrot = np.arange(xmin, xmax+0.1, abs(res*np.cos(ang)))
-        yrot = np.arange(ymin, ymax+0.1, abs(res*np.sin(ang)))
+        xrot = np.arange(xmin, xmax + 0.1, abs(res * np.cos(ang)))
+        yrot = np.arange(ymin, ymax + 0.1, abs(res * np.sin(ang)))
         xxrot, yyrot = np.meshgrid(xrot, yrot, indexing='ij')
-        elevrot = griddata( points, values, (xxrot, yyrot), method=method )
+        elevrot = griddata(points, values, (xxrot, yyrot), method=method)
 
     # create empty rotated Sx array
-    Sxrot = np.empty(np.shape(elevrot));  Sxrot[:,:] = np.nan
+    Sxrot = np.empty(np.shape(elevrot))
+    Sxrot[:, :] = np.nan
 
     for i, xi in enumerate(xrot):
-        if verbose: print(f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
+        if verbose:
+            print(
+                f'Computing shelter angle Sx.. {100*(i+1)/len(xrot):.1f}%  ', end='\r')
         for j, yi in enumerate(yrot):
 
             # Get elevation profile along the direction asked
-            isel = np.linspace(i-upstreamDirX*npoints+upstreamDirX, i, npoints, dtype=int)
-            jsel = np.linspace(j-upstreamDirY*npoints+upstreamDirY, j, npoints, dtype=int)
+            isel = np.linspace(i - upstreamDirX * npoints +
+                               upstreamDirX, i, npoints, dtype=int)
+            jsel = np.linspace(j - upstreamDirY * npoints +
+                               upstreamDirY, j, npoints, dtype=int)
             try:
                 xsel = xrot[isel]
                 ysel = yrot[jsel]
-                elev = elevrot[isel,jsel]
+                elev = elevrot[isel, jsel]
             except IndexError:
                 # At the borders, can't get a valid positions
-                xsel = np.zeros(np.size(isel))  
+                xsel = np.zeros(np.size(isel))
                 ysel = np.zeros(np.size(jsel))
                 elev = np.zeros(np.size(isel))
 
@@ -348,14 +383,16 @@ def calcSx(xgrid, ygrid, zagl, A, dmax=500, method='linear', verbose=True):
             elevi = elev[-1]
 
             try:
-                Sxrot[i,j] = np.nanmax(np.rad2deg( np.arctan( (elev[:-1] - elevi)/(((xsel[:-1]-xi)**2 + (ysel[:-1]-yi)**2)**0.5) ) ))
+                Sxrot[i, j] = np.nanmax(np.rad2deg(np.arctan(
+                    (elev[:-1] - elevi) / (((xsel[:-1] - xi)**2 + (ysel[:-1] - yi)**2)**0.5))))
             except IndexError:
                 raise
 
-    if verbose: print(f'Computing shelter angle Sx..        ')
+    if verbose:
+        print(f'Computing shelter angle Sx..        ')
     # interpolate results back to original grid
-    pointsrot = np.array( (xxrot.flatten(), yyrot.flatten()) ).T
-    Sx = griddata( pointsrot, Sxrot.flatten(), (xx, yy), method=method )
+    pointsrot = np.array((xxrot.flatten(), yyrot.flatten())).T
+    Sx = griddata(pointsrot, Sxrot.flatten(), (xx, yy), method=method)
 
     return Sx
 
@@ -427,10 +464,10 @@ def get_above_threshold_hard_cutoff(in_array: np.ndarray, threshold: float):
     return thresholded_array
 
 
-#def get_random_threshold(
+# def get_random_threshold(
 #    threshold: float,
 #    threshold_stdev: float
-#):
+# ):
 #    cutoff = -1
 #    while cutoff < 0:
 #        cutoff = np.random.normal(loc=threshold, scale=threshold_stdev)
@@ -469,11 +506,11 @@ def compute_random_thermals(
 
     return wt
 
-#def compute_terrain_linearity_index(
+# def compute_terrain_linearity_index(
 #    elevation: np.ndarray,
 #    aspect: np.ndarray,
 #    min_updraft_val: float = 0.
-#) -> np.ndarray:
+# ) -> np.ndarray:
 #    """ UNFINISHED Returns a measure of terrain linearity based on contiguous regions of similar aspect """
 #    ysize, xsize = aspect.shape
 #    for m in range(1, ysize):
@@ -483,10 +520,10 @@ def compute_random_thermals(
 #                for j in range(n-1,n+1)
 #                    if abs(aspect[i,j]-aspect[m,n])<5:
 #                        count[m,n]=count[m,n]+1
-#   
+#
 #    return tli
-        
-        
+
+
 # def computeDatetimeGain(datetime):
 #
 #     tofday_hour = datetime.hour
@@ -539,24 +576,25 @@ def compute_random_thermals(
 #     return diurnalgain, seasonalgain
 
 
-def getRandomPointsWeighted (weight, n, nRealization=1):
-    
-    normalweight = weight/np.sum(weight)
-    
+def getRandomPointsWeighted(weight, n, nRealization=1):
+
+    normalweight = weight / np.sum(weight)
+
     choicesum = np.zeros_like(weight).flatten()
     for i in range(nRealization):
-        randindices = np.random.choice( np.arange(np.size(choicesum)), size=n, replace = False, p=normalweight.flatten())
+        randindices = np.random.choice(
+            np.arange(np.size(choicesum)), size=n, replace=False, p=normalweight.flatten())
         # create a current-iteration result
         choice = np.zeros_like(weight).flatten()
         choice[randindices] = 1
         # accumulate
-        choicesum = choicesum +choice
+        choicesum = choicesum + choice
 
     # sum of realizations
     choicesum = choicesum.reshape(np.shape(weight))
     # last realization, choice
     choice = choice.reshape(np.shape(weight))
-    
+
     return choice, choicesum
 
 
@@ -565,49 +603,55 @@ def getObs_maxw(height, hrrr, southwest_lonlat, extent, res):
     import xarray as xr
     import os
 
-    if height<=200:
+    if height <= 200:
         my_path = os.path.abspath(os.path.dirname(__file__))
-        wfip = xr.open_dataset(os.path.join(my_path,'updraft','updraft_conditions_wfip2.nc'))
-        rho = 1.225 # kg/m^3
+        wfip = xr.open_dataset(os.path.join(
+            my_path, 'updraft', 'updraft_conditions_wfip2.nc'))
+        rho = 1.225  # kg/m^3
         cp = 1005   # J/(kg*K)
 
         # Get mean wspd
-        u, xx, yy = hrrr.get_single_var_on_grid(':UGRD:80 m above ground',       southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
-        v, xx, yy = hrrr.get_single_var_on_grid(':UGRD:80 m above ground',       southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
-        wspd = (u**2+v**2)**0.5
+        u, xx, yy = hrrr.get_single_var_on_grid(
+            ':UGRD:80 m above ground', southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
+        v, xx, yy = hrrr.get_single_var_on_grid(
+            ':UGRD:80 m above ground', southwest_lonlat, extent, res)   # u component of the wind at 80 AGL
+        wspd = (u**2 + v**2)**0.5
         meanwspd = np.mean(wspd)
 
         # Get heat flux
-        gflux_Wm2, xx, yy = hrrr.get_single_var_on_grid(':(GFLUX):',      southwest_lonlat, extent, res)   # ground heat flux
-        sensible,  xx, yy = hrrr.get_single_var_on_grid(':SHTFL:surface', southwest_lonlat, extent, res)   # sensible heat flux
-        latent,    xx, yy = hrrr.get_single_var_on_grid(':LHTFL:surface', southwest_lonlat, extent, res)   # latent heat flux
-        hfx = (sensible + latent - gflux_Wm2 )/(rho*cp)
+        gflux_Wm2, xx, yy = hrrr.get_single_var_on_grid(
+            ':(GFLUX):', southwest_lonlat, extent, res)   # ground heat flux
+        sensible, xx, yy = hrrr.get_single_var_on_grid(
+            ':SHTFL:surface', southwest_lonlat, extent, res)   # sensible heat flux
+        latent, xx, yy = hrrr.get_single_var_on_grid(
+            ':LHTFL:surface', southwest_lonlat, extent, res)   # latent heat flux
+        hfx = (sensible + latent - gflux_Wm2) / (rho * cp)
         meanhfx = np.mean(hfx)
 
         # Get the vertical speed statistics
         wfiph = wfip.interp(height=height).squeeze(drop=True)
-        wdata = wfiph.where( (wfiph.wind_speed>meanwspd-1 ) & ( wfiph.wind_speed<meanwspd+1) &
-                             (wfiph.hfx>meanhfx-0.025 )     & ( wfiph.hfx<meanhfx+0.025),       drop=True )['vertical_air_velocity']#.to_dataframe().agg(['count','min','mean','max','std'])
+        wdata = wfiph.where((wfiph.wind_speed > meanwspd - 1) & (wfiph.wind_speed < meanwspd + 1) &
+                            (wfiph.hfx > meanhfx - 0.025) & (wfiph.hfx < meanhfx + 0.025), drop=True)['vertical_air_velocity']  # .to_dataframe().agg(['count','min','mean','max','std'])
         wmax = wdata.max().values
-        
+
         return wmax
 
 
 def compute_thermals_3d(
     aspect: np.ndarray,  # terrain aspect, used for weighting
-    southwest_lonlat: Tuple[float, float], 
+    southwest_lonlat: Tuple[float, float],
     extent: Tuple[float, float, float, float],  # xmin, ymin, xmax, ymax
     res: int,   # uniform resolution
     time,  # either tuple with [y, m, d, hour], or datetimeobject
     height: float = 150,
     wfipInformed: bool = True
-    ) -> np.ndarray:
+) -> np.ndarray:
     '''
     Returns field of thermals based on Allen (2006)
     '''
-    
+
     # TODO: Loop over a list of `time`s
-    
+
     # Get string of time to pass to HRRR. Time can be passed either a tuple of datetime object
     if isinstance(time, datetime):
         timestr = f' {time.year}-{time.month:02d}-{time.day:02d} {time.hour:02d}:{time.minute:02d}'
@@ -615,28 +659,28 @@ def compute_thermals_3d(
         timestr = f'{time[0]}-{time[1]:02d}-{time[2]:02d} {time[3]:02d}:00'
 
     # Get hrrr data
-    hrrr = HRRR(valid_date = timestr)
+    hrrr = HRRR(valid_date=timestr)
 
     # Compute convective velocity
-    wstar,  xx, yy = hrrr.get_convective_velocity(southwest_lonlat, extent, res=res)
+    wstar, xx, yy = hrrr.get_convective_velocity(
+        southwest_lonlat, extent, res=res)
     # Compute albedo
     albedo, xx, yy = hrrr.get_albedo(southwest_lonlat, extent, res)
     # Get boundary layer height
-    zi,     xx, yy = hrrr.get_single_var_on_grid(':(HPBL):',  # boundary layer height
-                                                 southwest_lonlat,
-                                                 extent,
-                                                 res)
+    zi, xx, yy = hrrr.get_single_var_on_grid(':(HPBL):',  # boundary layer height
+                                             southwest_lonlat,
+                                             extent,
+                                             res)
     print(f'albedo is {albedo}')
-    wstar  = wstar.values
+    wstar = wstar.values
     try:
         albedo = albedo.values
     except AttributeError:  # it's an array already
         pass
     zi = zi[list(zi.keys())[0]].values
 
-
     if np.mean(zi) == np.nan:
-        raise ValueError(f'The value obtained for the boundary layer height contains NaNs.',\
+        raise ValueError(f'The value obtained for the boundary layer height contains NaNs.',
                          f'HRRR data is imcomplete at the site and time of interest.')
 
     # Define updraft shape factors
@@ -644,114 +688,139 @@ def compute_thermals_3d(
     Kshape = np.array([[1.5352, 2.5826, -0.0113, -0.1950, 0.0008],
                        [1.5265, 3.6054, -0.0176, -0.1265, 0.0005],
                        [1.4866, 4.8356, -0.0320, -0.0818, 0.0001],
-                       [1.2042, 7.7904,  0.0848, -0.0445, 0.0001],
+                       [1.2042, 7.7904, 0.0848, -0.0445, 0.0001],
                        [0.8816, 13.9720, 0.3404, -0.0216, 0.0001],
                        [0.7067, 23.9940, 0.5689, -0.0099, 0.0002],
                        [0.6189, 42.7965, 0.7157, -0.0033, 0.0001]])
 
-
     # Create weight for likeliness of thermals in space
-    albedofactor = (0.1/(albedo)**0.5)
-    spatialWeight = ( wstar**1 + albedofactor )**2
+    albedofactor = (0.1 / (albedo)**0.5)
+    spatialWeight = (wstar**1 + albedofactor)**2
     # Mask the edges so no thermals there
-    fringe= 2000 # in [m]
-    ifringe = int(fringe/res)
-    spatialWeight[0:ifringe,:] = spatialWeight[-ifringe:,:] = 0
-    spatialWeight[:,0:ifringe] = spatialWeight[:,-ifringe:] = 0
+    fringe = 2000  # in [m]
+    ifringe = int(fringe / res)
+    spatialWeight[0:ifringe, :] = spatialWeight[-ifringe:, :] = 0
+    spatialWeight[:, 0:ifringe] = spatialWeight[:, -ifringe:] = 0
 
     # Get thermal parameters
     ziavg = np.mean(zi)
-    zzi = height/zi
-    zziavg = height/ziavg
+    zzi = height / zi
+    zziavg = height / ziavg
     if ziavg > 300:
         ValueError(f'The boundary layer is too shallow for thermals')
 
     # Calcualte average updraft size
-    rbar=(.102*zzi**(1/3))*(1-(.25*zzi))*zi
+    rbar = (.102 * zzi**(1 / 3)) * (1 - (.25 * zzi)) * zi
 
     # Calculate average updraft strength (G. Young)
-    wT = wstar * 0.85 * (zzi**(1/3)) * (1.3-zzi)
+    wT = wstar * 0.85 * (zzi**(1 / 3)) * (1.3 - zzi)
 
     # Size gain around a mean, based on albedo
-    rgain =1.4*(0.4/(albedo))
+    rgain = 1.4 * (0.4 / (albedo))
 
     # Calculate inner and outer radius of rotated trapezoid updraft
-    r2 = rbar*rgain;  r2[r2<10] = 10
-    r1r2 = 0.0011*r2+0.14
-    r1r2[r2>600] = 0.8
-    r1 = r1r2*r2
+    r2 = rbar * rgain
+    r2[r2 < 10] = 10
+    r1r2 = 0.0011 * r2 + 0.14
+    r1r2[r2 > 600] = 0.8
+    r1 = r1r2 * r2
 
     # Determine number of thermals
-    nThermals = int ( 0.6*(extent[2]-extent[0])*(extent[3]-extent[1])/(ziavg*np.mean(r2)) )
+    nThermals = int(0.6 * (extent[2] - extent[0]) *
+                    (extent[3] - extent[1]) / (ziavg * np.mean(r2)))
 
     # Create strength gains, based on wstar
-    wgain = 0.7*wstar
+    wgain = 0.7 * wstar
 
     # Multiply average updraft strength by the gain
-    wTbar = wT*wgain
+    wTbar = wT * wgain
 
     # Calculate strength at center of rotated trapezoid updraft
-    wpeak=(3*wTbar*((r2**3)-(r2**2)*r1)) / ((r2**3)-(r1**3))
+    wpeak = (3 * wTbar * ((r2**3) - (r2**2) * r1)) / ((r2**3) - (r1**3))
 
     # Create a realization of thermal's center location
-    print(f'Creating {nThermals} thermals. The average boundary layer height is {ziavg:.1f} m')
-    wt_init, sumOfRealizations = getRandomPointsWeighted(weight=spatialWeight, n=nThermals, nRealization=1)
+    print(
+        f'Creating {nThermals} thermals. The average boundary layer height is {ziavg:.1f} m')
+    wt_init, sumOfRealizations = getRandomPointsWeighted(
+        weight=spatialWeight, n=nThermals, nRealization=1)
 
     # Get distances to closest thermal center
     wt_init1 = np.zeros_like(wt_init)
-    wt_init1[wt_init>0]=1
+    wt_init1[wt_init > 0] = 1
     dist = ndimage.distance_transform_edt(np.logical_not(wt_init1)) * res
 
     # Calculate updraft velocity
-    r=dist
-    rr2=r/r2
+    r = dist
+    rr2 = r / r2
 
     # Calculate shape parameters
     k1 = np.ones_like(r1r2)
     k2 = np.ones_like(r1r2)
     k3 = np.ones_like(r1r2)
     k4 = np.ones_like(r1r2)
-    k1 = k1*Kshape[6,0];                                      k2 = k2*Kshape[6,1];                                      k3 = k3*Kshape[6,2];                                      k4 = k4*Kshape[6,3]
-    k1[r1r2<(0.5*r1r2shape[6]+r1r2shape[5])] = Kshape[5,0];   k2[r1r2<(0.5*r1r2shape[6]+r1r2shape[5])] = Kshape[5,1];   k3[r1r2<(0.5*r1r2shape[6]+r1r2shape[5])] = Kshape[5,2];   k4[r1r2<(0.5*r1r2shape[6]+r1r2shape[5])] = Kshape[5,3]
-    k1[r1r2<(0.5*r1r2shape[5]+r1r2shape[4])] = Kshape[4,0];   k2[r1r2<(0.5*r1r2shape[5]+r1r2shape[4])] = Kshape[4,1];   k3[r1r2<(0.5*r1r2shape[5]+r1r2shape[4])] = Kshape[4,2];   k4[r1r2<(0.5*r1r2shape[5]+r1r2shape[4])] = Kshape[4,3]
-    k1[r1r2<(0.5*r1r2shape[4]+r1r2shape[3])] = Kshape[3,0];   k2[r1r2<(0.5*r1r2shape[4]+r1r2shape[3])] = Kshape[3,1];   k3[r1r2<(0.5*r1r2shape[4]+r1r2shape[3])] = Kshape[3,2];   k4[r1r2<(0.5*r1r2shape[4]+r1r2shape[3])] = Kshape[3,3]
-    k1[r1r2<(0.5*r1r2shape[3]+r1r2shape[2])] = Kshape[2,0];   k2[r1r2<(0.5*r1r2shape[3]+r1r2shape[2])] = Kshape[2,1];   k3[r1r2<(0.5*r1r2shape[3]+r1r2shape[2])] = Kshape[2,2];   k4[r1r2<(0.5*r1r2shape[3]+r1r2shape[2])] = Kshape[2,3]
-    k1[r1r2<(0.5*r1r2shape[2]+r1r2shape[1])] = Kshape[1,0];   k2[r1r2<(0.5*r1r2shape[2]+r1r2shape[1])] = Kshape[1,1];   k3[r1r2<(0.5*r1r2shape[2]+r1r2shape[1])] = Kshape[1,2];   k4[r1r2<(0.5*r1r2shape[2]+r1r2shape[1])] = Kshape[1,3]
-    k1[r1r2<(0.5*r1r2shape[1]+r1r2shape[0])] = Kshape[0,0];   k2[r1r2<(0.5*r1r2shape[1]+r1r2shape[0])] = Kshape[0,1];   k3[r1r2<(0.5*r1r2shape[1]+r1r2shape[0])] = Kshape[0,2];   k4[r1r2<(0.5*r1r2shape[1]+r1r2shape[0])] = Kshape[0,3]
+    k1 = k1 * Kshape[6, 0]
+    k2 = k2 * Kshape[6, 1]
+    k3 = k3 * Kshape[6, 2]
+    k4 = k4 * Kshape[6, 3]
+    k1[r1r2 < (0.5 * r1r2shape[6] + r1r2shape[5])] = Kshape[5, 0]
+    k2[r1r2 < (0.5 * r1r2shape[6] + r1r2shape[5])] = Kshape[5, 1]
+    k3[r1r2 < (0.5 * r1r2shape[6] + r1r2shape[5])] = Kshape[5, 2]
+    k4[r1r2 < (0.5 * r1r2shape[6] + r1r2shape[5])] = Kshape[5, 3]
+    k1[r1r2 < (0.5 * r1r2shape[5] + r1r2shape[4])] = Kshape[4, 0]
+    k2[r1r2 < (0.5 * r1r2shape[5] + r1r2shape[4])] = Kshape[4, 1]
+    k3[r1r2 < (0.5 * r1r2shape[5] + r1r2shape[4])] = Kshape[4, 2]
+    k4[r1r2 < (0.5 * r1r2shape[5] + r1r2shape[4])] = Kshape[4, 3]
+    k1[r1r2 < (0.5 * r1r2shape[4] + r1r2shape[3])] = Kshape[3, 0]
+    k2[r1r2 < (0.5 * r1r2shape[4] + r1r2shape[3])] = Kshape[3, 1]
+    k3[r1r2 < (0.5 * r1r2shape[4] + r1r2shape[3])] = Kshape[3, 2]
+    k4[r1r2 < (0.5 * r1r2shape[4] + r1r2shape[3])] = Kshape[3, 3]
+    k1[r1r2 < (0.5 * r1r2shape[3] + r1r2shape[2])] = Kshape[2, 0]
+    k2[r1r2 < (0.5 * r1r2shape[3] + r1r2shape[2])] = Kshape[2, 1]
+    k3[r1r2 < (0.5 * r1r2shape[3] + r1r2shape[2])] = Kshape[2, 2]
+    k4[r1r2 < (0.5 * r1r2shape[3] + r1r2shape[2])] = Kshape[2, 3]
+    k1[r1r2 < (0.5 * r1r2shape[2] + r1r2shape[1])] = Kshape[1, 0]
+    k2[r1r2 < (0.5 * r1r2shape[2] + r1r2shape[1])] = Kshape[1, 1]
+    k3[r1r2 < (0.5 * r1r2shape[2] + r1r2shape[1])] = Kshape[1, 2]
+    k4[r1r2 < (0.5 * r1r2shape[2] + r1r2shape[1])] = Kshape[1, 3]
+    k1[r1r2 < (0.5 * r1r2shape[1] + r1r2shape[0])] = Kshape[0, 0]
+    k2[r1r2 < (0.5 * r1r2shape[1] + r1r2shape[0])] = Kshape[0, 1]
+    k3[r1r2 < (0.5 * r1r2shape[1] + r1r2shape[0])] = Kshape[0, 2]
+    k4[r1r2 < (0.5 * r1r2shape[1] + r1r2shape[0])] = Kshape[0, 3]
 
     # Calculate the smooth vertical velocity distribution
-    ws = (1/(1+(k1*abs(rr2+k3))**k2)) + k4*rr2
+    ws = (1 / (1 + (k1 * abs(rr2 + k3))**k2)) + k4 * rr2
     # no negative updrafts
-    ws[ws<0] = 0
+    ws[ws < 0] = 0
     # Set to zero if above the boundary layer
-    ws[zi<height] = 0
+    ws[zi < height] = 0
 
     # Calculate downdraft velocity at edges of updrafts
-    wl = (np.pi/6)*np.sin(rr2*np.pi)
-    wl[( (dist<r1) | (rr2>2))] = 0
-    wd = 2.5*wl*(zzi-0.5)
-    wd[((zzi<0.5) | (zzi>0.9))] = 0
-    wd[wd<0]=0
+    wl = (np.pi / 6) * np.sin(rr2 * np.pi)
+    wl[((dist < r1) | (rr2 > 2))] = 0
+    wd = 2.5 * wl * (zzi - 0.5)
+    wd[((zzi < 0.5) | (zzi > 0.9))] = 0
+    wd[wd < 0] = 0
 
     # Combine fields
-    w = wpeak*ws + wd*wTbar
+    w = wpeak * ws + wd * wTbar
 
     # Scale it to fit experimental data (optional)
     if wfipInformed:
-        if height<= 200:
+        if height <= 200:
             wmax = getObs_maxw(height, hrrr, southwest_lonlat, extent, res)
-            w = w*wmax/np.max(w)
+            w = w * wmax / np.max(w)
         else:
-            print('The height requested is higher than observations. Skipping correction.')
+            print(
+                'The height requested is higher than observations. Skipping correction.')
 
     # Environment sink
     # we = np.zeros_like(w)
     # Stretch updraft field to blend with sink at edge
     # w[dist>r1] = (w*(1-we/wpeak)+we)[dist>r1]
-    
-    print(f'compute_thermals_3d returning a thermal field of shape {np.shape(w)}')
-    return w
 
+    print(
+        f'compute_thermals_3d returning a thermal field of shape {np.shape(w)}')
+    return w
 
 
 # def compute_adjusted_orographic_updraft (
@@ -766,7 +835,7 @@ def compute_thermals_3d(
 # ) -> np.ndarray:
 #     '''
 #     Returns the dimensional adjusted orographic updraft value
-   
+
 #     Parameters:
 #     ===========
 #     wspeedAtRefHeight:
@@ -786,13 +855,13 @@ def compute_thermals_3d(
 #         Minimum value used to clip the final adjusted model. Placeholder.
 #     returnOriginal:
 #         Whether or not also return original model
-       
+
 #     Returns:
 #     ========
 #     w0adj:
 #         numpy array containing dimensional w0 adjusted value
 #     '''
-   
+
 #     # Constants for height adjustment
 #     a=0.00004;  b=0.0028;   c=0.8
 #     d=0.35;     e=0.095;    f= -0.09
@@ -822,7 +891,7 @@ def compute_thermals_3d(
 #     # Compute dimensional w0 based on original model and a reference wind speed at a reference height
 #     w0 =  wspeedAtRefHeight * np.sin(np.deg2rad(slope)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspect))
 #     w0blur = wspeedAtRefHeight * np.sin(np.deg2rad(slopeblur)) * np.cos(np.deg2rad(((-np.mean(wdirn)+90)%360)-aspectblur))
-    
+
 #     # Adjust w0
 #     w0adj =  F * w0blur
 
@@ -830,4 +899,3 @@ def compute_thermals_3d(
 #         return w0adj, w0
 #     else:
 #         return w0adj
-

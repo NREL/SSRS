@@ -28,15 +28,15 @@ class Terrain:
             self,
             lonlat_bounds: Tuple[float, float, float, float],
             out_dir: str,
-            print_verbose: bool = True
+            verbose: bool = True
     ):
-        if print_verbose:
-            print((f'Terrain: Bounds set to'
-                   f' {[round(ix,2) for ix in lonlat_bounds]}'))
+
         self.lonlat_bounds = lonlat_bounds
         self.out_dir = out_dir
-        self.print_verbose = print_verbose
+        self.verbose = verbose
         makedir_if_not_exists(self.out_dir)
+        ilist = [round(ix, 2) for ix in lonlat_bounds]
+        self.printit(f'Bounds set to {ilist}')
         # self.downloaded = {}
 
     def get_raster_fpath(self, lyr: str) -> str:
@@ -56,25 +56,32 @@ class Terrain:
             fpath = self.get_raster_fpath(layer)
             padding = [-pad, -pad, pad, pad]
             pad_bnds = [ix + iy for ix, iy in zip(self.lonlat_bounds, padding)]
-            # pad_bnds = [self.lonlat_bounds[0]-pad, self.lonlat_bounds[1]-pad, self.lonlat_bounds[2]+pad, self.lonlat_bounds[3]+pad]
             try:
-                print(f'Trying to load terrain layer {layer}...')
+                # print(f'Trying to load terrain layer {layer}...')
                 self.validate_saved_layer_data(layer)
-            except (FileNotFoundError,ValueError) as err:
-                if isinstance(err,FileNotFoundError): print(f'Terrain: layer {layer} not found')
-                elif isinstance(err,ValueError):      print(f'Terrain: layer {layer} found with invalid bounds.')
+            except (FileNotFoundError, ValueError) as err:
+                if isinstance(err, FileNotFoundError):
+                    self.printit(f'Layer {layer} not found..')
+                elif isinstance(err, ValueError):
+                    self.printit(f'Layer {layer} found with invalid bounds..')
                 if layer in ThreeDEP.valid_layers:
-                    if self.print_verbose:
-                        print(f'Terrain: Downloading {layer} data from 3DEP..')
-                    src_object = ThreeDEP(layer, pad_bnds, fpath)
+                    self.printit(f'Downloading {layer} from 3DEP..')
+                    src_object = ThreeDEP(
+                        layer=layer,
+                        bnds=pad_bnds,
+                        fpath=fpath,
+                        verbose=self.verbose
+                    )
                 elif layer in SRTM.valid_layers:
-                    if self.print_verbose:
-                        print(f'Terrain: Downloading {layer} data from SRTM..')
-                    src_object = SRTM(layer, pad_bnds, fpath)
+                    self.printit(f'Downloading {layer} data from SRTM..')
+                    src_object = SRTM(
+                        layer=layer,
+                        bnds=pad_bnds,
+                        fpath=fpath
+                    )
                 src_object.download()
             else:
-                if self.print_verbose:
-                    print(f'Terrain: Found saved raster data for {layer}')
+                self.printit(f'Found saved raster data for {layer}')
 
     def validate_layer_name(self, layer: str) -> None:
         """ check if layer name is valid """
@@ -84,26 +91,28 @@ class Terrain:
 
     def validate_saved_layer_data(self, layer: str) -> None:
         """ Validate the saved layer data"""
-
         layerfile = self.get_raster_fpath(layer)
-
         if os.path.isfile(layerfile) is False:
             # layer <layer>.<format> not found
             raise FileNotFoundError
 
         with rs.open(layerfile) as src_img:
             src_bounds = src_img.bounds
-
-            isRequestedBoundsWithinLoadedBounds = (
+            within_bounds = (
                 (src_bounds[0] <= self.lonlat_bounds[0] <= src_bounds[2]) &
                 (src_bounds[1] <= self.lonlat_bounds[1] <= src_bounds[3]) &
                 (src_bounds[0] <= self.lonlat_bounds[2] <= src_bounds[2]) &
-                (src_bounds[1] <= self.lonlat_bounds[3] <= src_bounds[3]) ) 
-
-            if isRequestedBoundsWithinLoadedBounds is False:
+                (src_bounds[1] <= self.lonlat_bounds[3] <= src_bounds[3])
+            )
+            #print(within_bounds, flush=True)
+            if not within_bounds:
                 # layer found, but bounds are different
-                raise ValueError        
+                raise ValueError
 
+    def printit(self, istr: str):
+        """Print function"""
+        if self.verbose:
+            print(f'{self.__class__.__name__}: {istr}', flush=True)
         # try:
         #     with rs.open(self.get_raster_fpath(layer)) as src_img:
         #         src_bounds = src_img.bounds

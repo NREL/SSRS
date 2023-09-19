@@ -777,8 +777,8 @@ class Simulator(Config):
         print(
             f'Found orographic updraft {os.path.basename(fname)}. Loading it...')
 
-        # updrafts = [orographicupdraft] # is this needed??
-        updrafts = orographicupdraft
+        updrafts = [orographicupdraft] # By default (without any thermals), we
+                                       # have only a single updraft field
 
         # Removing this for heuristics. This function needs to return only the orographic
         # Add thermal updrafts to the `updrafts` field if available
@@ -792,8 +792,13 @@ class Simulator(Config):
                     updrafts.append(updrafts + np.load(f'{fname}.npy'))
             if apply_threshold:
                 if apply_threshold == True:
+                    # use user-specified threshold in input Config
                     threshold = self.updraft_threshold
                 else:
+                    # apply an arbitrary threshold, when potential fields corresponding
+                    # to a range of threshold values is needed, to allow more efficient
+                    # estimation of individual potential fields when each simulated
+                    # individual has a random threshold value (with hard cutoff)
                     assert isinstance(apply_threshold, float)
                     threshold = apply_threshold
                 if self.smooth_threshold_cutoff:
@@ -806,7 +811,7 @@ class Simulator(Config):
                     updrafts = [get_above_threshold_hard_cutoff(w0, threshold)
                                 for w0 in updrafts]
 
-        return updrafts
+        return updrafts  # a list of updraft fields
 
     def load_terrain_quantity(self, case_id: str, quant: str):
         """ Load specific quantity for the particular case """
@@ -987,9 +992,6 @@ class Simulator(Config):
                 # range of threshold values to be evaluated later
                 updrafts = self.load_updrafts(case_id, apply_threshold=False)
             for real_id, updraft in enumerate(updrafts):
-                # TODO: this should not be needed
-                #                if self.sim_seed > 0:
-                #                    np.random.seed(self.sim_seed + real_id)
                 id_str = self._get_id_string(case_id, real_id)
 
                 if self.movement_model == 'fluid-flow':
@@ -1134,18 +1136,13 @@ class Simulator(Config):
             # Load orographic updraft only
             orographicupdraft = self.load_updrafts(
                 case_id, apply_threshold=True)
+            assert len(orographicupdraft) == 1, \
+                'Should only have a single orographic updraft field'
+            
             elevation = highRes2lowRes(
                 self.get_terrain_elevation(), self.resolution_terrain, self.resolution)
 
-            if self.thermals_realization_count == 0:
-                # Workaound for Heuristics SSRS
-                self.thermals_realization_count = 1
-
-            # for real_id, updraft in enumerate(updrafts):  # This does not work for heuristics
-            for real_id in range(self.thermals_realization_count):
-                #                if self.sim_seed > 0:
-                #                    # TODO: this should not be needed
-                #                    np.random.seed(self.sim_seed + real_id)
+            for real_id, updraft in enumerate(updrafts):
                 id_str = self._get_id_string(case_id, real_id)
 
                 start_time = time.time()
@@ -1535,10 +1532,6 @@ class Simulator(Config):
             updrafts = self.load_updrafts(case_id, apply_threshold)
 
             # Identify if one updraft field or list of updrafts for enumerate
-            if np.shape(np.shape(updrafts))[0] == 2:
-                # Single updraft field
-                updrafts = [updrafts]
-
             for real_id, updraft in enumerate(updrafts):
                 fig, axs = plt.subplots(figsize=self.fig_size)
                 if vmax is None:
@@ -1753,9 +1746,9 @@ class Simulator(Config):
         summary_prob = np.zeros_like(elevation)
         krad = min(max(radius / self.resolution, 2), min(self.gridsize) / 2)
         for case_id in self.case_ids:
-            #updrafts = self.load_updrafts(case_id, apply_threshold=True)
+            updrafts = self.load_updrafts(case_id, apply_threshold=True)
             case_prob = np.zeros_like(elevation)
-            for real_id in range(self.thermals_realization_count):
+            for real_id,_ in enumerate(updrafts):
                 fname = self._get_tracks_fname(
                     case_id, real_id, self.mode_data_dir)
                 with open(f'{fname}.pkl', 'rb') as fobj:

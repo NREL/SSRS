@@ -96,7 +96,8 @@ def calcOrographicUpdraft_improved(
     factor_sx = 1 + np.tan(np.deg2rad(sx)) if sx is not None else 1.
     # Compute terrain complexity adjustment
     print('Computing adjusting factors from improved model (3/3)..', end='\r')
-    filterSize_in_m = 100
+    filterSize_in_m = 500 # EVVE default
+    #filterSize_in_m = 100 # reduce computational cost
     filterSize = int(np.floor(filterSize_in_m / res_terrain))
     elev_lowres = highRes2lowRes(elev, res_terrain, res)
     local_zmean = ndimage.generic_filter(

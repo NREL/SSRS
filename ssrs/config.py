@@ -32,6 +32,7 @@ class Config:
     # parameters defining the domain
     terrain_data_source: str = 'auto'   # 'auto', '3DEP', 'SRTM1' (30-m), 'SRTM3' (90-m)
     southwest_lonlat: Tuple[float, float] = (-106.21, 42.78)
+    center_lonlat: Tuple[float, float] = (999,999)
     projected_crs: str = 'ESRI:102008'  # ESRI, EPSG, PROJ4 or WKT string
     region_width_km: Tuple[float, float] = (60., 50.)
     resolution_terrain: int = 10.   # terrain resolution for aspect and slope computations (meters)

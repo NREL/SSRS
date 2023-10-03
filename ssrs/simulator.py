@@ -105,12 +105,29 @@ class Simulator(Config):
         print(f'Terrain grid size = {self.gridsize_terrain} elements')
 
         # Determine bounds in both lon/lat and in projected crs
-        proj_west, proj_south = transform_coordinates(
-            lonlat_crs, self.projected_crs,
-            self.southwest_lonlat[0], self.southwest_lonlat[1])
-        proj_east = proj_west[0] + (xsize - 1) * self.resolution
-        proj_north = proj_south[0] + (ysize - 1) * self.resolution
-        self.bounds = (proj_west[0], proj_south[0], proj_east, proj_north)
+        if self.center_lonlat == (999,999):
+            proj_west, proj_south = transform_coordinates(
+                lonlat_crs, self.projected_crs,
+                *self.southwest_lonlat)
+            proj_west = proj_west[0]
+            proj_south = proj_south[0]
+        else:
+            print('Using specified center lonlat =',*self.center_lonlat)
+            assert (self.center_lonlat[0] >= -180) & (self.center_lonlat[0] <= 180)
+            assert (self.center_lonlat[1] >= -90) & (self.center_lonlat[1] <= 90)
+            ori_west, ori_south = transform_coordinates(
+                lonlat_crs, self.projected_crs,
+                *self.center_lonlat)
+            proj_west = ori_west[0] - xsize//2 * self.resolution
+            proj_south = ori_south[0] - ysize//2 * self.resolution
+            # save southwest lonlat for other parts of the code
+            SWlon, SWlat = transform_coordinates(
+                self.projected_crs, lonlat_crs,
+                proj_west, proj_south)
+            self.southwest_lonlat = (SWlon[0],SWlat[0])
+        proj_east = proj_west + (xsize - 1) * self.resolution
+        proj_north = proj_south + (ysize - 1) * self.resolution
+        self.bounds = (proj_west, proj_south, proj_east, proj_north)
         self.extent = get_extent_from_bounds(self.bounds)
         self.lonlat_bounds = transform_bounds(
             self.bounds, self.projected_crs, lonlat_crs)
